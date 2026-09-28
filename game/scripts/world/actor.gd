@@ -1,20 +1,24 @@
 class_name Actor
-extends CharacterBody3D
-## Anyone walking the streets: a player's boss, a crewman, a cop, a pedestrian, a man looking for
-## work at the pool hall, an AI family's boss. On the host the AI brains run here (think());
-## clients only draw what the host's snapshots say. A player's own boss is moved by its owner
-## (PlayerController) and sent to the host as a pose.
+extends CharacterBody2D
+## Anyone on the street or in a shop: a player's boss, a crewman, a cop, a pedestrian, a
+## shopkeeper, a man looking for work at the pool hall, an AI family's boss, the arms dealer, the
+## smuggler, a longshoreman. On the host the brains run here (think()); clients only draw what the
+## host's snapshots say. A player's own boss is moved by its owner (PlayerController) and sent to
+## the host as a pose.
+##
+## Positions are world pixels (W.M per metre). yaw 0 = facing east (+x).
 
-const WALK := 1.35
-const RUN := 3.9
-const SPRINT := 5.6
+const WALK := 1.35 * W.M
+const RUN := 3.9 * W.M
+const SPRINT := 5.6 * W.M
+const RADIUS := 0.28 * W.M
 
 var world: Node          # World
 var key := ""
-var kind := ""           # boss, crew, cop, ped, recruit, aiboss, smuggler, dealer, unionboss, docker
+var kind := ""           # boss, aiboss, crew, cop, ped, shop, recruit, smuggler, dealer, unionboss, docker, newsboy
 var family := -1
 var ref_id := -1
-var person: Person
+var person: Person2D
 var hp := 100.0
 var tough := 60
 var down_t := 0.0
@@ -23,23 +27,23 @@ var carrying := false
 var sim := false         # this machine moves it (host AI, or the local player)
 var is_local_player := false
 var yaw := 0.0
-var speed := 0.0
-var state := Person.Anim.IDLE
+var speed := 0.0         # px/s
+var state: int = Person2D.Anim.IDLE
 var hidden_in_car := false
+var lot := -1            # the lot it's standing in (-1 = outside)
 
 # host brain
-var goal := Vector3.ZERO
-var path: PackedVector3Array = []
+var goal := Vector2.INF
+var path: PackedVector2Array = []
 var path_i := 0
 var wait_t := 0.0
 var chase: Actor = null
 var chase_t := 0.0
 var attack_target: Actor = null
-var attack_t := 0.0
 var cooldown := 0.0
 var scared_t := 0.0
-var scared_from := Vector3.ZERO
-var home := Vector3.ZERO
+var scared_from := Vector2.ZERO
+var home := Vector2.ZERO
 var home_yaw := 0.0
 var order: Dictionary = {}
 var last_attacker: Actor = null
@@ -47,57 +51,47 @@ var last_attacked_t := 0.0
 var talk_t := 0.0
 var route: Array = []    # longshoremen: a loop of points (pier, quay edge, the pile, quay edge)
 var route_i := 0
+var attack_target_hint: Actor = null   # players point at someone (R); the crew following them pile in
 var _stuck_t := 0.0
-var _stuck_at := Vector3.ZERO
+var _stuck_at := Vector2.ZERO
+var _lot_t := 0.0
 
 # network smoothing
-var net_pos := Vector3.ZERO
+var net_pos := Vector2.ZERO
 var net_yaw := 0.0
 var _net_have := false
 
 
-func setup(w: Node, k: String, kd: String, look: int, color: Color, body: String = "") -> void:
+func setup(w: Node, k: String, kd: String, look: int, color: Color, extra: Dictionary = {}) -> void:
 	world = w
 	key = k
 	kind = kd
 	name = k
+	z_index = W.Z_PEOPLE
 	collision_layer = 2
 	collision_mask = 1
-	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
-	var cs := CollisionShape3D.new()
-	var cap := CapsuleShape3D.new()
-	cap.radius = 0.3
-	cap.height = 1.7
-	cs.shape = cap
-	cs.position.y = 0.85
+	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
+	var cs := CollisionShape2D.new()
+	var c := CircleShape2D.new()
+	c.radius = RADIUS
+	cs.shape = c
 	add_child(cs)
-	person = Person.new()
+	person = Person2D.new()
 	add_child(person)
-	var pk := kd
-	if kd == "aiboss":
-		pk = "boss"
-	person.setup(pk, look, color, body)
+	person.setup(kd, look, color, extra)
 
 
-func place(p: Vector3, y: float = 0.0) -> void:
-	position = Vector3(p.x, 0.16 if _on_sidewalk(p) else 0.0, p.z)
+func place(p: Vector2, y: float = 0.0) -> void:
+	position = p
 	yaw = y
-	rotation.y = yaw
+	person.rotation = yaw
 	net_pos = position
 	net_yaw = yaw
 	home = position
 	home_yaw = y
-
-
-func _on_sidewalk(p: Vector3) -> bool:
-	if world == null or world.plan == null:
-		return false
-	for b in world.plan.blocks:
-		var r: Array = b["rect"]
-		if p.x > r[0] and p.x < r[2] and p.z > r[1] and p.z < r[3]:
-			return true
-	var q: Array = world.plan.quay_rect
-	return p.x > q[0] and p.x < q[2] + 30.0
+	velocity = Vector2.ZERO
+	path = []
+	lot = world.lot_at(position) if world else -1
 
 
 func _physics_process(delta: float) -> void:
@@ -105,7 +99,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if down_t > 0.0:
 		down_t -= delta
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		if down_t <= 0.0:
 			_stand_up()
 		return
@@ -113,57 +107,59 @@ func _physics_process(delta: float) -> void:
 		if not is_local_player and Net.is_host():
 			think(delta)
 		move_and_slide()
-		position.y = move_toward(position.y, 0.16 if _on_sidewalk(position) else 0.0, delta * 2.0)
-		var v := Vector2(velocity.x, velocity.z)
-		speed = v.length()
-		if speed > 0.2:
-			var target := atan2(velocity.x, velocity.z)
-			yaw = lerp_angle(yaw, target, clampf(delta * 10.0, 0.0, 1.0))
-		rotation.y = yaw
+		speed = velocity.length()
+		if speed > 8.0:
+			yaw = lerp_angle(yaw, velocity.angle(), clampf(delta * 12.0, 0.0, 1.0))
+		person.rotation = yaw
 		state = _anim_for_speed()
-		person.set_motion(state, speed)
+		person.set_motion(state, speed / W.M)
 	else:
 		if _net_have:
 			position = position.lerp(net_pos, clampf(delta * 12.0, 0.0, 1.0))
-			if position.distance_to(net_pos) > 6.0:
+			if position.distance_to(net_pos) > 6.0 * W.M:
 				position = net_pos
-			rotation.y = lerp_angle(rotation.y, net_yaw, clampf(delta * 12.0, 0.0, 1.0))
-			yaw = rotation.y
-		person.set_motion(state, speed)
+			yaw = lerp_angle(yaw, net_yaw, clampf(delta * 12.0, 0.0, 1.0))
+			person.rotation = yaw
+		person.set_motion(state, speed / W.M)
+	_lot_t -= delta
+	if _lot_t <= 0.0:
+		_lot_t = 0.2
+		lot = world.lot_at(position)
 
 
 func _anim_for_speed() -> int:
-	if talk_t > 0.0 and speed < 0.2:
-		return Person.Anim.TALK
+	if talk_t > 0.0 and speed < 10.0:
+		return Person2D.Anim.TALK
 	if carrying:
-		return Person.Anim.CARRY
-	if speed > 2.6:
-		return Person.Anim.RUN
-	if speed > 0.2:
-		return Person.Anim.WALK
+		return Person2D.Anim.CARRY
+	if speed > 2.6 * W.M:
+		return Person2D.Anim.RUN
+	if speed > 10.0:
+		return Person2D.Anim.WALK
 	if kind in ["recruit", "unionboss"] or (kind == "docker" and route.is_empty()):
-		return Person.Anim.ARMS
+		return Person2D.Anim.ARMS
 	if kind == "aiboss":
-		return Person.Anim.TALK
-	return Person.Anim.IDLE
+		return Person2D.Anim.TALK
+	return Person2D.Anim.IDLE
 
 
-func net_update(p: Vector3, y: float, st: int, sp: float, carry: bool) -> void:
+func net_update(p: Vector2, y: float, st: int, sp: float, carry: bool) -> void:
 	net_pos = p
 	net_yaw = y
 	if not _net_have:
 		position = p
-		rotation.y = y
+		yaw = y
+		person.rotation = y
 		_net_have = true
 	speed = sp
 	if carry != carrying:
 		carrying = carry
 		person.carry(carry)
-	if st == Person.Anim.DOWN and state != Person.Anim.DOWN:
+	if st == Person2D.Anim.DOWN and state != Person2D.Anim.DOWN:
 		person.action("down")
-	elif st == Person.Anim.DEAD and state != Person.Anim.DEAD:
+	elif st == Person2D.Anim.DEAD and state != Person2D.Anim.DEAD:
 		person.action("die")
-	elif state in [Person.Anim.DOWN, Person.Anim.DEAD] and st not in [Person.Anim.DOWN, Person.Anim.DEAD]:
+	elif state in [Person2D.Anim.DOWN, Person2D.Anim.DEAD] and st not in [Person2D.Anim.DOWN, Person2D.Anim.DEAD]:
 		person.play(st)
 	state = st
 
@@ -175,6 +171,10 @@ func set_carry(on: bool) -> void:
 
 func is_down() -> bool:
 	return down_t > 0.0 or dead
+
+
+func forward() -> Vector2:
+	return Vector2.from_angle(yaw)
 
 
 # ------------------------------------------------------------------ combat (host)
@@ -191,16 +191,18 @@ func hurt(dmg: float, from: Actor, lethal: bool = false) -> void:
 			die(from)
 		else:
 			knock_down(12.0 if lethal else 9.0)
-	elif kind == "ped":
+	elif kind in ["ped", "shop", "newsboy"]:
 		scare(from.position if from else position, 8.0)
-	elif kind in ["crew", "cop", "recruit", "aiboss"] and from and from != self and attack_target == null:
+	elif kind in ["crew", "cop", "recruit", "aiboss", "docker", "unionboss"] and from and from != self and attack_target == null:
 		attack_target = from
+	if kind == "shop" and from:
+		world.shopkeeper_hurt(self, from, hp <= 0.0)
 
 
 func knock_down(t: float) -> void:
-	down_t = t
-	velocity = Vector3.ZERO
-	state = Person.Anim.DOWN
+	down_t = t * world.down_time_mult(self)
+	velocity = Vector2.ZERO
+	state = Person2D.Anim.DOWN
 	if carrying:
 		carrying = false
 		person.carry(false)
@@ -211,22 +213,22 @@ func knock_down(t: float) -> void:
 
 func _stand_up() -> void:
 	hp = 60.0
-	state = Person.Anim.IDLE
-	person.play(Person.Anim.IDLE)
+	state = Person2D.Anim.IDLE
+	person.play(Person2D.Anim.IDLE)
 	attack_target = null
 	chase = null
 
 
 func die(from: Actor) -> void:
 	dead = true
-	state = Person.Anim.DEAD
-	velocity = Vector3.ZERO
+	state = Person2D.Anim.DEAD
+	velocity = Vector2.ZERO
 	person.action("die")
 	collision_layer = 0
 	world.on_killed(self, from)
 
 
-func scare(from: Vector3, t: float) -> void:
+func scare(from: Vector2, t: float) -> void:
 	scared_t = t
 	scared_from = from
 
@@ -243,66 +245,92 @@ func think(delta: float) -> void:
 		_fight(delta)
 		return
 	match kind:
-		"ped": _think_ped(delta)
+		"ped", "newsboy": _think_ped(delta)
 		"cop": _think_cop(delta)
 		"crew": _think_crew(delta)
-		"recruit", "aiboss", "unionboss": _think_stand(delta)
+		"shop": _think_shop(delta)
+		"recruit", "aiboss", "unionboss", "dealer": _think_stand(delta)
 		"docker": _think_docker(delta)
-		_: velocity = Vector3.ZERO
+		_: velocity = Vector2.ZERO
 
 
-func _fight(delta: float) -> void:
+func _fight(_delta: float) -> void:
 	var to := attack_target.position - position
-	to.y = 0.0
 	var d := to.length()
-	if d > 25.0:
+	if d > 25.0 * W.M:
 		attack_target = null
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		return
-	if d > 1.25:
-		velocity = to / d * RUN
+	if d > 1.05 * W.M:
+		_steer_to(attack_target.position, RUN)
 	else:
-		velocity = Vector3.ZERO
-		yaw = atan2(to.x, to.z)
+		velocity = Vector2.ZERO
+		yaw = to.angle()
 		if cooldown <= 0.0:
 			cooldown = randf_range(0.9, 1.4)
+			person.action("punch")
 			world.melee(self, attack_target)
 
 
+## Walk the current path. Returns true when it's done.
 func _follow_path(spd: float) -> bool:
 	if path_i >= path.size():
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		return true
 	var t := path[path_i]
-	var to := Vector3(t.x - position.x, 0, t.z - position.z)
-	if to.length() < 0.6:
+	var to := t - position
+	if to.length() < 0.35 * W.M:
 		path_i += 1
 		return path_i >= path.size()
 	velocity = to.normalized() * spd
+	_unstick(0.0)
 	return false
 
 
-func go_to(p: Vector3) -> void:
-	path = world.plan.path(position, p)
+## Head for a point directly (short distances, same room), re-planning if something is in the way.
+func _steer_to(p: Vector2, spd: float) -> void:
+	if world.lot_at(p) != lot or position.distance_to(p) > 10.0 * W.M:
+		if goal.distance_to(p) > 1.0 * W.M or path_i >= path.size():
+			go_to(p)
+		_follow_path(spd)
+		return
+	velocity = (p - position).normalized() * spd
+
+
+func go_to(p: Vector2) -> void:
+	path = world.route(position, p)
 	path_i = 0
 	goal = p
+
+
+## Stuck against something for a while: skip a waypoint.
+func _unstick(delta: float) -> void:
+	_stuck_t += get_physics_process_delta_time() if delta == 0.0 else delta
+	if _stuck_t > 2.0:
+		if position.distance_to(_stuck_at) < 0.3 * W.M and path_i < path.size():
+			path_i += 1
+		_stuck_t = 0.0
+		_stuck_at = position
+
+
+func _run_from(from: Vector2) -> void:
+	var away := position - from
+	velocity = (away.normalized() if away.length() > 1.0 else Vector2.RIGHT) * RUN
+	path = []
 
 
 func _think_ped(delta: float) -> void:
 	if scared_t > 0.0:
 		scared_t -= delta
-		var away := position - scared_from
-		away.y = 0.0
-		velocity = (away.normalized() if away.length() > 0.1 else Vector3.FORWARD) * RUN
-		path = []
+		_run_from(scared_from)
 		return
 	if wait_t > 0.0:
 		wait_t -= delta
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		return
 	if path_i >= path.size():
-		var n = randi() % world.plan.nodes.size()
-		go_to(world.plan.node_pos(n) + Vector3(randf_range(-1.0, 1.0), 0, randf_range(-1.0, 1.0)))
+		var n: int = randi() % world.plan.nodes.size()
+		go_to(W.pa(world.plan.nodes[n]) + Vector2(randf_range(-0.6, 0.6), randf_range(-0.6, 0.6)) * W.M)
 		wait_t = randf_range(0.0, 3.0) if randf() < 0.4 else 0.0
 		return
 	_follow_path(WALK * (0.85 + (ref_id % 5) * 0.06))
@@ -312,38 +340,56 @@ func _think_cop(delta: float) -> void:
 	if chase and is_instance_valid(chase) and not chase.dead:
 		chase_t -= delta
 		var to := chase.position - position
-		to.y = 0.0
-		if chase_t <= 0.0 or to.length() > 45.0 or chase.hidden_in_car:
+		if chase_t <= 0.0 or to.length() > 45.0 * W.M or chase.hidden_in_car:
 			world.cop_gave_up(self, chase)
 			chase = null
 			return
-		if to.length() < 1.5:
-			velocity = Vector3.ZERO
+		if to.length() < 1.1 * W.M:
+			velocity = Vector2.ZERO
 			world.cop_caught(self, chase)
 			chase = null
 			wait_t = 4.0
 			talk_t = 4.0
 			return
-		velocity = to.normalized() * (RUN * 1.05)
+		_steer_to(chase.position, RUN * 1.05)
 		return
 	chase = null
 	if wait_t > 0.0:
 		wait_t -= delta
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		return
 	if path_i >= path.size():
 		var cop := Game.cop_by_id(ref_id)
-		var tries := 0
-		while tries < 12:
-			var n = randi() % world.plan.nodes.size()
-			var p = world.plan.node_pos(n)
-			if cop.is_empty() or world.plan.district_at(p.x, p.z) == cop["district"]:
+		for tries in 12:
+			var n: int = randi() % world.plan.nodes.size()
+			var p: Vector2 = W.pa(world.plan.nodes[n])
+			if cop.is_empty() or world.plan.district_at(p.x / W.M, p.y / W.M) == cop["district"]:
 				go_to(p)
 				break
-			tries += 1
 		wait_t = randf_range(1.0, 5.0)
 		return
 	_follow_path(WALK * 0.9)
+
+
+## Behind the counter. Scared people back away toward the back room; a hurt one cowers.
+func _think_shop(delta: float) -> void:
+	var b := Game.biz_by_id(ref_id)
+	var fear := float(b.get("fear", 0.0))
+	if scared_t > 0.0:
+		scared_t -= delta
+		var hide: Vector2 = world.shop_hide_spot(ref_id)
+		if hide != Vector2.INF and position.distance_to(hide) > 0.4 * W.M:
+			_steer_to(hide, RUN * 0.8)
+		else:
+			velocity = Vector2.ZERO
+		return
+	var dist := position.distance_to(home)
+	if dist > 0.35 * W.M:
+		_steer_to(home, WALK)
+	else:
+		velocity = Vector2.ZERO
+		yaw = lerp_angle(yaw, home_yaw, 0.1)
+	talk_t = 0.5 if fear > 60.0 else talk_t
 
 
 ## A longshoreman's day: take a crate off the boat at the pier, carry it to the pile on the quay,
@@ -351,36 +397,33 @@ func _think_cop(delta: float) -> void:
 func _think_docker(delta: float) -> void:
 	if scared_t > 0.0:
 		scared_t -= delta
-		var away := position - scared_from
-		away.y = 0.0
-		velocity = (away.normalized() if away.length() > 0.1 else Vector3.FORWARD) * RUN
+		_run_from(scared_from)
 		return
 	if route.is_empty():
 		_think_stand(delta)
 		return
 	if wait_t > 0.0:
 		wait_t -= delta
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		return
-	var t: Vector3 = route[route_i % route.size()]
-	var to := Vector3(t.x - position.x, 0, t.z - position.z)
-	if to.length() < 0.55:
-		velocity = Vector3.ZERO
+	var t: Vector2 = route[route_i % route.size()]
+	var to := t - position
+	if to.length() < 0.5 * W.M:
+		velocity = Vector2.ZERO
 		if route_i % route.size() == 0 and not carrying:
-			set_carry(true)                 # off the boat
+			set_carry(true)
 			wait_t = randf_range(1.2, 2.6)
 		elif route_i % route.size() == 2 and carrying:
-			set_carry(false)                # onto the pile
+			set_carry(false)
 			wait_t = randf_range(0.8, 2.0)
 			talk_t = wait_t if randf() < 0.3 else 0.0
 		route_i = (route_i + 1) % route.size()
 		_stuck_t = 0.0
 		return
 	velocity = to.normalized() * (WALK * 0.95 if carrying else WALK * 1.15)
-	# walked into a stack of crates: skip ahead rather than push at it all day
 	_stuck_t += delta
 	if _stuck_t > 2.5:
-		if position.distance_to(_stuck_at) < 0.6:
+		if position.distance_to(_stuck_at) < 0.5 * W.M:
 			route_i = (route_i + 1) % route.size()
 		_stuck_t = 0.0
 		_stuck_at = position
@@ -388,29 +431,28 @@ func _think_docker(delta: float) -> void:
 
 func _think_stand(_delta: float) -> void:
 	var to := home - position
-	to.y = 0.0
-	if to.length() > 0.5:
-		velocity = to.normalized() * WALK
+	if to.length() > 0.4 * W.M:
+		_steer_to(home, WALK)
 	else:
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		yaw = lerp_angle(yaw, home_yaw, 0.1)
 
 
 func _think_crew(delta: float) -> void:
 	var c := Game.crew_by_id(ref_id)
 	if c.is_empty():
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		return
-	var f := Game.fam(family)
-	# an AI order in progress: walk to the shop, lean on it, come back
+	# an order in progress (an AI family's, or "take" from a player): walk to the owner, lean on him
 	if not order.is_empty():
-		var b := Game.biz_by_id(int(order["biz"]))
-		var door := Vector3(b["door"][0], 0, b["door"][1])
-		if position.distance_to(door) < 1.6:
-			velocity = Vector3.ZERO
+		var spot: Vector2 = world.talk_spot(int(order["biz"]))
+		if position.distance_to(spot) < 0.7 * W.M:
+			velocity = Vector2.ZERO
+			yaw = (world.owner_pos(int(order["biz"])) - position).angle()
 			if wait_t <= 0.0:
-				wait_t = 2.5
-				talk_t = 2.5
+				wait_t = 3.0
+				talk_t = 3.0
+				person.action("threaten")
 			else:
 				wait_t -= delta
 				if wait_t <= 0.0:
@@ -418,12 +460,12 @@ func _think_crew(delta: float) -> void:
 					order = {}
 					path = []
 			return
-		if path_i >= path.size() or goal.distance_to(door) > 1.0:
-			go_to(door)
-		_follow_path(WALK * 1.2)
+		if goal.distance_to(spot) > 0.8 * W.M or path_i >= path.size():
+			go_to(spot)
+		_follow_path(WALK * 1.3)
 		return
 	# defend the family's people
-	var threat = world.threat_near(self, 9.0)
+	var threat = world.threat_near(self, 9.0 * W.M)
 	if threat:
 		attack_target = threat
 		return
@@ -436,73 +478,61 @@ func _think_crew(delta: float) -> void:
 			if leader.attack_target_hint and is_instance_valid(leader.attack_target_hint) and not leader.attack_target_hint.is_down():
 				attack_target = leader.attack_target_hint
 				return
-			var slot = world.follow_slot(self, leader)
-			var to = slot - position
-			to.y = 0.0
-			var d = to.length()
-			if d > 1.0:
-				velocity = to / d * (RUN if d > 5.0 else WALK * 1.3)
+			var slot: Vector2 = world.follow_slot(self, leader)
+			var d := position.distance_to(slot)
+			if d > 0.6 * W.M:
+				_steer_to(slot, RUN if d > 5.0 * W.M else WALK * 1.3)
 			else:
-				velocity = Vector3.ZERO
+				velocity = Vector2.ZERO
 				yaw = lerp_angle(yaw, leader.yaw, 0.1)
 		"guard":
 			var b := Game.biz_by_id(int(c["target"]))
 			if b.is_empty():
 				_go_home_idle()
 				return
-			_stand_at(Vector3(b["door"][0], 0, b["door"][1]) + world.guard_offset(ref_id), float(b["yaw"]))
+			_stand_at(W.door(b) + world.guard_offset(ref_id, b), W.facing_out(float(b["yaw"])))
 		"booze":
 			var wh := Game.nyc_warehouse(family)
 			if wh.is_empty():
 				_go_home_idle()
 				return
-			var basis := Basis(Vector3.UP, float(wh["yaw"]))
-			_stand_at(Vector3(wh["door"][0], 0, wh["door"][1]) + basis * Vector3(1.4 + (ref_id % 3) * 0.7, 0, 0.9), float(wh["yaw"]))
+			var f := W.front_dir(float(wh["yaw"]))
+			_stand_at(W.door(wh) + f.orthogonal() * (1.6 + (ref_id % 3) * 0.7) * W.M, f.angle())
 		"collect":
 			if path_i >= path.size():
+				if wait_t > 0.0:
+					wait_t -= delta
+					velocity = Vector2.ZERO
+					return
+				var t := Game.biz_by_id(int(c["target"]))
 				var shops := Game.shops_of(family).filter(func(x: Dictionary) -> bool:
-					var t := Game.biz_by_id(int(c["target"]))
 					return t.is_empty() or x["district"] == t["district"])
 				if shops.is_empty():
 					_go_home_idle()
 					return
 				var s: Dictionary = shops[randi() % shops.size()]
-				go_to(Vector3(s["door"][0], 0, s["door"][1]))
-				wait_t = 2.0
-			elif wait_t > 0.0 and velocity.length() < 0.1 and path_i >= path.size() - 1:
-				wait_t -= delta
+				go_to(W.door(s))
+				wait_t = 2.5
 			else:
 				_follow_path(WALK * 1.1)
 		_:
 			_go_home_idle()
-	if f.get("ai", false) and c["task"] == "guard":
-		pass
 
 
 func _go_home_idle() -> void:
-	var c := Game.crew_by_id(ref_id)
 	var hq := Game.biz_by_id(int(Game.fam(family).get("hq", -1)))
 	if hq.is_empty():
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
 		return
-	_stand_at(Vector3(hq["door"][0], 0, hq["door"][1]) + world.guard_offset(ref_id), float(hq["yaw"]))
+	var spot: Vector2 = world.club_spot(family, ref_id)
+	_stand_at(spot, W.facing_out(float(hq["yaw"])))
 
 
-func _stand_at(p: Vector3, face_yaw: float) -> void:
-	var to := p - position
-	to.y = 0.0
-	var d := to.length()
-	if d > 12.0:
-		if path_i >= path.size() or goal.distance_to(p) > 1.0:
-			go_to(p)
-		_follow_path(RUN * 0.8)
-	elif d > 0.4:
-		velocity = to / d * WALK
-		path = []
+func _stand_at(p: Vector2, face_yaw: float) -> void:
+	var d := position.distance_to(p)
+	if d > 0.35 * W.M:
+		_steer_to(p, RUN * 0.8 if d > 12.0 * W.M else WALK)
 	else:
-		velocity = Vector3.ZERO
+		velocity = Vector2.ZERO
+		path = []
 		yaw = lerp_angle(yaw, face_yaw, 0.08)
-
-
-## Players point at someone to rough up (R); the crew following them pile in.
-var attack_target_hint: Actor = null

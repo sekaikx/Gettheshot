@@ -21,7 +21,7 @@ func _ready() -> void:
 	_rain = _bed("rain_loop", -80.0)
 	_music = AudioStreamPlayer.new()
 	_music.volume_db = -20.0
-	_music.bus = "Master"
+	_music.bus = _music_bus()
 	add_child(_music)
 	_engine = _bed("engine", -80.0)
 
@@ -41,6 +41,7 @@ func _bed(name: String, db: float) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
 	p.stream = _stream(name, true)
 	p.volume_db = db
+	p.bus = _sfx_bus()
 	add_child(p)
 	p.play()
 	return p
@@ -74,12 +75,13 @@ func ui(name: String, db: float = -6.0) -> void:
 	var p := AudioStreamPlayer.new()
 	p.stream = _stream(name)
 	p.volume_db = db
+	p.bus = _sfx_bus()
 	add_child(p)
 	p.play()
 	p.finished.connect(p.queue_free)
 
 
-func at(kind: String, pos: Vector3) -> void:
+func at(kind: String, pos: Vector2) -> void:
 	var name := ""
 	var db := 0.0
 	var dist := 30.0
@@ -91,14 +93,25 @@ func at(kind: String, pos: Vector3) -> void:
 		"down", "die": name = "hh_hurt"
 		"cheer": name = "coin"; db = -8.0
 		"whistle": name = "whistle"; dist = 60.0
+		"door": name = "click_wood"; db = -10.0; dist = 20.0
+		"cash": name = "coins_pay"; db = -6.0; dist = 20.0
 	if name == "":
 		return
-	var p := AudioStreamPlayer3D.new()
+	var p := AudioStreamPlayer2D.new()
 	p.stream = _stream(name)
 	p.volume_db = db
-	p.max_distance = dist
-	p.unit_size = 6.0
+	p.max_distance = dist * W.M
+	p.attenuation = 1.6
+	p.bus = _sfx_bus()
 	add_child(p)
-	p.global_position = pos + Vector3(0, 1.2, 0)
+	p.global_position = pos
 	p.play()
 	p.finished.connect(p.queue_free)
+
+
+func _sfx_bus() -> StringName:
+	return &"SFX" if AudioServer.get_bus_index(&"SFX") >= 0 else &"Master"
+
+
+func _music_bus() -> StringName:
+	return &"Music" if AudioServer.get_bus_index(&"Music") >= 0 else &"Master"

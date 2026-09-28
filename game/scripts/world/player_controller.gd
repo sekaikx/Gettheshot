@@ -1,65 +1,89 @@
 class_name PlayerController
 extends Node
-## Your hands on the street. Walks your boss (or drives the truck), finds what you're standing
-## next to and asks the host to act on it.
-##   WASD move · Shift sprint · Alt walk · E talk / use · F punch · G pistol · R send your crew at
-##   the person in front of you · V get in / out of the truck · Space brake (driving)
-##   Z / C turn the camera · scroll zoom · Tab family · M map · N newspaper · Esc menu
+## Your hands on the street. Walks your boss (or drives the truck), finds what you're next to,
+## shows the prompt over it, and asks the host to act.
+##   WASD / arrows move (screen directions) · Shift run · Alt walk slowly
+##   E talk / use · F or left click punch (or smash what's in front of you) · G or right click shoot
+##   R send your men at who you face · V get in / out of the truck · Q drop a crate
+##   Tab family · M the city · J the country · N the paper · H how to play · Esc pause
+## With the mouse, you face the pointer while you stand still (aim).
 
 var world: World
-var focus := {}          # what E would use: {type, id, key, label}
+var focus := {}          # what E would use: {type, id, key, label, pos}
 var auto_move := Vector2.ZERO   # autotest: pretend the stick is held
 var _punch_cd := 0.0
 var _shoot_cd := 0.0
+var _mouse_t := 0.0
+var _last_mouse := Vector2.ZERO
 
 
 func _physics_process(delta: float) -> void:
 	_punch_cd = maxf(0.0, _punch_cd - delta)
 	_shoot_cd = maxf(0.0, _shoot_cd - delta)
-	var a = world.local_actor
+	_mouse_t = maxf(0.0, _mouse_t - delta)
+	var a := world.local_actor
 	if a == null:
 		return
 	var busy: bool = world.hud.is_modal() or world.hud.in_jail()
 	if world.local_vehicle:
-		var v = world.local_vehicle
+		var v := world.local_vehicle
 		var th := 0.0
 		var tu := 0.0
 		if not busy:
 			th = float(Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)) - float(Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN))
-			tu = float(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)) - float(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT))
+			tu = float(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT))
 		v.drive(delta, th, tu, Input.is_key_pressed(KEY_SPACE) and not busy)
 		a.position = v.position
 		focus = {}
-		world.hud.set_prompt("V  Get out" + ("   ·   %d crates in the back" % v.load if v.load > 0 else ""))
+		world.hud.set_prompt("Get out" + ("  ·  %d crates in the back" % v.load if v.load > 0 else ""), v.position, "V")
 		return
 	if a.is_down() or busy:
-		a.velocity = Vector3.ZERO
+		a.velocity = Vector2.ZERO
 		if a.is_down():
 			world.hud.set_prompt("")
 		return
 	var inp := Vector2(float(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)),
-		float(Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)) - float(Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)))
+		float(Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)))
 	if auto_move != Vector2.ZERO:
 		inp = auto_move
 	if inp.length() > 1.0:
 		inp = inp.normalized()
-	var spd := Actor.RUN
+	var spd := Actor.RUN * 0.72
 	if Input.is_key_pressed(KEY_SHIFT):
 		spd = Actor.SPRINT
 	if Input.is_key_pressed(KEY_ALT):
 		spd = Actor.WALK
+	if a.lot >= 0 and not Input.is_key_pressed(KEY_SHIFT):
+		spd = minf(spd, Actor.WALK * 1.4)
 	if a.carrying:
-		spd = minf(spd, 2.1)
-	var dir = world.cam.flat_basis() * Vector3(-inp.x, 0, inp.y)
-	a.velocity = dir * spd
+		spd = minf(spd, 2.1 * W.M)
+	a.velocity = inp * spd
+	# aim at the mouse while standing still
+	if inp == Vector2.ZERO and _mouse_t > 0.0:
+		var m := world.get_global_mouse_position()
+		a.yaw = lerp_angle(a.yaw, (m - a.position).angle(), clampf(delta * 14.0, 0.0, 1.0))
 	_find_focus(a)
 
 
 func _unhandled_input(e: InputEvent) -> void:
+	var hud = world.hud
+	if e is InputEventMouseMotion:
+		if (e as InputEventMouseMotion).relative.length() > 2.0:
+			_mouse_t = 2.5
+		return
+	if e is InputEventMouseButton and (e as InputEventMouseButton).pressed and not hud.is_modal():
+		var mb := e as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			_mouse_t = 2.5
+			_punch()
+		elif mb.button_index == MOUSE_BUTTON_RIGHT:
+			_mouse_t = 2.5
+			_face_mouse()
+			_shoot()
+		return
 	if not (e is InputEventKey) or not e.pressed or e.echo:
 		return
 	var k := (e as InputEventKey).keycode
-	var hud = world.hud
 	if k == KEY_ESCAPE:
 		hud.escape()
 		return
@@ -67,14 +91,12 @@ func _unhandled_input(e: InputEvent) -> void:
 		hud.modal_key(k)
 		return
 	match k:
-		KEY_Z: world.cam.turn(1)
-		KEY_C: world.cam.turn(-1)
 		KEY_TAB: hud.toggle_family()
 		KEY_M: hud.toggle_map()
 		KEY_J: hud.toggle_nation()
 		KEY_N: hud.show_newspaper(-1)
 		KEY_H, KEY_F1: hud.toggle_help()
-	var a = world.local_actor
+	var a := world.local_actor
 	if a == null or a.is_down() or hud.in_jail():
 		return
 	if world.local_vehicle:
@@ -83,22 +105,17 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	match k:
 		KEY_E: _use()
-		KEY_F:
-			if _punch_cd <= 0.0:
-				_punch_cd = 0.55
-				a.person.action("punch")
-				Net.to_host("punch", [])
+		KEY_F: _punch()
 		KEY_G:
-			if _shoot_cd <= 0.0:
-				_shoot_cd = 0.9
-				a.person.action("shoot")
-				Net.to_host("shoot", [])
+			if _mouse_t > 0.0:
+				_face_mouse()
+			_shoot()
 		KEY_R:
-			var t := _target_in_front(a, 12.0)
+			var t := _target_in_front(a, 12.0 * W.M)
 			if t:
 				Net.to_host("sic", [t.key])
 			else:
-				hud.toast("Face someone to send your boys after them.", "info")
+				hud.toast("Face someone first, then press R to send your men at him.", "info")
 		KEY_V:
 			var v := _near_vehicle(a)
 			if v:
@@ -108,18 +125,40 @@ func _unhandled_input(e: InputEvent) -> void:
 				Net.to_host("drop", [])
 
 
+func _face_mouse() -> void:
+	var a := world.local_actor
+	if a:
+		a.yaw = (world.get_global_mouse_position() - a.position).angle()
+		a.person.rotation = a.yaw
+
+
+func _punch() -> void:
+	var a := world.local_actor
+	if a == null or a.is_down() or world.local_vehicle or _punch_cd > 0.0:
+		return
+	_punch_cd = 0.5
+	if _mouse_t > 0.0 and a.velocity == Vector2.ZERO:
+		_face_mouse()
+	a.person.action("punch")
+	Net.to_host("punch", [])
+
+
+func _shoot() -> void:
+	var a := world.local_actor
+	if a == null or a.is_down() or world.local_vehicle or _shoot_cd > 0.0:
+		return
+	_shoot_cd = 0.8
+	a.person.action("shoot")
+	Net.to_host("shoot", [])
+
+
 func _use() -> void:
-	var a = world.local_actor
+	var a := world.local_actor
 	if focus.is_empty():
 		return
-	if focus.get("quick", "") != "":
-		# E at your warehouse door with the truck parked there: load it straight away
-		a.person.action("interact")
-		Net.to_host("act", [focus["quick"], focus["id"], 0])
-		return
+	a.person.action("interact")
 	match focus["type"]:
 		"river":
-			a.person.action("interact")
 			Net.to_host("dump_gun", [])
 		"item":
 			a.person.action("pickup")
@@ -131,16 +170,18 @@ func _use() -> void:
 			if a.carrying:
 				Net.to_host("truck_load", [v.key])
 			elif v.load > 0 and v.family == a.family:
-				world.hud.open_truck(v)
+				Net.to_host("truck_unload", [v.key])
 			else:
 				Net.to_host("enter", [v.key])
+		"quick":
+			Net.to_host("act", [focus["what"], focus["id"], 0])
 		_:
-			world.hud.open_dialog(focus)
+			Talk.open(world, focus)
 
 
 func _near_vehicle(a: Actor) -> Vehicle:
 	var best: Vehicle = null
-	var bd := 4.0
+	var bd := 3.2 * W.M
 	for v in world.vehicles.values():
 		var ve := v as Vehicle
 		if not ve.lane.is_empty() or ve.driver != 0 or not ve.key.begins_with("t"):
@@ -153,7 +194,7 @@ func _near_vehicle(a: Actor) -> Vehicle:
 
 
 func _target_in_front(a: Actor, dist: float) -> Actor:
-	var fwd := Vector3(sin(a.yaw), 0, cos(a.yaw))
+	var fwd := a.forward()
 	var best: Actor = null
 	var bd := dist
 	for o in world.actors.values():
@@ -161,7 +202,6 @@ func _target_in_front(a: Actor, dist: float) -> Actor:
 		if ac == a or ac.is_down() or not ac.visible or ac.family == a.family:
 			continue
 		var to := ac.position - a.position
-		to.y = 0.0
 		var d := to.length()
 		if d < bd and fwd.dot(to / maxf(d, 0.01)) > 0.8:
 			bd = d
@@ -169,70 +209,97 @@ func _target_in_front(a: Actor, dist: float) -> Actor:
 	return best
 
 
-## What E would act on: the nearest thing in reach, with your own men (who follow at your heels)
-## and the parked truck ranked behind a door you're standing at.
+## What E would act on: the nearest thing in reach. People first, then things in the room, then
+## the truck, then the river.
 func _find_focus(a: Actor) -> void:
 	var best := {}
-	var bd := 99.0
+	var bd := 99999.0
 	var p := a.position
+	var reach := World.REACH
 	for id in world.items:
 		var c: Crate = world.items[id]
 		var d := c.position.distance_to(p)
-		if d < 1.7 and d < bd:
+		if d < reach and d < bd:
 			bd = d
-			best = {"type": "item", "id": id, "label": ("Pick up the crate" if c.kind == "crate" else "Pick up $%d" % c.amount)}
+			best = {"type": "item", "id": id, "pos": c.position, "label": ("Pick up the crate" if c.kind == "crate" else "Pick up $%d" % c.amount)}
 	if best.is_empty():
 		for o in world.actors.values():
 			var ac := o as Actor
-			if ac == a or ac.is_down() or not ac.visible:
-				continue
-			if ac.kind in ["ped"]:
+			if ac == a or ac.is_down() or not ac.visible or ac.hidden_in_car:
 				continue
 			var own := ac.kind == "crew" and ac.family == a.family
-			var d := ac.position.distance_to(p) + (1.2 if own else 0.0)
-			if d < (3.5 if own else 2.3) and d < bd:
+			var r := reach * (2.2 if ac.kind == "shop" else 1.3)
+			if own:
+				r = reach * 1.6
+			# only people in the same room (or both outside)
+			if ac.lot != a.lot:
+				continue
+			var d := ac.position.distance_to(p) + (0.6 * W.M if own else 0.0)
+			if d < r and d < bd:
 				var lab := _actor_label(ac)
 				if lab != "":
 					bd = d
-					best = {"type": "actor", "key": ac.key, "kind": ac.kind, "id": ac.ref_id, "label": lab}
-	# standing at a warehouse door on the quay, the door wins over the truck parked beside it
-	var at_wh := false
-	for b in Game.biz:
-		if b["kind"] == "warehouse" and Vector2(float(b["door"][0]) - p.x, float(b["door"][1]) - p.z).length() < 2.2:
-			at_wh = true
-	if best.get("type", "") in ["", "actor"] and not at_wh:
+					best = {"type": "actor", "key": ac.key, "kind": ac.kind, "id": ac.ref_id, "pos": ac.position, "label": lab}
+	if best.is_empty() and a.lot >= 0:
+		var b: Dictionary = world.biz_at_lot(a.lot)
+		var lay: Dictionary = world.layout_of_biz(int(b.get("id", -1)))
+		if not lay.is_empty():
+			for it in lay["items"]:
+				var lab2 := _object_label(b, it)
+				if lab2 == "":
+					continue
+				var r2: Rect2 = it["rect"]
+				var q := Vector2(clampf(p.x, r2.position.x, r2.end.x), clampf(p.y, r2.position.y, r2.end.y))
+				var d2 := q.distance_to(p)
+				if d2 < reach and d2 < bd:
+					bd = d2
+					best = {"type": "object", "biz": b["id"], "item": it["type"], "id": it["id"], "pos": r2.get_center(), "label": lab2}
+	if best.is_empty():
 		for v in world.vehicles.values():
 			var ve := v as Vehicle
 			if not ve.key.begins_with("t") or ve.driver != 0:
 				continue
-			var d := ve.position.distance_to(p) + 0.3
-			if d < 3.9 and d < bd:
-				bd = d
+			var d3 := ve.position.distance_to(p)
+			if d3 < 3.0 * W.M and d3 < bd:
+				bd = d3
 				var mine := ve.family == a.family
-				var lab := "Load the crate into the truck" if a.carrying else ("Truck: %d crates  (E unload / V drive)" % ve.load if ve.load > 0 else "Drive the %s truck (V)" % ("family" if mine else Game.fam(ve.family).get("name", "") + " family's"))
-				best = {"type": "truck", "key": ve.key, "label": lab}
+				var lab3 := "Put the crate on the truck" if a.carrying else ("Take a crate off the truck (%d)" % ve.load if ve.load > 0 and mine else "Drive the %s truck" % ("family" if mine else Game.fam(ve.family).get("name", "") + " family's"))
+				best = {"type": "truck", "key": ve.key, "pos": ve.position, "label": lab3}
 	if best.is_empty() and world._near_river(p):
 		var guns: Array = Game.fam(a.family).get("evidence", []).filter(func(e: Dictionary) -> bool: return e["kind"] == "weapon")
 		if not guns.is_empty():
-			best = {"type": "river", "label": "Throw the gun in the river (it's evidence)"}
-	if best.get("type", "") in ["", "actor", "truck"]:
-		for b in Game.biz:
-			var door := Vector3(b["door"][0], 0.16, b["door"][1])
-			var d := door.distance_to(Vector3(p.x, 0.16, p.z))
-			if d < 2.8 and d < bd:
-				bd = d
-				best = {"type": "biz", "id": b["id"], "label": _biz_label(b)}
-				if b["kind"] == "warehouse" and int(b["owned_by"]) == a.family:
-					var truck: Vehicle = world.parked_truck(a.family, door, 9.0)
-					var have := Syndicate.stock(Game.nation, "nyc", a.family)
-					if truck and truck.load < Vehicle.MAX_LOAD and have > 0 and not a.carrying:
-						best["quick"] = "wh_load"
-						best["label"] = "Load %d crates into the truck  (%d in the warehouse)" % [mini(have, Vehicle.MAX_LOAD - truck.load), have]
+			best = {"type": "river", "pos": p, "label": "Throw the gun in the river (it's evidence)"}
 	focus = best
 	if a.carrying and best.is_empty():
-		world.hud.set_prompt("Carrying a crate  ·  Q drop it")
+		world.hud.set_prompt("Carrying a crate  ·  Q to drop it", a.position, "")
+	elif best.is_empty():
+		world.hud.set_prompt("")
 	else:
-		world.hud.set_prompt(("E  " + String(best["label"])) if not best.is_empty() else "")
+		world.hud.set_prompt(String(best["label"]), best.get("pos", Vector2.INF), "E")
+
+
+func _object_label(b: Dictionary, it: Dictionary) -> String:
+	var me := world.local_actor.family
+	match String(it["type"]):
+		"safe":
+			if int(b.get("hq_of", -1)) == me:
+				return "Open the safe"
+			if int(b.get("hq_of", -1)) >= 0:
+				return "Crack the %s family's safe" % Game.fam(int(b["hq_of"])).get("name", "")
+		"desk":
+			if int(b.get("hq_of", -1)) == me:
+				return "Sit at your desk"
+		"map_table":
+			if int(b.get("hq_of", -1)) == me:
+				return "Look at the map"
+		"phone":
+			if int(b.get("hq_of", -1)) == me:
+				var n := Game.deals.filter(func(d: Dictionary) -> bool: return int(d["to"]) == me).size()
+				return "Use the telephone" + ("  ·  %d call%s waiting" % [n, "" if n == 1 else "s"] if n > 0 else "")
+		"register":
+			if int(b["owned_by"]) != me and b["kind"] not in ["precinct", "club", "warehouse"] and not (b.get("broken", []) as Array).has(int(it["id"])):
+				return "Empty the till"
+	return ""
 
 
 func _actor_label(ac: Actor) -> String:
@@ -256,29 +323,29 @@ func _actor_label(ac: Actor) -> String:
 			if ac.family == world.local_actor.family:
 				return "Give %s an order" % c.get("name", "your man")
 			return ""
+		"shop":
+			var b := Game.biz_by_id(ac.ref_id)
+			if b.is_empty():
+				return ""
+			if b["kind"] == "precinct":
+				return "Talk to the desk sergeant"
+			if b["kind"] == "club":
+				return "Talk to the bartender"
+			if b["kind"] == "warehouse":
+				return "Talk to the watchman"
+			if int(b["protector"]) == world.local_actor.family and int(b["envelope"]) > 0:
+				return "Collect from %s  ·  $%d" % [b["owner_name"], int(b["envelope"])]
+			return "Talk to %s" % b["owner_name"]
 		"smuggler":
 			return "Talk to the man from the boat" if ac.visible else ""
 		"dealer":
-			return "Talk to Izzy (he sells things that go bang)"
+			return "Talk to Izzy (he sells guns)"
 		"unionboss":
-			return "Talk to %s, hiring boss of Local %s" % [Game.UNION_BOSS, Game.UNION_LOCAL]
+			return "Talk to %s, the union boss" % Game.UNION_BOSS
+		"newsboy":
+			return "Buy a paper"
+		"docker":
+			return "Talk to the longshoreman"
+		"ped":
+			return "Talk"
 	return ""
-
-
-func _biz_label(b: Dictionary) -> String:
-	var me = world.local_actor.family
-	if b["kind"] == "precinct":
-		return "The desk sergeant, 14th Precinct"
-	if b["kind"] == "warehouse":
-		var own := int(b["owned_by"])
-		if own == me:
-			return "Your warehouse: %d crates  ·  park the truck here to load it" % Syndicate.stock(Game.nation, "nyc", me)
-		if own >= 0:
-			return "%s (the %s family's warehouse)" % [b["name"], Game.fam(own)["name"]]
-		return "%s  ·  a warehouse on the quay, for sale" % b["name"]
-	if b["kind"] == "club":
-		if int(b["hq_of"]) == me:
-			return "Your club: the stash, the books"
-		if int(b["hq_of"]) >= 0:
-			return "%s (the %s family)" % [b["name"], Game.fam(int(b["hq_of"]))["name"]]
-	return "%s  ·  %s" % [b["name"], b["owner_name"]]

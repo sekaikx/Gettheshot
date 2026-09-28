@@ -1,10 +1,10 @@
 extends Node
 ## godot res://scenes/main.tscn -- --autotest --shot=/tmp/a
-## Plays solo: walks, talks to a shop, shoots, sends men to Chicago, runs a convoy, buys a
-## warehouse on the West St. quay (the convoy into New York fills it, the truck loads from it),
-## a warehouse and a brewery in Chicago, a freight order by rail, the booze run, talks to the
-## union's hiring boss, lets months pass with the AI families acting, and saves screenshots of
-## each screen.
+## Plays solo in the 2D street: walks, goes into a shop, talks to the owner, shakes him down
+## (smashes his things until the fear meter tips), shoots, sends men to Chicago, buys a warehouse on
+## the quay and loads the truck from it, talks to the union boss, lets months pass, and saves
+## screenshots of each screen (street, inside a shop, the talk box, the shakedown, the quay, night,
+## rain, the club's office, the maps, the family book, the paper).
 ##
 ## godot res://scenes/main.tscn -- --autotest --sim=36 : no test steps, just lets 36 months pass
 ## fast and prints every family's money each month (balance check).
@@ -19,6 +19,7 @@ var _sim_start := 0
 var _checks := {}
 var _wh_id := -1
 var _speak_id := -1
+var _shop_id := -1
 var _pending := ""
 var _pending_frames := 0
 
@@ -32,97 +33,116 @@ func _ready() -> void:
 	if _sim > 0:
 		_start_sim()
 		return
+	Game.clock = 0.2
 	_steps = [
 		[0.3, func() -> void:
-			if world.hud.is_modal(): world.hud.toggle_help()],
-		[1.5, func() -> void: world.controller.auto_move = Vector2(0.3, -1.0)],
-		[4.5, func() -> void: world.controller.auto_move = Vector2.ZERO],
-		[5.0, func() -> void: _shot("street")],
-		[5.2, func() -> void:
-			var f: Dictionary = world.controller.focus
-			if not f.is_empty(): world.controller._use()],
-		[6.0, func() -> void: _shot("dialog")],
-		[6.2, func() -> void:
-			world.hud.close_dialog()
-			var me: Actor = world.local_actor
-			var b := _nearest_shop(me.position)
-			Net.to_host("act", ["pitch", b["id"], 0])
-			Net.to_host("act", ["lean", b["id"], 0])
+			if world.hud.is_modal(): world.hud.escape()],
+		[0.5, func() -> void: world.controller.auto_move = Vector2(0.4, 1.0)],
+		[2.5, func() -> void: world.controller.auto_move = Vector2.ZERO],
+		[3.0, func() -> void: _shot("street")],
+		[3.2, func() -> void: _enter_shop()],
+		[4.2, func() -> void: _shot("inside")],
+		[4.4, func() -> void:
+			world.controller._find_focus(world.local_actor)
+			_checks["owner_focus"] = world.controller.focus.get("kind", "") == "shop"
+			world.controller._use()
+			_checks["talk_open"] = world.hud.is_modal()],
+		[5.2, func() -> void: _shot("talk")],
+		[5.4, func() -> void: _shakedown()],
+		[7.0, func() -> void: _shot("shakedown")],
+		[7.2, func() -> void: _smash_more()],
+		[8.0, func() -> void:
+			var b := Game.biz_by_id(_shop_id)
+			_checks["shakedown_result"] = int(b["protector"]) == 0 or int(b.get("snapped_until", -1)) >= Game.month
+			print("  shakedown: protector=%d fear=%d snapped=%d broken=%s" % [int(b["protector"]), int(b["fear"]), int(b.get("snapped_until", -1)), str(b.get("broken", []))])
 			Game.player(1)["wallet"] += 5000
 			Game.fam(0)["dirty"] += 8000
 			Game.fam(0)["clean"] += 16000
+			Game.fam(0)["arsenal"]["pistol"] += 1
 			Net.to_host("shoot", [])
 			Net.to_host("nation", ["send", "chi", 4, 1, -1])
 			Net.to_host("nation", ["convoy", "champlain", 50])
 			Net.to_host("nation", ["ambush", "detroit_river", 3])
 			Net.to_host("nation", ["route", "rum_row_atl"])],
-		[6.4, func() -> void: _supply_setup()],
-		[6.6, func() -> void:
+		[8.2, func() -> void: _supply_setup()],
+		[8.4, func() -> void:
 			var cop: Actor = world.actor("k0")
 			world.local_actor.set_carry(true)
-			world.local_actor.place(cop.position + Vector3(2, 0, 0))],
-		[7.0, func() -> void:
+			world.local_actor.place(cop.position + Vector2(2, 0) * W.M)],
+		[8.8, func() -> void:
+			world.local_actor.set_carry(false)
 			Game.cfg["month_seconds"] = 1.2],
-		[13.0, func() -> void:
+		[14.0, func() -> void:
 			Game.cfg["month_seconds"] = 60.0
+			Game.clock = 0.2
 			Net.to_host("nation", ["hit", "chi", 1])],
-		[13.2, func() -> void: _load_truck()],
-		[15.0, func() -> void: _shot("dock")],
-		[15.2, func() -> void:
+		[14.2, func() -> void: _load_truck()],
+		[15.4, func() -> void: _shot("warehouse")],
+		[15.6, func() -> void:
+			world.hud.close_conversation()
 			var u: Actor = world.actor("u1")
-			world.local_actor.place(u.position + Basis(Vector3.UP, u.yaw) * Vector3(0, 0, 1.2), u.yaw + PI)
+			world.local_actor.place(u.position + Vector2.from_angle(u.yaw) * 0.9 * W.M, u.yaw + PI)
 			world.cam.snap()],
-		[15.8, func() -> void:
+		[16.2, func() -> void:
 			world.controller._find_focus(world.local_actor)
 			_checks["union_focus"] = world.controller.focus.get("kind", "") == "unionboss"
 			world.controller._use()
-			_checks["union_dialog"] = world.hud._modal == "dialog"],
-		[16.6, func() -> void: _shot("union")],
-		[16.8, func() -> void:
-			world.hud._choose(0)       # put the local on the payroll
-			# the longshoremen at work on the middle pier
+			_checks["union_talk"] = world.hud.is_modal()],
+		[17.0, func() -> void: _shot("union")],
+		[17.2, func() -> void:
+			world.hud._choose(0)
 			var pier: Dictionary = world.plan.piers[1]
-			world.local_actor.place(Vector3(world.plan.water_x - 5.0, 0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 6.0), PI * 0.5)
-			world.cam.dist_goal = 26.0
+			world.local_actor.place(W.p(world.plan.water_x - 4.0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 4.0), 0.0)
+			world.cam.user_zoom = 0.7
 			world.cam.snap()],
-		[19.0, func() -> void:
+		[19.5, func() -> void:
 			var carrying := 0
 			for a in world.actors.values():
 				if (a as Actor).kind == "docker" and (a as Actor).carrying:
 					carrying += 1
 			_checks["dockers_work"] = carrying > 0
 			_shot("piers")],
-		[19.2, func() -> void: world.cam.dist_goal = 40.0],
-		[21.0, func() -> void: _shot("zoom")],
-		[21.2, func() -> void:
-			Game.clock = 0.74
-			world.cam.dist_goal = 18.0],
+		[19.7, func() -> void:
+			world.cam.user_zoom = 0.45
+			var hq := Game.biz_by_id(int(Game.fam(0)["hq"]))
+			world.local_actor.place(W.door(hq) + W.front_dir(float(hq["yaw"])) * 3.0 * W.M)
+			world.cam.snap()],
+		[21.5, func() -> void: _shot("zoom")],
+		[21.7, func() -> void:
+			world.cam.user_zoom = 1.0
+			Game.clock = 0.74],
 		[24.0, func() -> void: _shot("night")],
 		[24.2, func() -> void:
-			world.hud.close_dialog()
-			world.hud._modal = ""
-			world.hud.toggle_nation()],
-		[25.2, func() -> void: _shot("nation")],
-		[25.3, func() -> void:
-			world.hud._nation._sel = {"type": "rail", "id": "rail_nyc_chi"}
-			world.hud._nation.focus_on("buf", 2.4)
-			world.hud._nation._fill()],
-		[26.0, func() -> void: _shot("nation_rail")],
-		[26.2, func() -> void:
-			world.hud.toggle_nation()
-			world.hud._modal = ""
-			world.hud._fam_tab = "case"
-			world.hud.toggle_family()],
-		[27.0, func() -> void: _shot("case")],
+			world.weather = "rain"],
+		[25.5, func() -> void: _shot("rain")],
+		[25.7, func() -> void:
+			world.weather = "clear"
+			Game.clock = 0.25
+			_to_office()],
+		[27.0, func() -> void: _shot("office")],
 		[27.2, func() -> void:
-			world.hud._fam_tab = "supply"
-			world.hud._fill_family()],
-		[28.0, func() -> void: _shot("supply")],
-		[28.2, func() -> void:
+			world.controller._find_focus(world.local_actor)
+			_checks["office_focus"] = world.controller.focus.get("type", "") == "object"
+			print("  in the office, E would: ", world.controller.focus.get("label", "(nothing)"))
+			world.controller._use()],
+		[27.8, func() -> void: _shot("office_talk")],
+		[28.0, func() -> void:
+			world.hud.close_conversation()
+			world.hud.toggle_nation()],
+		[29.0, func() -> void: _shot("nation")],
+		[29.2, func() -> void:
+			world.hud.toggle_nation()
+			world.hud.toggle_family()],
+		[30.0, func() -> void: _shot("book")],
+		[30.2, func() -> void:
 			world.hud.toggle_family()
+			world.hud.toggle_map()],
+		[31.0, func() -> void: _shot("dons_view")],
+		[31.2, func() -> void:
+			world.hud.toggle_map()
 			world.hud.show_newspaper(-1)],
-		[29.0, func() -> void: _shot("paper")],
-		[29.3, func() -> void: _finish()],
+		[32.0, func() -> void: _shot("paper")],
+		[32.3, func() -> void: _finish()],
 	]
 	Game.notice.connect(func(fam: int, text: String, _k: String) -> void:
 		if fam == 0 or fam == -1: _log.append("notice: " + text))
@@ -135,12 +155,59 @@ func _ready() -> void:
 		if n == "reply": _log.append("reply: " + String(args[0])))
 
 
+## Into the nearest shop that pays nobody, in front of the counter.
+func _enter_shop() -> void:
+	var me: Actor = world.local_actor
+	var best := {}
+	var bd := INF
+	for b in Game.biz:
+		if b["kind"] in ["club", "precinct", "warehouse", "poolhall"] or int(b["protector"]) >= 0 or int(b["owned_by"]) >= 0:
+			continue
+		var d := W.door(b).distance_to(me.position)
+		if d < bd:
+			bd = d
+			best = b
+	_shop_id = best["id"]
+	var spot: Vector2 = world.talk_spot(_shop_id)
+	var f := W.front_dir(float(best["yaw"]))
+	me.place(spot, (-f).angle())
+	world.cam.snap()
+	_checks["inside"] = true
+
+
+## Offer protection; when he says no, break his things.
+func _shakedown() -> void:
+	world.hud.close_conversation()
+	Net.to_host("act", ["pitch", _shop_id, 0])
+	var lay: Dictionary = world.layout_of_biz(_shop_id)
+	for it in lay["items"]:
+		if bool(it["breakable"]) and it["type"] != "window":
+			var me: Actor = world.local_actor
+			me.place((it["rect"] as Rect2).get_center() + (lay["front"] as Vector2) * 0.9 * W.M, (-(lay["front"] as Vector2)).angle())
+			Net.to_host("smash", [_shop_id, it["id"]])
+			break
+	var b := Game.biz_by_id(_shop_id)
+	_checks["shakedown_started"] = int(b.get("shake", -1)) == 0 or int(b["protector"]) == 0
+	print("  after the first smash: fear=%d shake=%d weak=%s" % [int(b["fear"]), int(b.get("shake", -1)), b.get("weak", "")])
+
+
+func _smash_more() -> void:
+	var lay: Dictionary = world.layout_of_biz(_shop_id)
+	var b := Game.biz_by_id(_shop_id)
+	for it in lay["items"]:
+		if int(b["protector"]) == 0 or int(b.get("shake", -1)) != 0:
+			break
+		if bool(it["breakable"]) and not (b["broken"] as Array).has(int(it["id"])):
+			world.local_actor.place((it["rect"] as Rect2).get_center() + (lay["front"] as Vector2) * 0.9 * W.M, 0.0)
+			Net.to_host("smash", [_shop_id, it["id"]])
+
+
 ## Buy the first warehouse on the quay (in person), a warehouse and the brewery in Chicago, a
 ## convoy into Chicago, freight New York -> Chicago, a speakeasy and a man on the booze run.
 func _supply_setup() -> void:
 	var wh: Dictionary = world.quay_warehouses()[0]
 	_wh_id = wh["id"]
-	world.local_actor.place(Vector3(wh["door"][0], 0, wh["door"][1]) + Basis(Vector3.UP, float(wh["yaw"])) * Vector3(0, 0, 0.8))
+	world.local_actor.place(W.door(wh) - W.front_dir(float(wh["yaw"])) * 1.5 * W.M)
 	Net.to_host("act", ["buy", _wh_id, 0])
 	_checks["nyc_warehouse"] = Syndicate.has_wh(Game.nation, "nyc", 0) and int(Game.biz_by_id(_wh_id)["owned_by"]) == 0
 	Net.to_host("nation", ["warehouse", "chi"])
@@ -149,9 +216,6 @@ func _supply_setup() -> void:
 	Net.to_host("nation", ["yard", "chi"])
 	Net.to_host("nation", ["freight", "rail_nyc_chi", "nyc", "chi", 20])
 	_checks["chi_warehouse"] = Syndicate.has_wh(Game.nation, "chi", 0)
-	_checks["chi_brewery"] = int(Game.nation["cities"]["chi"]["plant"]) == 0
-	_checks["freight_order"] = (Game.nation["freight"] as Array).any(func(o: Dictionary) -> bool: return int(o["fam"]) == 0 and o["from"] == "nyc")
-	# a speakeasy of our own and a man to run the booze to it
 	for b in Game.shops_of(0):
 		if b["owned_by"] < 0 and b["kind"] not in ["club", "warehouse", "precinct"]:
 			Game.act_buy(0, b["id"])
@@ -164,45 +228,33 @@ func _supply_setup() -> void:
 		_checks["booze_run"] = Game.crew_by_id(men[men.size() - 1]["id"])["task"] == "booze"
 
 
-## After the months: the truck parked at the warehouse door, E loads it from the stock.
+## The truck parked outside the warehouse, the watchman loads it.
 func _load_truck() -> void:
 	var wh := Game.biz_by_id(_wh_id)
 	var have := Syndicate.stock(Game.nation, "nyc", 0)
-	print("  nyc warehouse before loading: ", have, " crates")
 	if have < 150:
-		Syndicate.put_stock(Game.nation, "nyc", 0, 150 - have)       # a full quay for the picture
+		Syndicate.put_stock(Game.nation, "nyc", 0, 150 - have)
 		Game.mark_dirty()
-	var basis := Basis(Vector3.UP, float(wh["yaw"]))
-	var door := Vector3(wh["door"][0], 0, wh["door"][1])
+	var f := W.front_dir(float(wh["yaw"]))
 	var truck: Vehicle = world.vehicles["t0"]
 	truck.set_load(0)
-	truck.place(door + basis * Vector3(0, 0, 5.2), float(wh["yaw"]) + PI * 0.5)
-	world.local_actor.set_carry(false)
-	world.local_actor.place(door + basis * Vector3(0.6, 0, 0.9), float(wh["yaw"]) + PI)
-	world.controller._find_focus(world.local_actor)
-	print("  at the warehouse door, E would: ", world.controller.focus.get("label", "(nothing)"))
-	_checks["load_prompt"] = world.controller.focus.get("quick", "") == "wh_load"
-	var before := Syndicate.stock(Game.nation, "nyc", 0)
-	world.controller._use()
-	_checks["truck_loaded"] = truck.load > 0 and Syndicate.stock(Game.nation, "nyc", 0) == before - truck.load
-	print("  truck loaded ", truck.load, " crates at the warehouse door; ", Syndicate.stock(Game.nation, "nyc", 0), " left")
-	world.cam.dist_goal = 21.0
+	truck.place(W.door(wh) + f * 4.5 * W.M, f.orthogonal().angle())
+	var lay: Dictionary = world.layout_of_biz(_wh_id)
+	world.local_actor.place(world.talk_spot(_wh_id), (-f).angle())
 	world.cam.snap()
+	var before := Syndicate.stock(Game.nation, "nyc", 0)
+	Net.to_host("act", ["wh_load", _wh_id, 0])
+	_checks["truck_loaded"] = truck.load > 0 and Syndicate.stock(Game.nation, "nyc", 0) == before - truck.load
+	print("  truck loaded ", truck.load, " crates; ", Syndicate.stock(Game.nation, "nyc", 0), " left; layout ok: ", not lay.is_empty())
 	Game.mark_dirty()
 
 
-func _nearest_shop(p: Vector3) -> Dictionary:
-	var best := {}
-	var bd := INF
-	for b in Game.biz:
-		if b["kind"] in ["club", "precinct", "warehouse"]:
-			continue
-		var d := Vector3(b["door"][0], 0, b["door"][1]).distance_to(p)
-		if d < bd:
-			bd = d
-			best = b
-	world.local_actor.place(Vector3(best["door"][0], 0, best["door"][1]) + Vector3(0.5, 0, 0.5))
-	return best
+func _to_office() -> void:
+	var hq := Game.biz_by_id(int(Game.fam(0)["hq"]))
+	var lay: Dictionary = world.layout_of_biz(int(hq["id"]))
+	var at: Vector2 = lay["spots"].get("safe", (lay["back"] as Rect2).get_center())
+	world.local_actor.place(at, 0.0)
+	world.cam.snap()
 
 
 ## Screenshots wait a few rendered frames, so what the step before opened is on screen.
@@ -220,15 +272,8 @@ func _finish() -> void:
 	var f: Dictionary = Game.fam(0)
 	var n: Dictionary = Game.nation
 	print("heat=", f["heat"], " evidence=", f["evidence"].size(), " chicago=", n["cities"]["chi"]["influence"], " cellar=", f.get("cellar", 0))
-	print("  supply: nyc stock=%d chi stock=%d chi sold=%s chi plant=%d docks nyc=%d freight=%s speakeasy=%s" % [Syndicate.stock(n, "nyc", 0),
-		Syndicate.stock(n, "chi", 0), str(n["cities"]["chi"]["sold"]), int(n["cities"]["chi"]["plant"]), int(n["cities"]["nyc"]["docks"]),
-		str((n["freight"] as Array).map(func(o: Dictionary) -> String: return "%s>%s %d (%s)" % [o["from"], o["to"], o["crates"], o["last"]])),
-		str(Game.biz_by_id(_speak_id).get("stock", -1)) if _speak_id >= 0 else "none"])
-	for l in n.get("supply", {}).get("0", []):
-		print("  supply log: ", l)
 	for fm in Game.families:
-		print("  ", fm["name"], " dirty=", fm["dirty"], " clean=", fm["clean"], " shops=", Game.shops_of(fm["id"]).size(), " legacy=", Game.legacy(fm["id"]),
-			" warehouses=", Syndicate.warehouses_of(n, fm["id"]))
+		print("  ", fm["name"], " dirty=", fm["dirty"], " clean=", fm["clean"], " shops=", Game.shops_of(fm["id"]).size(), " legacy=", Game.legacy(fm["id"]))
 	for nw in Game.news.slice(0, 8):
 		print("  news: ", nw["text"])
 	_checks["union_paid"] = int(n["cities"]["nyc"]["docks"]) == 0
@@ -260,11 +305,10 @@ func _process(delta: float) -> void:
 
 func _start_sim() -> void:
 	if world.hud.is_modal():
-		world.hud.toggle_help()
+		world.hud.escape()
 	_sim_start = Game.month
 	Game.cfg["month_seconds"] = 0.35
 	Game.month_passed.connect(_sim_month)
-	# months this short leave no time to walk to a shop: settle the AI families' street orders at once
 	Game.ai_order.connect(func(order: Dictionary) -> void:
 		var a: Actor = world.actor("c%d" % int(order["crew"]))
 		if a:
@@ -274,12 +318,9 @@ func _start_sim() -> void:
 
 
 func _sim_month(m: int) -> void:
-	var n: Dictionary = Game.nation
-	# the player does his rounds: every envelope collected and stashed
 	for b in Game.shops_of(0):
 		Game.fam(0)["dirty"] += int(b["envelope"])
 		b["envelope"] = 0
-	# ...and talks one shopkeeper into paying, or tries to
 	var home: String = Game.biz_by_id(int(Game.fam(0)["hq"]))["district"]
 	for b in Game.biz:
 		if b["protector"] < 0 and b["owned_by"] < 0 and b["kind"] not in ["precinct", "club", "warehouse"] and (b["district"] == home or m % 2 == 0):
@@ -287,25 +328,7 @@ func _sim_month(m: int) -> void:
 			break
 	var parts := []
 	for f in Game.families:
-		var sites := []
-		for c in Syndicate.CITIES:
-			var cs: Dictionary = n["cities"][c["id"]]
-			if cs["wh"].has(str(f["id"])):
-				sites.append("W:%s(%d)" % [c["id"], int(cs["wh"][str(f["id"])])])
-			if int(cs["plant"]) == f["id"]:
-				sites.append("B:" + c["id"])
-			if int(cs["docks"]) == f["id"]:
-				sites.append("D:" + c["id"])
-			if int(cs["yard"]) == f["id"]:
-				sites.append("Y:" + c["id"])
-		var conv := []
-		for d in Syndicate.ROUTES:
-			var v := int(n["routes"][d["id"]]["convoys"].get(str(f["id"]), 0))
-			if v > 0:
-				conv.append("%s:%d" % [d["id"], v])
-		var fr := (n["freight"] as Array).filter(func(o: Dictionary) -> bool: return int(o["fam"]) == f["id"]).size()
-		parts.append("%s d=%d c=%d shops=%d men=%d heat=%d net=%d %s %s fr=%d" % [f["name"], int(f["dirty"]), int(f["clean"]), Game.shops_of(f["id"]).size(), Game.crew_of(f["id"]).size(),
-			int(f["heat"]), Syndicate._net_dirty(f), ",".join(conv), " ".join(sites), fr])
+		parts.append("%s d=%d c=%d shops=%d men=%d heat=%d" % [f["name"], int(f["dirty"]), int(f["clean"]), Game.shops_of(f["id"]).size(), Game.crew_of(f["id"]).size(), int(f["heat"])])
 	print("SIM %s | %s" % [Game.date_text(m), " | ".join(parts)])
 	if m - _sim_start >= _sim:
 		print("SIM END")
