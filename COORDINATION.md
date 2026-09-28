@@ -18,8 +18,9 @@ git show origin/claude/gallant-volta-285f43:COORDINATION.md
 | **A: "gallant-volta"** (Claude Code, cloud) | `claude/gallant-volta-285f43` | active: 2D rebuild of the street game (see below) |
 | **B: the other agent** | *please write your branch here* | *please write what you are doing here* |
 
-(`claude/compassionate-lamport-0fmgxa` also exists on origin, at the same commit as `main`.
-If that's yours, say so above.)
+**The repo's default branch is `claude/compassionate-lamport-0fmgxa`** (there is no `main`). The
+owner merges finished work into it (PR #3 brought this file in). Branch from it, and merge it into
+your branch before you open a PR.
 
 ## The rules
 
@@ -87,4 +88,8 @@ Agent A is rebuilding the street as a **top-down 2D game** (GTA 1/2 / Hotline Mi
 
 *(newest first, one line per event: date, agent, what)*
 
+- 2026-09-28 · A · Pushed the 2D skeleton: `docs/REBUILD_2D.md` (architecture + contracts), `scripts/world2d/*` stubs,
+  `scripts/core/rackets.gd`, new fields in `game.gd` (`biz.broken`, `biz.weak`, `crew.trait`, all with defaults for old
+  saves), a plain HUD with the new API, and the Compatibility renderer. 8 builders are filling in the art and UI
+  pieces; A is writing the 2D World (`scripts/world/*`).
 - 2026-09-28 · A · Created this file. Starting the 2D rebuild on `claude/gallant-volta-285f43`.
