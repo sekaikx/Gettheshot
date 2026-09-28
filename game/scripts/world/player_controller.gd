@@ -112,6 +112,11 @@ func _use() -> void:
 	var a = world.local_actor
 	if focus.is_empty():
 		return
+	if focus.get("quick", "") != "":
+		# E at your warehouse door with the truck parked there: load it straight away
+		a.person.action("interact")
+		Net.to_host("act", [focus["quick"], focus["id"], 0])
+		return
 	match focus["type"]:
 		"river":
 			a.person.action("interact")
@@ -164,6 +169,8 @@ func _target_in_front(a: Actor, dist: float) -> Actor:
 	return best
 
 
+## What E would act on: the nearest thing in reach, with your own men (who follow at your heels)
+## and the parked truck ranked behind a door you're standing at.
 func _find_focus(a: Actor) -> void:
 	var best := {}
 	var bd := 99.0
@@ -181,19 +188,25 @@ func _find_focus(a: Actor) -> void:
 				continue
 			if ac.kind in ["ped"]:
 				continue
-			var d := ac.position.distance_to(p)
-			if d < 2.3 and d < bd:
+			var own := ac.kind == "crew" and ac.family == a.family
+			var d := ac.position.distance_to(p) + (1.2 if own else 0.0)
+			if d < (3.5 if own else 2.3) and d < bd:
 				var lab := _actor_label(ac)
 				if lab != "":
 					bd = d
 					best = {"type": "actor", "key": ac.key, "kind": ac.kind, "id": ac.ref_id, "label": lab}
-	if best.is_empty():
+	# standing at a warehouse door on the quay, the door wins over the truck parked beside it
+	var at_wh := false
+	for b in Game.biz:
+		if b["kind"] == "warehouse" and Vector2(float(b["door"][0]) - p.x, float(b["door"][1]) - p.z).length() < 2.2:
+			at_wh = true
+	if best.get("type", "") in ["", "actor"] and not at_wh:
 		for v in world.vehicles.values():
 			var ve := v as Vehicle
 			if not ve.key.begins_with("t") or ve.driver != 0:
 				continue
-			var d := ve.position.distance_to(p)
-			if d < 3.6 and d < bd:
+			var d := ve.position.distance_to(p) + 0.3
+			if d < 3.9 and d < bd:
 				bd = d
 				var mine := ve.family == a.family
 				var lab := "Load the crate into the truck" if a.carrying else ("Truck: %d crates  (E unload / V drive)" % ve.load if ve.load > 0 else "Drive the %s truck (V)" % ("family" if mine else Game.fam(ve.family).get("name", "") + " family's"))
@@ -202,13 +215,19 @@ func _find_focus(a: Actor) -> void:
 		var guns: Array = Game.fam(a.family).get("evidence", []).filter(func(e: Dictionary) -> bool: return e["kind"] == "weapon")
 		if not guns.is_empty():
 			best = {"type": "river", "label": "Throw the gun in the river (it's evidence)"}
-	if best.is_empty():
+	if best.get("type", "") in ["", "actor", "truck"]:
 		for b in Game.biz:
 			var door := Vector3(b["door"][0], 0.16, b["door"][1])
 			var d := door.distance_to(Vector3(p.x, 0.16, p.z))
 			if d < 2.8 and d < bd:
 				bd = d
 				best = {"type": "biz", "id": b["id"], "label": _biz_label(b)}
+				if b["kind"] == "warehouse" and int(b["owned_by"]) == a.family:
+					var truck: Vehicle = world.parked_truck(a.family, door, 9.0)
+					var have := Syndicate.stock(Game.nation, "nyc", a.family)
+					if truck and truck.load < Vehicle.MAX_LOAD and have > 0 and not a.carrying:
+						best["quick"] = "wh_load"
+						best["label"] = "Load %d crates into the truck  (%d in the warehouse)" % [mini(have, Vehicle.MAX_LOAD - truck.load), have]
 	focus = best
 	if a.carrying and best.is_empty():
 		world.hud.set_prompt("Carrying a crate  ·  Q drop it")
@@ -241,6 +260,8 @@ func _actor_label(ac: Actor) -> String:
 			return "Talk to the man from the boat" if ac.visible else ""
 		"dealer":
 			return "Talk to Izzy (he sells things that go bang)"
+		"unionboss":
+			return "Talk to %s, hiring boss of Local %s" % [Game.UNION_BOSS, Game.UNION_LOCAL]
 	return ""
 
 
@@ -248,6 +269,13 @@ func _biz_label(b: Dictionary) -> String:
 	var me = world.local_actor.family
 	if b["kind"] == "precinct":
 		return "The desk sergeant, 14th Precinct"
+	if b["kind"] == "warehouse":
+		var own := int(b["owned_by"])
+		if own == me:
+			return "Your warehouse: %d crates  ·  park the truck here to load it" % Syndicate.stock(Game.nation, "nyc", me)
+		if own >= 0:
+			return "%s (the %s family's warehouse)" % [b["name"], Game.fam(own)["name"]]
+		return "%s  ·  a warehouse on the quay, for sale" % b["name"]
 	if b["kind"] == "club":
 		if int(b["hq_of"]) == me:
 			return "Your club: the stash, the books"
