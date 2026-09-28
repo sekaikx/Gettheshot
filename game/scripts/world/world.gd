@@ -57,6 +57,8 @@ var _shake_t := 0.0
 var _night := -1.0
 var _decor := {}
 var _banner_lot := -2
+var _ring_t := 3.0
+var _rings_done := {}     # family id -> {ring id: true}
 
 
 func _ready() -> void:
@@ -124,10 +126,12 @@ func _ready() -> void:
 		_host_spawn()
 	_ensure_local_boss()
 	_on_state_changed()
-	if bool(Game.cfg.get("tutorial", false)) and not "--autotest" in OS.get_cmdline_user_args():
+	var args := OS.get_cmdline_user_args()
+	if (bool(Game.cfg.get("tutorial", false)) and not "--autotest" in args) or "--tuttest" in args:
 		var tut = load("res://scripts/ui/tutorial.gd")
 		if tut:
 			var t: Node = tut.new()
+			t.name = "Tutorial"
 			t.set("world", self)
 			add_child(t)
 	if "--mptest" in OS.get_cmdline_user_args():
@@ -1051,6 +1055,10 @@ func _host_tick(delta: float) -> void:
 	if _shake_t <= 0.0:
 		_shake_t = 0.5
 		_shake_tick(0.5)
+	_ring_t -= delta
+	if _ring_t <= 0.0:
+		_ring_t = 3.0
+		_check_rings()
 	var smug := actor("z1")
 	if smug:
 		smug.visible = _boat_here()
@@ -1069,6 +1077,25 @@ func _host_tick(delta: float) -> void:
 						var drv := actor("p%d" % veh.driver)
 						if drv:
 							crime(drv, 10.0, ac.position, "hit and run", ac.family)
+
+
+## A family that just took every shop of a trade gets the ring's perk; one that lost one loses it.
+func _check_rings() -> void:
+	for f in Game.families:
+		if not f["alive"]:
+			continue
+		var fid: int = f["id"]
+		var had: Dictionary = _rings_done.get(fid, {})
+		var now := {}
+		for r in Rackets.ring_progress(fid):
+			if r["done"]:
+				now[r["id"]] = true
+				if not had.has(r["id"]) and _rings_done.has(fid):
+					Game.notice.emit(fid, "You run %s now: %s" % [r["name"].to_lower(), r["perk"]], "good")
+					Game._log("THE %s FAMILY NOW CONTROLS %s ACROSS THE LOWER EAST SIDE." % [String(f["name"]).to_upper(), String(r["name"]).to_upper()])
+			elif had.has(r["id"]):
+				Game.notice.emit(fid, "You lost %s. The perk is gone." % r["name"].to_lower(), "bad")
+		_rings_done[fid] = now
 
 
 func car_bump(_v: Vehicle) -> void:
@@ -1170,7 +1197,7 @@ func _make_snapshot() -> PackedByteArray:
 	var a := {}
 	for k in actors:
 		var ac: Actor = actors[k]
-		if ac.hidden_in_car or not ac.visible:
+		if ac.hidden_in_car or not ac.visible or k.begins_with("m"):
 			continue
 		a[k] = PackedFloat32Array([ac.position.x, ac.position.y, ac.yaw, ac.state, ac.speed, 1.0 if ac.carrying else 0.0])
 	var v := {}
@@ -1727,6 +1754,24 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 				r = {"ok": false, "msg": "Izzy isn't here."}
 		"nation":
 			r = _nation(family, args)
+		"tutorial":
+			p["tut"] = int(args[0])
+			if args.size() > 1 and String(args[1]) == "gift" and not bool(p.get("tut_gift", false)):
+				p["tut_gift"] = true
+				Game.fam(family)["clean"] += 2500
+				r = {"ok": true, "msg": "Uncle Carmine put $2,500 in the Bank for you."}
+			elif args.size() > 1 and String(args[1]) == "done" and not bool(p.get("tut_done", false)):
+				p["tut_done"] = true
+				Game.fam(family)["rep"] += 5
+		"wait":
+			# solo only: skip to nightfall, or to the morning (the month turns)
+			if Game.players.size() == 1:
+				if Game.clock < 0.55:
+					Game.clock = 0.56
+					r = {"ok": true, "msg": "You wait at the club until dark."}
+				else:
+					Game.clock = 0.999
+					r = {"ok": true, "msg": "You sleep on the couch in the office. Morning."}
 		"save":
 			if peer == Net.my_id():
 				var path := Game.save_campaign()

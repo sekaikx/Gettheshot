@@ -33,6 +33,9 @@ func _ready() -> void:
 	if _sim > 0:
 		_start_sim()
 		return
+	if "--tuttest" in OS.get_cmdline_user_args():
+		_tuttest.call_deferred()
+		return
 	Game.clock = 0.2
 	_steps = [
 		[0.3, func() -> void:
@@ -90,7 +93,8 @@ func _ready() -> void:
 			_checks["union_talk"] = world.hud.is_modal()],
 		[17.0, func() -> void: _shot("union")],
 		[17.2, func() -> void:
-			world.hud._choose(0)
+			Game.fam(0)["dirty"] += 3000
+			Net.to_host("act", ["union_pay", 0, 0])
 			var pier: Dictionary = world.plan.piers[1]
 			world.local_actor.place(W.p(world.plan.water_x - 4.0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 4.0), 0.0)
 			world.cam.user_zoom = 0.7
@@ -299,6 +303,112 @@ func _process(delta: float) -> void:
 	while not _steps.is_empty() and _t >= _steps[0][0]:
 		var s: Array = _steps.pop_front()
 		(s[1] as Callable).call()
+
+
+# ------------------------------------------------------------------ the tutorial, start to finish
+
+func _tut() -> Node:
+	return world.get_node_or_null("Tutorial")
+
+
+func _wait(s: float) -> void:
+	await get_tree().create_timer(s).timeout
+
+
+func _tuttest() -> void:
+	await _wait(0.6)
+	var t := _tut()
+	if t == null:
+		print("TUTTEST FAIL no tutorial")
+		get_tree().quit()
+		return
+	var me: Actor = world.local_actor
+	var hq := Game.biz_by_id(int(Game.fam(0)["hq"]))
+	var lay: Dictionary = world.layout_of_biz(int(hq["id"]))
+	print("  step ", t.step, " ", t.STEPS[t.step][0])
+	me.place((lay["back"] as Rect2).get_center())
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0])
+	Net.to_host("act", ["bank_out", hq["id"], 0])
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0], " shop=", t._shop)
+	var shop: int = t._shop
+	me.place(world.talk_spot(shop))
+	await _wait(0.5)
+	Net.to_host("act", ["pitch", shop, 0])
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0])
+	for k in 12:
+		var b := Game.biz_by_id(t._shop)
+		if int(b["protector"]) == 0:
+			break
+		var sl: Dictionary = world.layout_of_biz(t._shop)
+		if t._shop != shop:
+			shop = t._shop
+			me.place(world.talk_spot(shop))
+			await _wait(0.4)
+			Net.to_host("act", ["pitch", shop, 0])
+			await _wait(0.6)
+			continue
+		var hit := false
+		for it in sl["items"]:
+			if bool(it["breakable"]) and not (b["broken"] as Array).has(int(it["id"])):
+				me.place((it["rect"] as Rect2).get_center() + (sl["front"] as Vector2) * 0.9 * W.M)
+				Net.to_host("smash", [shop, it["id"]])
+				hit = true
+				break
+		if not hit:
+			var owner: Actor = world.actor("s%d" % shop)
+			if owner:
+				world.shopkeeper_hurt(owner, me, false)
+		await _wait(0.7)
+	await _wait(1.0)
+	print("  step ", t.step, " ", t.STEPS[t.step][0], " protector=", Game.biz_by_id(t._shop)["protector"])
+	Game.player(1)["wallet"] += 3000
+	for a in world.actors.values():
+		if (a as Actor).kind == "recruit":
+			me.place((a as Actor).position + Vector2(0.8, 0) * W.M)
+			await _wait(0.3)
+			Net.to_host("act", ["hire", (a as Actor).ref_id, 0])
+			break
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0])
+	for c in Game.cops:
+		if int(c["payroll"]) == 0:
+			break
+		var ca: Actor = world.actor("k%d" % c["id"])
+		if ca:
+			me.place(ca.position + Vector2(0.8, 0) * W.M)
+			await _wait(0.2)
+			Net.to_host("act", ["cop", c["id"], 0])
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0], " bank=", Game.fam(0)["clean"])
+	var front := -1
+	for b in Game.shops_of(0):
+		if int(b["owned_by"]) < 0 and b["kind"] not in ["club", "warehouse", "precinct"]:
+			front = int(b["id"])
+			break
+	me.place(world.talk_spot(front))
+	await _wait(0.3)
+	Net.to_host("act", ["buy", front, 0])
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0])
+	Net.to_host("act", ["speakeasy", front, 0])
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0])
+	me.set_carry(true)
+	Net.to_host("act", ["deliver", front, 0])
+	await _wait(1.2)
+	print("  step ", t.step, " ", t.STEPS[t.step][0])
+	var ev := InputEventKey.new()
+	ev.keycode = KEY_TAB
+	ev.pressed = true
+	t._input(ev)
+	await _wait(1.2)
+	var ok: bool = String(t.STEPS[mini(t.step, t.STEPS.size() - 1)][0]) == "done"
+	print("  step ", t.step, " tut=", Game.player(1).get("tut", -1), " gift=", Game.player(1).get("tut_gift", false))
+	print("TUTTEST %s" % ("OK" if ok else "FAIL"))
+	get_tree().quit()
 
 
 # ------------------------------------------------------------------ balance simulation

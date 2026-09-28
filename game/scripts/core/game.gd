@@ -512,11 +512,16 @@ func _tick_businesses() -> void:
 			f["clean"] += legit
 			f["income"]["legit"] += legit
 			if b["speak"] and b["stock"] > 0:
-				var sold := mini(b["stock"], int(round(b["demand"] * speak_mult)))
+				var food := 1.25 if Rackets.has_ring(int(b["owned_by"]), "food") else 1.0
+				var sold := mini(b["stock"], int(round(b["demand"] * speak_mult * food)))
 				b["stock"] -= sold
 				var cash := int(sold * CRATE_PRICE * (0.6 + 0.4 * econ))
 				f["dirty"] += cash
 				f["income"]["speakeasy"] += cash
+		# the numbers game in the back of the cigar and candy stores
+		if p >= 0 and not closed and b["kind"] in ["cigar", "candy"] and Rackets.has_ring(p, "numbers"):
+			families[p]["dirty"] += 60
+			families[p]["income"]["protection"] += 60
 		b["fear"] = maxf(0.0, b["fear"] - 3.0)
 
 
@@ -539,13 +544,15 @@ func _tick_families() -> void:
 			var amt := clampi(int(f["dirty"]) - keep, 0, laundering_capacity(f["id"]))
 			if amt > 0:
 				f["dirty"] -= amt
-				f["clean"] += int(amt * (1.0 - LAUNDER_FEE))
+				f["clean"] += int(amt * (1.0 - (0.05 if Rackets.has_ring(f["id"], "laundry") else LAUNDER_FEE)))
 				f["income"]["laundered"] += amt
-		# wages
+		# wages (the family eats free if it runs the restaurants)
+		var wage_mult := 0.8 if Rackets.has_ring(f["id"], "eats") else 1.0
 		for c in crew_of(f["id"]):
-			if f["dirty"] >= c["wage"]:
-				f["dirty"] -= c["wage"]
-				f["income"]["wages"] += c["wage"]
+			var wage := int(c["wage"] * wage_mult)
+			if f["dirty"] >= wage:
+				f["dirty"] -= wage
+				f["income"]["wages"] += wage
 				c["loyalty"] = mini(100, c["loyalty"] + 1)
 			else:
 				c["loyalty"] -= 12
@@ -1126,8 +1133,11 @@ func _tick_evidence() -> void:
 	var fade := {"street": 0.75, "witness": 0.88, "cop": 0.9, "weapon": 0.97, "ledger": 0.95, "body": 0.99,
 		"informant": 1.0, "file": 0.85}
 	for f in families:
+		var meat := Rackets.has_ring(f["id"], "meat")
 		for e in f["evidence"]:
 			e["w"] = float(e["w"]) * float(fade.get(e["kind"], 0.9))
+			if meat and e["kind"] == "body":
+				e["w"] = float(e["w"]) * 0.7
 			if captains.values().has(f["id"]) and e["kind"] in ["street", "cop"]:
 				e["w"] = float(e["w"]) * 0.85
 		f["evidence"] = f["evidence"].filter(func(e: Dictionary) -> bool: return float(e["w"]) >= 0.8)
@@ -1211,9 +1221,10 @@ func act_cleanup(peer: int, ev_id: int) -> Dictionary:
 		return _r(false, "")
 	if month - int(e["month"]) > 2:
 		return _r(false, "Too late: the police already have the body.")
-	if f["dirty"] < 400:
-		return _r(false, "The cleanup crew wants $400.")
-	f["dirty"] -= 400
+	var cost := 200 if Rackets.has_ring(family, "meat") else 400
+	if f["dirty"] < cost:
+		return _r(false, "The cleanup crew wants $%d." % cost)
+	f["dirty"] -= cost
 	_drop_evidence(family, ev_id)
 	return _r(true, "Lime, a car trunk and the Jersey marshes. There never was a body.")
 
@@ -1246,6 +1257,8 @@ func act_buy_gun(peer: int, kind: String) -> Dictionary:
 	if kind == "tommy" and year() < 1928:
 		return _r(false, "\"The Thompson? Not yet. Army's still got 'em all. Ask me again in '28.\"")
 	var price := int(dealer.get(kind, 0))
+	if Rackets.has_ring(int(p.get("family", -1)), "pawn"):
+		price /= 2
 	if p["wallet"] < price:
 		return _r(false, "$%d, cash." % price)
 	p["wallet"] -= price

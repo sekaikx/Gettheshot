@@ -39,8 +39,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if a.is_down() or busy:
 		a.velocity = Vector2.ZERO
-		if a.is_down():
-			world.hud.set_prompt("")
+		world.hud.set_prompt("")
 		return
 	var inp := Vector2(float(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)),
 		float(Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)))
@@ -344,6 +343,8 @@ func _actor_label(ac: Actor) -> String:
 			return "Talk to %s, the union boss" % Game.UNION_BOSS
 		"newsboy":
 			return "Buy a paper"
+		"consigliere":
+			return "Talk to Uncle Carmine"
 		"docker":
 			return "Talk to the longshoreman"
 		"ped":

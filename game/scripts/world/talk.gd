@@ -65,6 +65,13 @@ static func _actor(focus: Dictionary) -> Dictionary:
 		"dealer": return _dealer(a)
 		"unionboss": return _union(a)
 		"smuggler": return _smuggler(a)
+		"consigliere":
+			var tut: Node = world.get_node_or_null("Tutorial")
+			if tut and tut.has_method("mentor_conversation"):
+				return tut.call("mentor_conversation")
+			return {"name": "Uncle Carmine", "role": "Your father's consigliere", "portrait": _portrait(a),
+				"line": "\"Take care of your men and they take care of you. Don't let the Bureau build a case. And never let them see you coming.\"",
+				"options": [_leave()]}
 		"newsboy":
 			return {"name": "The newsboy", "role": "Corner of %s" % world.plan.corner_at(a.position.x / W.M, a.position.y / W.M),
 				"portrait": _portrait(a), "line": "\"Extra! Extra! Read all about it! Two cents, mister!\"",
@@ -423,6 +430,9 @@ static func _object(focus: Dictionary) -> Dictionary:
 			var books := (f["evidence"] as Array).filter(func(e: Dictionary) -> bool: return e["kind"] == "ledger")
 			if not books.is_empty():
 				opts.append({"text": "Burn the books", "sub": "$300 from the Bank to start clean ones", "icon": "fist", "enabled": int(f["clean"]) >= 300, "action": _req("burn_books", [])})
+			if Game.players.size() == 1:
+				opts.append({"text": "Wait until dark" if Game.clock < 0.55 else "Sleep until morning", "sub": "the boat comes in at night" if Game.clock < 0.55 else "the month turns",
+					"icon": "talk", "action": _req("wait", [])})
 			if Net.is_host():
 				opts.append({"text": "Save the game", "icon": "talk", "action": _req("save", [])})
 			opts.append(_leave())

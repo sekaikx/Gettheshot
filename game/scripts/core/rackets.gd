@@ -39,7 +39,7 @@ const RINGS := [
 	{"id": "numbers", "name": "The Numbers", "kinds": ["cigar", "candy"], "perk": "Each of those shops runs a numbers game: +$60 a month each."},
 	{"id": "meat", "name": "The Butchers", "kinds": ["butcher", "fish"], "perk": "Bodies disappear: cleanup crews cost half and bodies fade fast."},
 	{"id": "food", "name": "The Grocers & Bakers", "kinds": ["grocer", "bakery"], "perk": "Speakeasies sell 25% more (people eat when they drink)."},
-	{"id": "rags", "name": "The Tailors & Barbers", "kinds": ["tailor", "barber", "cobbler"], "perk": "Everybody knows your face: +20 reputation, shakedowns go easier."},
+	{"id": "rags", "name": "The Tailors & Barbers", "kinds": ["tailor", "barber", "cobbler"], "perk": "Everybody knows your face: shakedowns go 20% faster."},
 	{"id": "tools", "name": "The Hardware Stores", "kinds": ["hardware"], "perk": "The family truck carries 16 crates instead of 10."},
 ]
 
