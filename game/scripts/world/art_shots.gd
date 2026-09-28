@@ -20,11 +20,25 @@ func _ready() -> void:
 		elif a.begins_with("--only="):
 			_only = a.substr(7).split(",")
 	await get_tree().process_frame
-	if _mode == "cars":
+	if _mode == "stats":
+		for kd in ["truck", "delivery", "sedan", "taxi", "van", "police"]:
+			var m := CarModels.body(kd)
+			var sp := CarModels.spec(kd)
+			var w := CarModels.wheel(sp["wheel"], sp["wheels"][0][1])
+			print("STAT %s body %d wheel %d" % [kd, _tris(m), _tris(w)])
+		print("STAT freighter %d gantry %d hall %d" % [_tris(Harbour.freighter()), _tris(Harbour.gantry()), _tris(Harbour.union_hall())])
+	elif _mode == "cars":
 		await _cars()
 	else:
 		await _city()
 	get_tree().quit()
+
+
+func _tris(m: Mesh) -> int:
+	var t := 0
+	for si in m.get_surface_count():
+		t += (m.surface_get_arrays(si)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+	return t
 
 
 func _snap(name: String) -> void:
@@ -115,6 +129,9 @@ func _city() -> void:
 		["el", Vector3(0, 0, 1.5 * P), 24.0, -0.8, 0.29, "clear"],
 		["docks", Vector3(q[0] + 16, 0, 60), 34.0, -0.6, 0.3, "clear"],
 		["docks_crane", Vector3(q[2] + 10, 0, 160), 30.0, 0.5, 0.32, "clear"],
+		["docks_wide", Vector3(q[0] + 14, 0, 70), 45.0, -PI * 0.5, 0.3, "clear"],
+		["docks_wide2", Vector3(q[0] + 14, 0, 150), 45.0, -PI * 0.5 - 0.4, 0.3, "clear"],
+		["docks_night", Vector3(q[0] + 14, 0, 100), 40.0, -PI * 0.5, 0.74, "clear"],
 		["roofs", Vector3(1.5 * P, 0, 1.5 * P), 40.0, 2.4, 0.27, "clear"],
 		["dusk", Vector3(2 * P, 0, 2 * P), 22.0, 0.3, 0.5, "clear"],
 		["night", door, 18.0, 0.0, 0.74, "clear"],
@@ -123,17 +140,45 @@ func _city() -> void:
 		["fog", Vector3(3 * P, 0, 2 * P), 26.0, -0.2, 0.3, "fog"],
 	]
 	Game.boat["crates"] = 20
+	var shops_s: Array = []
+	for b in Game.biz:
+		if absf(float(b["yaw"])) < 0.01 and b["kind"] not in ["precinct", "warehouse"]:
+			shops_s.append(b)
+	for i in mini(2, shops_s.size()):
+		var b: Dictionary = shops_s[i * 3 % shops_s.size()]
+		spots.append(["shop%d" % i, Vector3(b["door"][0], 0, b["door"][1] + 2.0), 17.0, 0.25, 0.3, "clear"])
+		spots.append(["shop%d_night" % i, Vector3(b["door"][0], 0, b["door"][1] + 2.0), 17.0, 0.25, 0.74, "clear"])
+	var ys: Array = world.city.yard_spots
+	for i in mini(2, ys.size()):
+		var yv: Vector3 = ys[i * 2 % ys.size()]
+		spots.append(["yard%d" % i, yv + Vector3(18.0, 0, 0.0), 45.0, -0.9, 0.3, "clear"])
+	var bs: Array = world.city.billboard_spots
+	for i in mini(2, bs.size()):
+		var bb: Vector3 = bs[i]
+		var fw := Vector3(sin(bb.y), 0, cos(bb.y))
+		spots.append(["billboard%d" % i, Vector3(bb.x, 0, bb.z) - fw * 8.0, 45.0, bb.y, 0.3, "clear"])
+	var tip: Array = plan.piers[1]["tip"]
+	spots.append(["boat", Vector3(tip[0], 0, tip[1]), 15.0, -0.6, 0.72, "clear"])
+	spots.append(["boat_day", Vector3(tip[0], 0, tip[1]), 15.0, -0.6, 0.62, "clear"])
+	for vk in ["v0", "v2", "v3", "v6"]:
+		if world.vehicles.has(vk):
+			spots.append(["car_" + vk, world.vehicles[vk], 11.0, 0.5, 0.3, "clear"])
 	for s in spots:
 		if not _only.is_empty() and s[0] not in _only:
 			continue
-		world.cam.target = null
-		world.cam._focus = s[1]
+		var focus: Vector3 = s[1] if s[1] is Vector3 else (s[1] as Node3D).global_position
+		world.cam.target = null if s[1] is Vector3 else s[1]
+		world.cam._focus = focus
 		world.cam.yaw = s[3]
 		world.cam.yaw_goal = s[3]
 		world.cam.dist = s[2]
 		world.cam.dist_goal = s[2]
 		Game.clock = s[4]
 		world.weather = s[5]
-		world.local_actor.place(s[1] + Vector3(0.5, 0, 0.5))
+		world.local_actor.place(focus + Vector3(0.5, 0, 0.5) + (Vector3(0, 0, 3.0) if not s[1] is Vector3 else Vector3.ZERO))
 		await _frames(10 if s[5] != "rain" else 40)
 		_snap(s[0])
+		print("perf %s: draw calls %d, objects %d, primitives %d, fps %d" % [s[0],
+			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
+			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), Engine.get_frames_per_second()])

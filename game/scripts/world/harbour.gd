@@ -121,6 +121,17 @@ static func freighter() -> ArrayMesh:
 			d += 1.5
 		return d
 	_hull(k, -L, L, 44, bfn, dfn, -2.6, [[-2.6, 0.25, BOOT], [0.25, 0.4, Color("d8d0bc")], [0.4, 99.0, HULL]], DECK, 0.95, Color("5e4a3c"))
+	# deck planking seams
+	for px in 12:
+		var x := -3.6 + px * 0.66
+		for seg in [[-14.6, 13.2], [13.8, 19.0], [-21.0, -15.4]]:
+			var z0s: float = seg[0]
+			while z0s < seg[1] - 0.1:
+				var z1s: float = minf(z0s + 2.0, seg[1])
+				var zz := (z0s + z1s) * 0.5
+				if absf(x) < minf(bfn.call(z0s), bfn.call(z1s)) - 0.35:
+					k.box("base", Vector3(x, dfn.call(zz) + 0.012, zz), Vector3(0.03, 0.01, z1s - z0s), Color("2a241e"))
+				z0s = z1s
 	# forecastle and poop fronts (bulkheads across the deck)
 	var fz := 13.5
 	k.face("hull", [Vector3(-B * 0.97, 3.4 + 0.7 * 0.38, fz), Vector3(B * 0.97, 3.4 + 0.7 * 0.38, fz), Vector3(B * 0.97, 5.6, fz), Vector3(-B * 0.97, 5.6, fz)], Color("c8bfa8"), Vector3.BACK)
@@ -279,6 +290,13 @@ static func union_hall() -> ArrayMesh:
 		k.face_auto("base", [a - Vector3(0, 0.05, 0), b - Vector3(0, 0.05, 0), c - Vector3(0, 0.05, 0), e - Vector3(0, 0.05, 0)], Color("2c2826"), Vector3(0, -1, -s))
 	for s in [-1.0, 1.0]:
 		k.face_auto("base", [Vector3(s * w * 0.5, 3.6, -d * 0.5), Vector3(s * w * 0.5, 3.6, d * 0.5), Vector3(s * w * 0.5, 3.6 + rh * 0.95, 0)], clap, Vector3(s, 0, 0))
+		# battens over the tar-paper seams, the ridge cap
+		for b in 6:
+			var x := -w * 0.5 + 0.4 + b * (w - 0.8) / 5.0
+			var lo := Vector3(x, 3.62, s * (d * 0.5 + 0.35))
+			var hi := Vector3(x, 3.6 + rh + 0.02, 0)
+			k.cyl("base", lo, hi, 0.035, 0.035, 4, Color("1a1817"), false, false)
+	k.box("base", Vector3(0, 3.6 + rh + 0.03, 0), Vector3(w + 0.6, 0.08, 0.3), Color("3a3430"))
 	# the door, windows, a notice board, the stovepipe, a lamp over the door, the sign board
 	k.box("base", Vector3(0, 1.1, d * 0.5 + 0.03), Vector3(1.1, 2.2, 0.05), Color("3a2a1e"))
 	k.box("base", Vector3(0, 2.3, d * 0.5 + 0.04), Vector3(1.3, 0.1, 0.06), Color("d8d0bc"))
@@ -330,7 +348,8 @@ static func rum_runner() -> Node3D:
 		k.box("base", Vector3(x, dfn.call(3.0) + 0.012, 3.0), Vector3(0.015, 0.01, 6.0), Color("3a1e10"))
 	# the deckhouse with a raked windscreen, cockpit coaming, engine hatch
 	k.bbox("hull", Vector3(0, 1.55, 0.6), Vector3(2.2, 0.9, 3.0), 0.12, Color("6e3a1e"))
-	k.box("base", Vector3(0, 2.02, 0.6), Vector3(2.3, 0.06, 3.1), Color("d8d0bc"))
+	k.box("base", Vector3(0, 2.02, 0.6), Vector3(2.3, 0.06, 3.1), Color("4a3a2c"))
+	k.box("base", Vector3(0, 2.06, 0.6), Vector3(2.0, 0.02, 2.8), Color("5e4a36"))
 	k.box("glow", Vector3(0, 1.62, 2.12), Vector3(1.9, 0.45, 0.03), Color("403830"))
 	for s in [-1.0, 1.0]:
 		for pz in 3:

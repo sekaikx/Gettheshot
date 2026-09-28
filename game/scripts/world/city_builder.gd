@@ -18,7 +18,7 @@ extends Node3D
 
 const SIGN_FONTS := ["Rye-Regular.ttf", "Limelight-Regular.ttf", "AlfaSlabOne-Regular.ttf", "Bevan-Regular.ttf",
 	"AbrilFatface-Regular.ttf", "PlayfairDisplay.ttf", "IMFeENsc28P.ttf"]
-const CHUNK := 96.0
+const CHUNK := 64.0
 const EL_X := 0.0                 # the elevated railway runs over the westernmost avenue
 const TROLLEY_I := 3              # the avenue with streetcar tracks
 
@@ -33,16 +33,23 @@ var granite_mat: StandardMaterial3D
 var rail_mat: StandardMaterial3D
 var awnings := {}     # biz id -> MeshInstance3D
 var signs := {}       # biz id -> Label3D
-var lamps: Array[OmniLight3D] = []
+var lamps: Array[OmniLight3D] = []        # the lights that follow the camera (see _process)
+var lamp_spots: Array[Vector3] = []       # every lit lamp head in the city
 var lamp_heads: Array[MeshInstance3D] = []
 var dock_spots := {}  # name -> Vector3 (see _waterfront)
 var dock_paths := {}  # name -> PackedVector3Array
 var lot_height := {}  # lot id -> metres
+var billboard_spots: Array[Vector3] = []   # where the rooftop billboards stand (x, z, yaw in y)
+var yard_spots: Array[Vector3] = []        # back yards hung with washing
 var _cut_mats: Array[ShaderMaterial] = []
 var _lamp_head_mat: StandardMaterial3D
 var _board_kit: MeshKit
 var _mm := {}         # key -> {mesh, xf: Array[Transform3D], colors, shadow}
 var _rng := RandomNumberGenerator.new()
+var _lamps_on := false
+var _lamp_t := 0.0
+var _lamp_energy := 0.0
+const LIGHT_POOL := 14
 
 
 func build(p: CityPlan) -> void:
@@ -71,12 +78,40 @@ func build(p: CityPlan) -> void:
 	_flush()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var f: Variant = facade_mat.get_shader_parameter("focus")
 	var c: Variant = facade_mat.get_shader_parameter("cam_pos")
 	for m in _cut_mats:
 		m.set_shader_parameter("focus", f)
 		m.set_shader_parameter("cam_pos", c)
+	# a small pool of real lights follows the camera, sitting in the nearest lamp heads (the
+	# renderer has a light budget; a hundred omni lights would not fit)
+	_lamp_t -= delta
+	if _lamp_t <= 0.0 and f is Vector3:
+		_lamp_t = 0.3
+		var fp: Vector3 = f
+		if lamps.is_empty():
+			for i in LIGHT_POOL:
+				var light := OmniLight3D.new()
+				light.light_color = Color("ffc47e")
+				light.omni_range = 16.0
+				light.omni_attenuation = 1.1
+				light.light_energy = _lamp_energy
+				light.shadow_enabled = false
+				add_child(light)
+				lamps.append(light)
+		var order := range(lamp_spots.size())
+		order.sort_custom(func(a: int, b: int) -> bool:
+			return lamp_spots[a].distance_squared_to(fp) < lamp_spots[b].distance_squared_to(fp))
+		for i in lamps.size():
+			var l := lamps[i]
+			if i < order.size() and _lamps_on:
+				var at: Vector3 = lamp_spots[order[i]]
+				if l.position.distance_squared_to(at) > 0.01:
+					l.position = at
+				l.visible = true
+			else:
+				l.visible = false
 
 
 func _tex(name: String) -> Texture2D:
@@ -138,17 +173,18 @@ func set_night(v: float, wet: float) -> void:
 	water_mat.set_shader_parameter("night", v)
 	water_mat.set_shader_parameter("wet", wet)
 	for m: StandardMaterial3D in [asphalt_mat, cobble_mat, granite_mat, pave_mat]:
-		m.roughness = lerpf(1.0, 0.2, wet)
-		m.metallic_specular = lerpf(0.5, 0.9, wet)
+		m.roughness = lerpf(1.0, 0.3 if m != asphalt_mat else 0.45, wet)
+		m.metallic_specular = lerpf(0.5, 0.75, wet)
 	asphalt_mat.albedo_color = Color(0.42, 0.42, 0.41).darkened(wet * 0.4)
 	cobble_mat.albedo_color = Color(0.55, 0.56, 0.6).darkened(wet * 0.35)
 	pave_mat.albedo_color = Color(0.6, 0.6, 0.59).darkened(wet * 0.3)
 	Props1920s.set_night(v, wet)
 	Harbour.set_night(v)
 	var on := clampf((v - 0.25) / 0.4, 0.0, 1.0)
+	_lamps_on = on > 0.01
+	_lamp_energy = on * 4.2
 	for l in lamps:
-		l.light_energy = on * 2.6
-		l.visible = on > 0.01
+		l.light_energy = _lamp_energy
 	_lamp_head_mat.emission_energy_multiplier = 0.2 + on * 3.0
 
 
@@ -192,6 +228,20 @@ func _mm_add(mesh: Mesh, xf: Transform3D, shadow := true, col := Color.WHITE) ->
 
 
 func _flush() -> void:
+	if OS.get_environment("CITY_STATS") != "":
+		var tot := {}
+		for key in _mm:
+			var e: Dictionary = _mm[key]
+			var m: Mesh = e["mesh"]
+			var tris := 0
+			for si in m.get_surface_count():
+				tris += (m.surface_get_arrays(si)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+			var id := m.resource_name + str(m.get_instance_id() % 1000)
+			if not tot.has(id):
+				tot[id] = [tris, 0]
+			tot[id][1] += e["xf"].size()
+		for id in tot:
+			print("MM mesh %s tris %d x %d = %d" % [id, tot[id][0], tot[id][1], tot[id][0] * tot[id][1]])
 	for key in _mm:
 		var e: Dictionary = _mm[key]
 		var mm := MultiMesh.new()
@@ -232,50 +282,24 @@ func _ground() -> void:
 	var half := CityPlan.STREET * 0.5
 	var P := CityPlan.PITCH
 	var r := plan.bounds
-	# asphalt everywhere, tiled so each piece gets its own nearby lamps
-	var x0 := r.position.x
-	while x0 < plan.water_x:
-		var x1 := minf(x0 + P, plan.water_x)
-		var z0 := r.position.y
-		while z0 < r.end.y:
-			var z1 := minf(z0 + P, r.end.y)
-			var mi := MeshInstance3D.new()
-			var pm := PlaneMesh.new()
-			pm.size = Vector2(x1 - x0, z1 - z0)
-			mi.mesh = pm
-			mi.material_override = asphalt_mat
-			mi.position = Vector3((x0 + x1) * 0.5, 0.0, (z0 + z1) * 0.5)
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			add_child(mi)
-			z0 = z1
-		x0 = x1
-	# Belgian block on the cross streets (the avenues keep their asphalt), one mesh per street
+	# asphalt everywhere, in tiles small enough that each gets its own nearby lamps (the
+	# Compatibility renderer lights an object with at most 8 lights)
+	_tiles(asphalt_mat, r.position.x, plan.water_x, r.position.y, r.end.y, 0.0, 24.0)
+	# Belgian block on the cross streets (the avenues keep their asphalt)
 	for j in range(0, CityPlan.NZ + 1):
-		var k := MeshKit.new()
 		var z := j * P
 		for i in range(-1, CityPlan.NX):
-			var xa := i * P + half
-			var xb := (i + 1) * P - half
-			k.box("s", Vector3((xa + xb) * 0.5, 0.004, z), Vector3(xb - xa, 0.008, CityPlan.STREET), Color.WHITE, Basis.IDENTITY, true)
-		var cm := MeshInstance3D.new()
-		cm.mesh = k.commit({"s": cobble_mat})
-		cm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(cm)
+			_tiles(cobble_mat, i * P + half, (i + 1) * P - half, z - half, z + half, 0.004, 18.0)
 	# the trolley avenue: block paving between and around the rails, two tracks, conduit slots
 	var tx := TROLLEY_I * P
-	var tk := MeshKit.new()
 	var rk := MeshKit.new()
 	var tz0 := r.position.y
 	var tz1 := r.end.y
-	tk.box("s", Vector3(tx, 0.006, (tz0 + tz1) * 0.5), Vector3(6.4, 0.008, tz1 - tz0), Color.WHITE, Basis.IDENTITY, true)
+	_tiles(cobble_mat, tx - 3.2, tx + 3.2, tz0, tz1, 0.006, 24.0)
 	for c in [-1.6, 1.6]:
 		for g in [-0.72, 0.72]:
 			rk.box("r", Vector3(tx + c + g, 0.014, (tz0 + tz1) * 0.5), Vector3(0.08, 0.02, tz1 - tz0), Color(0.55, 0.53, 0.5))
 		rk.box("r", Vector3(tx + c, 0.011, (tz0 + tz1) * 0.5), Vector3(0.05, 0.012, tz1 - tz0), Color(0.06, 0.06, 0.06))
-	var tm := MeshInstance3D.new()
-	tm.mesh = tk.commit({"s": cobble_mat})
-	tm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(tm)
 	var rm := MeshInstance3D.new()
 	rm.mesh = rk.commit({"r": rail_mat})
 	rm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -305,6 +329,24 @@ func _ground() -> void:
 			_mm_add(Props1920s.manhole(), _xf(Vector3(i * P + P * 0.5 + _rng.randf_range(-10, 10), 0.0, j * P - 0.8), 0.0), false)
 			if _rng.randf() < 0.4:
 				_mm_add(Props1920s.manhole(), _xf(Vector3(i * P + P * 0.5 + _rng.randf_range(-16, 16), 0.0, j * P + 2.8), 0.0), false)
+
+
+## Flat ground from x0..x1, z0..z1 at height y, cut into tiles of about `tile` metres.
+func _tiles(mat: Material, x0: float, x1: float, z0: float, z1: float, y: float, tile: float) -> void:
+	var nx := maxi(1, roundi((x1 - x0) / tile))
+	var nz := maxi(1, roundi((z1 - z0) / tile))
+	var sx := (x1 - x0) / nx
+	var sz := (z1 - z0) / nz
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(sx, sz)
+	for a in nx:
+		for b in nz:
+			var mi := MeshInstance3D.new()
+			mi.mesh = pm
+			mi.material_override = mat
+			mi.position = Vector3(x0 + sx * (a + 0.5), y, z0 + sz * (b + 0.5))
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(mi)
 
 
 ## A band of granite slabs from a to b (1.2 m wide crossing).
@@ -416,7 +458,7 @@ func _building(lot: Dictionary) -> void:
 	if kind in ["courtyard", "warehouse"]:
 		if kind == "courtyard":
 			for s in _rng.randi_range(1, 3):
-				_mm_add(Props1920s.skylight(), _xf(Vector3(pos.x + _rng.randf_range(-w * 0.35, w * 0.35), h, pos.z + _rng.randf_range(-d * 0.35, d * 0.35)), _rng.randi_range(0, 1) * PI * 0.5))
+				_mm_add(Props1920s.skylight(), _xf(Vector3(pos.x + _rng.randf_range(-w * 0.35, w * 0.35), h, pos.z + _rng.randf_range(-d * 0.35, d * 0.35)), _rng.randi_range(0, 1) * PI * 0.5), false)
 		return
 	# rooftops: water towers, stair bulkheads, chimneys, skylights, vents, pigeon coops
 	var basis := Basis(Vector3.UP, yaw)
@@ -439,26 +481,26 @@ func _building(lot: Dictionary) -> void:
 	for c in _rng.randi_range(1, 3):
 		var lp := Vector3(_rng.randf_range(-w * 0.4, w * 0.4), 0, -d * 0.42 + _rng.randf() * 0.3)
 		if place.call(lp, 0.5):
-			_mm_add(Props1920s.chimney(), _xf(roof + basis * lp, yaw))
+			_mm_add(Props1920s.chimney(), _xf(roof + basis * lp, yaw), false)
 	if _rng.randf() < 0.45:
 		var lp := Vector3(_rng.randf_range(-w * 0.25, w * 0.25), 0, _rng.randf_range(0.0, d * 0.25))
 		if place.call(lp, 1.0):
-			_mm_add(Props1920s.skylight(), _xf(roof + basis * lp, yaw))
+			_mm_add(Props1920s.skylight(), _xf(roof + basis * lp, yaw), false)
 	for v in _rng.randi_range(0, 2):
 		var lp := Vector3(_rng.randf_range(-w * 0.4, w * 0.4), 0, _rng.randf_range(-d * 0.35, d * 0.35))
 		if place.call(lp, 0.3):
-			_mm_add(Props1920s.vent(), _xf(roof + basis * lp, 0.0))
+			_mm_add(Props1920s.vent(), _xf(roof + basis * lp, 0.0), false)
 	if lot["district"] in ["Lower East Side", "Little Italy"] and _rng.randf() < 0.12:
 		var lp := Vector3(_rng.randf_range(-w * 0.2, w * 0.2), 0, d * 0.15)
 		if place.call(lp, 1.2):
-			_mm_add(Props1920s.pigeon_coop(), _xf(roof + basis * lp, yaw + _rng.randf_range(-0.3, 0.3)))
+			_mm_add(Props1920s.pigeon_coop(), _xf(roof + basis * lp, yaw + _rng.randf_range(-0.3, 0.3)), false)
 	var front := Vector3(pos.x, 0, pos.z) + basis * Vector3(0, 0, d * 0.5)
 	# the stoop of a tenement, with ash cans beside it
 	if not shop and kind == "tenement":
 		_mm_add(Props1920s.stoop(), _xf(front + basis * Vector3(0, 0.16, 1.5), yaw))
 		for c in _rng.randi_range(0, 3):
 			var side := 1.0 if c % 2 == 0 else -1.0
-			_mm_add(Props1920s.ash_can(), _xf(front + basis * Vector3(side * (1.35 + (c / 2) * 0.55), 0.16, 0.35 + _rng.randf() * 0.2), _rng.randf() * TAU))
+			_mm_add(Props1920s.ash_can(), _xf(front + basis * Vector3(side * (1.35 + (c / 2) * 0.55), 0.16, 0.35 + _rng.randf() * 0.2), _rng.randf() * TAU), false)
 	# fire escapes zig-zag down the fronts of the walk-ups
 	var fe_chance := 0.8 if lot["district"] == "Lower East Side" else 0.55
 	if floors >= 3 and not shop and _rng.randf() < fe_chance:
@@ -484,7 +526,7 @@ func _facade(size: Vector3, tint: Color, style: int, seed: float, shop: bool, ad
 		k.box("p1", Vector3(0, -hy + 4.2, size.z * 0.5 + 0.1), Vector3(size.x - 0.06, 0.18, 0.22), Color.WHITE)
 	if parapet:
 		var ph := 0.7 if style != 3 else 0.5
-		var t := 0.25
+		var t := 0.2
 		k.box("p2", Vector3(0, hy + ph * 0.5, size.z * 0.5 - t * 0.5), Vector3(size.x, ph, t), Color.WHITE)
 		k.box("p2", Vector3(0, hy + ph * 0.5, -size.z * 0.5 + t * 0.5), Vector3(size.x, ph, t), Color.WHITE)
 		k.box("p2", Vector3(size.x * 0.5 - t * 0.5, hy + ph * 0.5, 0), Vector3(t, ph, size.z - 2.0 * t), Color.WHITE)
@@ -586,7 +628,7 @@ func _storefront(b: Dictionary) -> void:
 		# cellar doors in the sidewalk beside some shops
 		if _rng.randf() < 0.4 and w > 7.5:
 			var side := 1.0 if _rng.randf() < 0.5 else -1.0
-			_mm_add(Props1920s.cellar_doors(), _xf(front + basis * Vector3(side * (w * 0.5 - 1.1), 0.16, 0.6), yaw))
+			_mm_add(Props1920s.cellar_doors(), _xf(front + basis * Vector3(side * (w * 0.5 - 1.1), 0.16, 0.6), yaw), false)
 	# the painted signboard over the shop front, lettered in a period face
 	var board_w := w - 1.1
 	var board_h := 0.72
@@ -681,15 +723,7 @@ func _lamp_at(pos: Vector3, out: Vector3, lit: bool) -> void:
 	_mm_add(Props1920s.lamp_post(), _xf(pos, yaw))
 	if not lit:
 		return
-	var light := OmniLight3D.new()
-	light.light_color = Color("ffc47e")
-	light.omni_range = 15.0
-	light.omni_attenuation = 1.3
-	light.light_energy = 0.0
-	light.position = pos + Basis(Vector3.UP, yaw) * Props1920s.lamp_head()
-	light.shadow_enabled = false
-	add_child(light)
-	lamps.append(light)
+	lamp_spots.append(pos + Basis(Vector3.UP, yaw) * Props1920s.lamp_head())
 
 
 func _lamps() -> void:
@@ -720,9 +754,9 @@ func _street_props() -> void:
 		# a hydrant near one corner, on the kerb
 		var hx: float = r[0] + 2.2 if _rng.randf() < 0.5 else r[2] - 2.2
 		var hz: float = r[1] + 0.5 if _rng.randf() < 0.5 else r[3] - 0.5
-		_mm_add(Props1920s.hydrant(), _xf(Vector3(hx, 0.16, hz), 0.0 if hz > cz else PI))
+		_mm_add(Props1920s.hydrant(), _xf(Vector3(hx, 0.16, hz), 0.0 if hz > cz else PI), false)
 		if _rng.randf() < 0.5:
-			_mm_add(Props1920s.hydrant(), _xf(Vector3(lerpf(r[0], r[2], _rng.randf_range(0.3, 0.7)), 0.16, r[3] - 0.5 if hz < cz else r[1] + 0.5), 0.0))
+			_mm_add(Props1920s.hydrant(), _xf(Vector3(lerpf(r[0], r[2], _rng.randf_range(0.3, 0.7)), 0.16, r[3] - 0.5 if hz < cz else r[1] + 0.5), 0.0), false)
 		# fire-alarm post at alternate corners
 		if (b["i"] + b["j"]) % 2 == 1:
 			_mm_add(Props1920s.call_box(), _xf(Vector3(r[0] + 0.6, 0.16, r[1] + 2.0), -PI * 0.5))
@@ -734,9 +768,9 @@ func _street_props() -> void:
 			_collider(Vector3(1.1, 2.2, 2.0), at + Vector3(0, 1.1, 0), 0.0)
 		else:
 			var mz: float = lerpf(r[1], r[3], _rng.randf_range(0.25, 0.75))
-			_mm_add(Props1920s.mailbox(), _xf(Vector3(r[0] + 0.6, 0.16, mz), -PI * 0.5))
+			_mm_add(Props1920s.mailbox(), _xf(Vector3(r[0] + 0.6, 0.16, mz), -PI * 0.5), false)
 		if _rng.randf() < 0.5:
-			_mm_add(Props1920s.mailbox(), _xf(Vector3(r[2] - 0.6, 0.16, r[3] - 1.6), PI * 0.5))
+			_mm_add(Props1920s.mailbox(), _xf(Vector3(r[2] - 0.6, 0.16, r[3] - 1.6), PI * 0.5), false)
 		# pushcarts along the kerb in Little Italy and on the Lower East Side
 		if district in ["Little Italy", "Lower East Side"]:
 			for z in [r[1] - 0.95, r[3] + 0.95]:
@@ -772,6 +806,8 @@ func _clotheslines() -> void:
 				var hs := _row_height(bi, bj, "S", x)
 				var top := minf(hn, hs) - 1.2
 				if top > 6.5:
+					if yard_spots.is_empty() or yard_spots[yard_spots.size() - 1].distance_to(Vector3(cx, 0, cz)) > 1.0:
+						yard_spots.append(Vector3(cx, 0, cz))
 					var y := _rng.randf_range(6.0, top)
 					var z0 := cz - d * 0.5
 					var z1 := cz + d * 0.5
@@ -815,7 +851,8 @@ func _billboards() -> void:
 	for lot in plan.lots:
 		if lot["kind"] == "courtyard" or lot["kind"] == "warehouse" or int(lot["floors"]) < 5:
 			continue
-		if not _is_corner(lot) or _rng.randf() > 0.55 or count >= 7:
+		# they face the street the camera usually looks at (lots fronting south)
+		if absf(float(lot["yaw"])) > 0.01 or _rng.randf() > 0.45 or count >= 8:
 			continue
 		count += 1
 		var h: float = lot_height[lot["id"]]
@@ -825,6 +862,7 @@ func _billboards() -> void:
 		var bw := 7.0
 		var bh := 3.5
 		var at := c + basis * Vector3(0, 1.2, 1.5)
+		billboard_spots.append(Vector3(at.x, yaw, at.z))
 		frame.push(Transform3D(basis, at))
 		for s in [-1.0, 1.0]:
 			for zz in [0.0, -1.4]:
@@ -917,9 +955,21 @@ func _mesh_node(k: MeshKit) -> MeshInstance3D:
 
 func _waterfront() -> void:
 	var q: Array = plan.quay_rect
-	var concrete := _world_mat("concrete_wall_albedo", "concrete_wall_normal", 0.2, Color(0.55, 0.53, 0.5))
-	var quay := _box(Vector3(q[2] - q[0], 0.2, q[3] - q[1]), Vector3((q[0] + q[2]) * 0.5, 0.1, (q[1] + q[3]) * 0.5), concrete)
-	quay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# the marginal way: Belgian block, with a concrete apron along the bulkhead
+	var concrete := _world_mat("concrete_wall_albedo", "concrete_wall_normal", 0.2, Color(0.5, 0.49, 0.47))
+	_tiles(cobble_mat, q[0], q[2] - 3.0, q[1], q[3], 0.2, 20.0)
+	_tiles(concrete, q[2] - 3.0, q[2], q[1], q[3], 0.2, 20.0)
+	var kerb := _box(Vector3(0.3, 0.2, q[3] - q[1]), Vector3(float(q[0]) - 0.1, 0.1, (q[1] + q[3]) * 0.5), concrete)
+	kerb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# a freight track down West Street, as the railroad ran along the piers
+	var fk := MeshKit.new()
+	var wx := CityPlan.NX * CityPlan.PITCH + 3.2
+	for g in [-0.72, 0.72]:
+		fk.box("r", Vector3(wx + g, 0.014, (q[1] + q[3]) * 0.5), Vector3(0.08, 0.02, q[3] - q[1]), Color(0.5, 0.48, 0.45))
+	var ft := MeshInstance3D.new()
+	ft.mesh = fk.commit({"r": rail_mat})
+	ft.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ft)
 	# the river
 	var water := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
@@ -972,7 +1022,7 @@ func _waterfront() -> void:
 		dk.box("base", Vector3(cx, -0.15, p["z1"] + 0.05), Vector3(len, 0.25, 0.12), Color("3a2e24"))
 		for bx in [p["x0"] + 4.0, p["x0"] + 12.0, p["x1"] - 3.0]:
 			for s in [p["z0"] + 0.35, p["z1"] - 0.35]:
-				_mm_add(Props1920s.bollard(), _xf(Vector3(bx, 0.2, s), 0.0))
+				_mm_add(Props1920s.bollard(), _xf(Vector3(bx, 0.2, s), 0.0), false)
 		# a harbour lamp at the end of every pier
 		_lamp_at(Vector3(p["x1"] - 0.6, 0.2, p["z0"] + 0.5), Vector3(0, 0, -1), true)
 		# fenders on the ship side
@@ -990,13 +1040,13 @@ func _waterfront() -> void:
 			if bz > gap[0] - 1.0 and bz < gap[1] + 1.0:
 				near_pier = true
 		if not near_pier:
-			_mm_add(Props1920s.bollard(), _xf(Vector3(plan.water_x - 0.7, 0.2, bz), 0.0))
+			_mm_add(Props1920s.bollard(), _xf(Vector3(plan.water_x - 0.7, 0.2, bz), 0.0), false)
 		bz += 9.0
 	# quay lamps
 	var lz := float(q[1]) + 10.0
 	while lz < float(q[3]) - 5.0:
-		_lamp_at(Vector3(plan.water_x - 1.6, 0.2, lz), Vector3(1, 0, 0), int(lz) % 2 == 0)
-		lz += 30.0
+		_lamp_at(Vector3(plan.water_x - 3.4, 0.2, lz), Vector3(1, 0, 0), true)
+		lz += 24.0
 	# freighters alongside the outer piers, their derricks swung out over the pier
 	var ships := [[plan.piers[0], -1.0, "S.S. MARY DONNELLY", "HOBOKEN"], [plan.piers[2], 1.0, "S.S. CASTELLAMARE", "NAPOLI"]]
 	var hull_mesh := Harbour.freighter()
@@ -1078,18 +1128,27 @@ func _waterfront() -> void:
 	add_child(hl)
 	dock_spots["union_hall"] = hall_at + Vector3(-3.4, 0, 0.8)
 	dock_spots["union_boss"] = hall_at + Vector3(-3.2, 0, -1.4)
-	var hall_lamp := OmniLight3D.new()
-	hall_lamp.light_color = Color("ffc47e")
-	hall_lamp.omni_range = 8.0
-	hall_lamp.light_energy = 0.0
-	hall_lamp.position = hall_at + Vector3(-3.0, 3.0, 0)
-	add_child(hall_lamp)
-	lamps.append(hall_lamp)
+	lamp_spots.append(hall_at + Vector3(-3.0, 3.0, 0))
 	# cargo: stacks of crates, barrels, sacks, a few rope coils; each stack collides as one box
 	var stacks: Array = []
+	var wn := 0
 	for lot in plan.lots_of_kind("warehouse"):
 		var wz: float = lot["center"][1]
+		wn += 1
+		var wl := Label3D.new()
+		wl.text = "PIER %d  ·  WAREHOUSE" % (44 + wn * 2)
+		wl.font = load("res://assets/fonts/signs/AlfaSlabOne-Regular.ttf")
+		wl.font_size = 96
+		wl.pixel_size = 0.012
+		wl.modulate = Color("ddd4bc")
+		wl.shaded = true
+		wl.double_sided = false
+		wl.outline_size = 0
+		wl.position = Vector3(float(lot["center"][0]) + 7.05, 7.4, wz)
+		wl.rotation.y = PI * 0.5
+		add_child(wl)
 		dock_spots["warehouse_%d_stack" % lot["id"]] = Vector3(q[0] + 2.4, 0.2, wz + 5.6)
+		_lamp_at(Vector3(q[0] + 0.7, 0.2, wz - 3.2), Vector3(-1, 0, 0), true)
 		dock_spots["warehouse_%d_door" % lot["id"]] = Vector3(lot["door"][0], 0.2, lot["door"][1])
 		# behind the warehouse, along the water
 		stacks.append([Vector3(plan.water_x - 3.0, 0.2, wz - 5.0), "crates"])
@@ -1103,8 +1162,8 @@ func _waterfront() -> void:
 	stacks.append([Vector3(plan.water_x - 3.0, 0.2, hall_z - 2.0), "sacks"])
 	for s in stacks:
 		_cargo(s[0], s[1])
-	_mm_add(Props1920s.rope_coil(), _xf(Vector3(plan.water_x - 1.6, 0.2, hall_z + 4.0), 0.0))
-	_mm_add(Props1920s.rope_coil(), _xf(Vector3(plan.piers[2]["x1"] - 2.0, 0.2, plan.piers[2]["z0"] + 1.2), 0.0))
+	_mm_add(Props1920s.rope_coil(), _xf(Vector3(plan.water_x - 1.6, 0.2, hall_z + 4.0), 0.0), false)
+	_mm_add(Props1920s.rope_coil(), _xf(Vector3(plan.piers[2]["x1"] - 2.0, 0.2, plan.piers[2]["z0"] + 1.2), 0.0), false)
 	# longshoremen's walking loops: from each freighter's gangway along the quay to a warehouse
 	var wh := plan.lots_of_kind("warehouse")
 	for si in 2:
@@ -1193,7 +1252,7 @@ func _backdrop() -> void:
 		if _rng.randf() < 0.7:
 			_mm_add(Props1920s.water_tower(), _xf(roof + Vector3(_rng.randf_range(-w * 0.3, w * 0.3), 0, _rng.randf_range(-w * 0.3, w * 0.3)), _rng.randf() * TAU))
 		for n in 3:
-			_mm_add(Props1920s.chimney(), _xf(roof + Vector3(_rng.randf_range(-w * 0.4, w * 0.4), 0, _rng.randf_range(-w * 0.4, w * 0.4)), 0.0))
+			_mm_add(Props1920s.chimney(), _xf(roof + Vector3(_rng.randf_range(-w * 0.4, w * 0.4), 0, _rng.randf_range(-w * 0.4, w * 0.4)), 0.0), false)
 	# the far side of the outer streets: walls
 	var r := plan.bounds
 	_collider(Vector3(2, 6, r.size.y), Vector3(-half - CityPlan.PITCH * 0.5, 3, r.position.y + r.size.y * 0.5), 0.0)

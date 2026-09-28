@@ -34,6 +34,8 @@ var _vis_steer := 0.0
 var _last_pos := Vector3.ZERO
 var _last_yaw := 0.0
 var _body: MeshInstance3D
+var _night := 0.0
+var _light_t := 0.0
 
 
 func setup(w: Node, k: String, kd: String, fam_color: Color = Color(0, 0, 0, 0)) -> void:
@@ -147,13 +149,21 @@ func set_load(n: int) -> void:
 
 
 func set_night(v: float) -> void:
+	_night = v
 	for l in _lights:
 		l.light_energy = v * 3.0
-		l.visible = v > 0.05
 	CarModels.set_night(v)
 
 
 func _process(delta: float) -> void:
+	# headlamps are real lights only near the camera (the renderer has a light budget)
+	_light_t -= delta
+	if _light_t <= 0.0:
+		_light_t = 0.4
+		var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+		var near := cam != null and cam.global_position.distance_squared_to(global_position) < 45.0 * 45.0
+		for l in _lights:
+			l.visible = _night > 0.05 and near
 	# wheels turn with the distance actually covered, front wheels follow the turn
 	var moved := position - _last_pos
 	moved.y = 0.0

@@ -1,6 +1,17 @@
-Copyright (c) 2011 by Sorkin Type Co (www.sorkintype.com),
-with Reserved Font Name "Rye".
+Sign and lettering faces used on the street (shop signboards, wall advertisements, vehicle and
+dock lettering), all from the Google Fonts collection, licensed under the SIL Open Font License
+1.1 (full text below). Each font keeps its own copyright and Reserved Font Names:
 
+- Rye-Regular.ttf            Copyright (c) 2011 Sorkin Type Co, Reserved Font Name "Rye"
+- Limelight-Regular.ttf      Copyright (c) 2011 Nicole Fally, Sorkin Type Co
+- AlfaSlabOne-Regular.ttf    Copyright (c) 2011 JM Sole
+- Bevan-Regular.ttf          Copyright (c) 2011 Vernon Adams; 2020 The Bevan Project Authors
+- AbrilFatface-Regular.ttf   Copyright (c) 2011 TypeTogether
+- PlayfairDisplay.ttf        Copyright 2017 The Playfair Display Project Authors
+- IMFeENsc28P.ttf            IM FELL English SC, Copyright (c) 2010 Igino Marini
+- Sancreek-Regular.ttf       Copyright (c) 2011 Vernon Adams
+
+--------------------------------------------------------------------------------
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
 http://scripts.sil.org/OFL

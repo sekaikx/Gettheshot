@@ -41,7 +41,7 @@ void fragment() {
 	float n1 = noise(p * 0.9 + vec2(t * 0.35, t * 0.12));
 	float n2 = noise(p * 2.3 - vec2(t * 0.2, t * 0.45));
 	float n3 = noise(p * 5.0 + vec2(t * 0.6, -t * 0.3));
-	vec2 slope = vec2(n1 - 0.5, n2 - 0.5) * 0.28 + vec2(n3 - 0.5) * 0.08 * (1.0 + wet);
+	vec2 slope = vec2(n1 - 0.5, n2 - 0.5) * 0.1 + vec2(n3 - 0.5) * 0.04 * (1.0 + wet);
 	NORMAL_MAP = normalize(vec3(0.5 + slope.x, 0.5 + slope.y, 1.0));
 	NORMAL_MAP_DEPTH = 1.0;
 	// deep river green-grey, darker far out
@@ -52,14 +52,14 @@ void fragment() {
 	for (int i = 0; i < 6; i++) {
 		d = min(d, rect_dist(p, foam_rects[i]));
 	}
-	float edge = 1.0 - smoothstep(0.0, 1.4, d);
-	float froth = smoothstep(0.45, 0.8, noise(p * 3.0 + vec2(t * 0.5, t * 0.3)) * (0.6 + edge));
+	float edge = 1.0 - smoothstep(0.0, 0.7, d);
+	float froth = smoothstep(0.5, 0.8, noise(p * 7.0 + vec2(t * 0.7, t * 0.4)) * noise(p * 2.0 - vec2(t * 0.2)) * 1.6 * (0.4 + edge));
 	float foam = edge * froth;
-	col = mix(col, vec3(0.55, 0.56, 0.52) * (1.0 - night * 0.75), foam * 0.7);
+	col = mix(col, vec3(0.5, 0.51, 0.48) * (1.0 - night * 0.75), foam * 0.55);
 	// an oily sheen in the slips
 	col += vec3(0.03, 0.02, 0.04) * edge * (1.0 - night) * step(0.6, noise(p * 0.6));
 	ALBEDO = col;
-	ROUGHNESS = mix(0.18, 0.7, foam);
-	METALLIC = 0.1;
-	SPECULAR = 0.45;
+	ROUGHNESS = mix(0.35, 0.85, foam);
+	METALLIC = 0.0;
+	SPECULAR = 0.18;
 }

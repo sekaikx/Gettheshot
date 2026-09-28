@@ -64,7 +64,9 @@ void vertex() {
 
 vec3 wall_base(float cu, float y, float st, vec3 tn) {
 	if (st > 1.5 && st < 2.5) {
-		return texture(plaster_tex, vec2(cu, y) * 0.2).rgb * vec3(0.86, 0.8, 0.7) * tn;
+		vec3 pl = texture(plaster_tex, vec2(cu, y) * 0.2).rgb;
+		pl = mix(vec3(dot(pl, vec3(0.33))), pl, 1.4);
+		return pl * vec3(0.8, 0.74, 0.65) * tn;
 	}
 	if (st > 4.5) {
 		// dressed stone in courses
@@ -143,7 +145,7 @@ void fragment() {
 	if (part > 1.5) {
 		// parapet: wall material, stone coping on top
 		col = wall_base(cu + wpos.x + wpos.z, y, style, tint) * 0.92;
-		if (n.y > 0.5 || y > size.y + 0.62) col = stone * 0.62;
+		if (n.y > 0.5 || y > size.y + 0.62) col = stone * 0.48;
 	} else if (part > 0.5) {
 		// pressed-metal cornice: fascia with mouldings, modillion brackets underneath
 		vec3 cc = trim_col;
@@ -172,22 +174,52 @@ void fragment() {
 			}
 		}
 	} else if (n.y > 0.5) {
-		// tar-paper roof: rolled strips, patches, a sheen when wet
+		// roofs: tar paper in lapped strips, silver-painted, or tar and gravel; dirt at the edges
 		vec2 rp = wpos.xz;
-		col = texture(roof_tex, rp * 0.12).rgb * vec3(0.27, 0.26, 0.26);
-		float strip = fract(rp.x / 0.92);
-		col *= 1.0 - step(0.965, strip) * 0.35;
-		vec2 cell = floor(rp / vec2(2.7, 1.9));
-		float ph = h21(cell + seed);
-		if (ph > 0.82) col *= 1.25;
-		else if (ph < 0.12) col *= 0.75;
-		if (style > 3.5 && style < 4.5) col *= 0.9;
-		rough = mix(0.95, 0.25, wet);
+		bool along_x = h21(vec2(seed, 1.7)) > 0.5;
+		float sv = along_x ? rp.y : rp.x;
+		float strip = fract(sv / 0.91);
+		float sid = floor(sv / 0.91);
+		vec3 tex = texture(roof_tex, rp * 0.12).rgb;
+		float kind = h21(vec2(seed, 6.1));
+		if (kind < 0.55) {
+			col = tex * vec3(0.2, 0.195, 0.2) * (0.9 + 0.2 * h21(vec2(sid, seed)));
+			col *= 1.0 - smoothstep(0.93, 0.97, strip) * 0.4;
+			col += vec3(0.03) * smoothstep(0.97, 1.0, strip);
+			rough = 0.85;
+		} else if (kind < 0.82) {
+			col = mix(tex * vec3(0.4, 0.41, 0.42), vec3(0.42, 0.43, 0.44), 0.5) * (0.9 + 0.14 * h21(vec2(sid, seed)));
+			col *= 1.0 - smoothstep(0.94, 0.98, strip) * 0.3;
+			metal = 0.35;
+			rough = 0.5;
+		} else {
+			float grit = h21(floor(rp * 22.0));
+			col = tex * vec3(0.34, 0.31, 0.28) * (0.8 + 0.4 * grit);
+			rough = 0.95;
+		}
+		// patches of fresh tar and the odd repair
+		vec2 cell = floor(rp / vec2(2.3, 1.7));
+		float ph = h21(cell + seed * 1.3);
+		vec2 cf = fract(rp / vec2(2.3, 1.7));
+		if (ph > 0.86 && cf.x > 0.15 && cf.x < 0.85 && cf.y > 0.2 && cf.y < 0.8) {
+			col = vec3(0.07, 0.07, 0.075);
+			rough = 0.5;
+			metal = 0.0;
+		}
+		// soot and grime collect along the parapet
+		float ex = size.x * 0.5 - abs(lpos.x);
+		float ez = size.z * 0.5 - abs(lpos.z);
+		float edge = min(ex, ez);
+		col *= mix(0.7, 1.0, smoothstep(0.25, 1.2, edge));
+		if (style > 3.5 && style < 4.5) col *= 0.85;
+		rough = mix(rough, 0.25, wet);
 	} else if (n.y < -0.5) {
 		col = vec3(0.1);
 	} else if (style > 2.5 && style < 3.5) {
 		// pier warehouse: painted corrugated iron, a band of high windows, big loading doors
-		col = texture(metal_tex, vec2(cu, y) * 0.3).rgb * tint * 0.85;
+		col = texture(metal_tex, vec2(cu, y) * 0.3).rgb * tint * 1.25;
+		col *= 0.88 + 0.12 * step(0.5, fract(cu * 3.3));
+		if (fract(y / 2.4) < 0.03) col *= 0.7;
 		metal = 0.25;
 		rough = 0.65;
 		bool front = n.z > 0.5;
@@ -389,6 +421,20 @@ void fragment() {
 			if (fy < 0.12 && fy > 0.0 && h21(vec2(seed, fl)) > 0.55 && !back) col = stone * 0.9;
 		} else if (y >= top_band) {
 			col *= 0.9;
+		} else if (side_x && y > gh) {
+			// a blank party wall: soot streaks, patched brick, and on some a column of small
+			// light-well windows
+			float streak = h21(vec2(floor(cu * 1.7), seed));
+			col *= 0.86 + 0.14 * streak * smoothstep(size.y, size.y - 6.0, y);
+			if (h21(floor(vec2(cu * 0.8, y * 0.6)) + seed) > 0.93) col *= 0.82;
+			if (ad < 0.5 && h21(vec2(seed, 11.0 + (n.x > 0.0 ? 1.0 : 0.0))) > 0.4) {
+				float wx = face_w * (0.25 + 0.5 * h21(vec2(seed, 12.0 + (n.x > 0.0 ? 1.0 : 0.0))));
+				float fl = floor((y - gh) / fh);
+				float fy = (y - gh) - fl * fh;
+				vec2 p = vec2(cu - wx, fy - 0.95);
+				if (abs(p.x) < 0.5 && p.y > -0.1 && p.y < 0.0) col = stone;
+				window_px(p, 0.36, 1.35, fl * 3.0 + 77.0 + (n.x > 0.0 ? 5.0 : 0.0), -0.02, 1.0, col, emit, rough, frame_col, seed, night);
+			}
 		}
 		col *= 1.0 - wet * 0.25;
 		if (wet > 0.0 && rough > 0.5) rough = mix(rough, 0.35, wet);

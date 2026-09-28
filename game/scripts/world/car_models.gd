@@ -179,11 +179,6 @@ static func wheel(style: String, r: float) -> ArrayMesh:
 
 # ------------------------------------------------------------------ shared pieces
 
-static func _mirror(k: MeshKit, fn: Callable) -> void:
-	for s in [1.0, -1.0]:
-		fn.call(s)
-
-
 ## A fender: a curved sheet over the wheel at (z, y) = c, running back or forward into the
 ## running board at height `board_y` and z = `board_z`; x from xa to xb.
 static func _fender(k: MeshKit, c: Vector2, r: float, a0: float, a1: float, board_z: float, board_y: float,

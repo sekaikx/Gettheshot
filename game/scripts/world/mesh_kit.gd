@@ -179,6 +179,19 @@ func _face_world(surf: String, pts: Array, col: Color, outward: Vector3) -> void
 	face(surf, pts, col, outward)
 
 
+## A flat strip from a to b, `w` wide, turned to face `toward` (2 triangles; for thin parts
+## drawn double-sided, like railings and spokes).
+func bar(surf: String, a: Vector3, b: Vector3, w: float, col: Color, toward: Vector3) -> void:
+	var d := (b - a).normalized()
+	var side := d.cross(toward).normalized() * (w * 0.5)
+	if side.length() < 1e-6:
+		side = d.cross(Vector3.UP if absf(d.y) < 0.9 else Vector3.RIGHT).normalized() * (w * 0.5)
+	var n := side.cross(d).normalized()
+	if n.dot(toward) < 0.0:
+		n = -n
+	face(surf, [a - side, a + side, b + side, b - side], col, n)
+
+
 ## A cylinder (or cone) from a to b.
 func cyl(surf: String, a: Vector3, b: Vector3, ra: float, rb: float, segs: int, col: Color, caps := true, smooth := true) -> void:
 	var ax := b - a

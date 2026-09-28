@@ -54,6 +54,7 @@ static func _mk(key: String, build: Callable) -> ArrayMesh:
 		var k := MeshKit.new()
 		build.call(k)
 		_cache[key] = k.commit({"base": base_mat, "iron": iron_mat, "glow": glow_mat})
+		(_cache[key] as ArrayMesh).resource_name = key
 	return _cache[key]
 
 
@@ -63,23 +64,22 @@ static func _mk(key: String, build: Callable) -> ArrayMesh:
 static func lamp_post() -> ArrayMesh:
 	return _mk("lamp", func(k: MeshKit) -> void:
 		k.lathe("iron", Vector3.ZERO, [Vector2(0.2, 0.0), Vector2(0.2, 0.1), Vector2(0.16, 0.14), Vector2(0.16, 0.42),
-			Vector2(0.18, 0.46), Vector2(0.13, 0.52), Vector2(0.11, 0.62), Vector2(0.085, 0.72), Vector2(0.08, 0.9),
-			Vector2(0.095, 0.95), Vector2(0.07, 1.0), Vector2(0.06, 3.3), Vector2(0.085, 3.36), Vector2(0.085, 3.44),
-			Vector2(0.055, 3.5), Vector2(0.05, 4.0), Vector2(0.0, 4.02)], 8, IRON)
+			Vector2(0.18, 0.46), Vector2(0.11, 0.62), Vector2(0.08, 0.9), Vector2(0.095, 0.95), Vector2(0.06, 1.05),
+			Vector2(0.05, 3.3), Vector2(0.08, 3.4), Vector2(0.05, 3.5), Vector2(0.045, 4.0), Vector2(0.0, 4.02)], 7, IRON)
 		# the crook: up, over and down, like a shepherd's staff
 		var pts: Array = [Vector3(0, 3.9, 0)]
-		for s in 11:
-			var a := PI - PI * s / 10.0
+		for s in 8:
+			var a := PI - PI * s / 7.0
 			pts.append(Vector3(0, 4.12 + sin(a) * 0.36, 0.36 + cos(a) * 0.36))
 		pts.append(Vector3(0, 4.02, 0.72))
-		k.tube("iron", pts, 0.035, 6, IRON)
+		k.tube("iron", pts, 0.035, 5, IRON)
 		# the scroll bracket under the arm
 		var sc: Array = []
-		for s in 13:
-			var t := s / 12.0
+		for s in 9:
+			var t := s / 8.0
 			var a := t * PI * 1.6
 			sc.append(Vector3(0, 3.72 + t * 0.38 + sin(a) * 0.05, 0.04 + t * 0.34 + cos(a) * 0.05 - 0.05))
-		k.tube("iron", sc, 0.014, 4, IRON)
+		k.tube("iron", sc, 0.014, 3, IRON)
 		k.lathe("iron", Vector3(0, 3.62, 0.72), [Vector2(0.0, 0.42), Vector2(0.04, 0.4), Vector2(0.17, 0.3), Vector2(0.17, 0.27),
 			Vector2(0.13, 0.26)], 8, IRON)
 		k.lathe("glow", Vector3(0, 3.62, 0.72), [Vector2(0.13, 0.26), Vector2(0.15, 0.18), Vector2(0.14, 0.05),
@@ -123,9 +123,8 @@ static func mailbox() -> ArrayMesh:
 ## Galvanised ash can with a lid, dented a little.
 static func ash_can() -> ArrayMesh:
 	return _mk("ashcan", func(k: MeshKit) -> void:
-		k.lathe("iron", Vector3.ZERO, [Vector2(0.2, 0.0), Vector2(0.22, 0.02), Vector2(0.22, 0.1), Vector2(0.235, 0.12),
-			Vector2(0.225, 0.14), Vector2(0.235, 0.36), Vector2(0.245, 0.38), Vector2(0.235, 0.4), Vector2(0.245, 0.62),
-			Vector2(0.26, 0.64), Vector2(0.24, 0.66), Vector2(0.18, 0.69), Vector2(0.03, 0.7), Vector2(0.0, 0.7)], 12, GALV)
+		k.lathe("iron", Vector3.ZERO, [Vector2(0.22, 0.0), Vector2(0.235, 0.12), Vector2(0.225, 0.14), Vector2(0.235, 0.38),
+			Vector2(0.245, 0.62), Vector2(0.26, 0.64), Vector2(0.2, 0.69), Vector2(0.0, 0.7)], 9, GALV)
 		k.box("iron", Vector3(0, 0.73, 0), Vector3(0.16, 0.03, 0.03), IRON)
 		for s in [1.0, -1.0]:
 			k.box("iron", Vector3(s * 0.25, 0.55, 0), Vector3(0.03, 0.03, 0.12), IRON))
@@ -174,10 +173,10 @@ static func pushcart(variant: int) -> ArrayMesh:
 	return _mk("cart%d" % variant, func(k: MeshKit) -> void:
 		var ax := Basis(Vector3(0, 1, 0), Vector3(1, 0, 0), Vector3(0, 0, -1))
 		for s in [1.0, -1.0]:
-			k.lathe("base", Vector3(s * 0.52, 0.45, -0.3), [Vector2(0.45, -0.03), Vector2(0.45, 0.03), Vector2(0.41, 0.03), Vector2(0.41, -0.03), Vector2(0.45, -0.03)], 14, OLD_WOOD, ax)
-			for sp in 8:
-				var a := TAU * sp / 8.0
-				k.box("base", Vector3(s * 0.52, 0.45 + sin(a) * 0.21, -0.3 + cos(a) * 0.21), Vector3(0.03, 0.03, 0.42), OLD_WOOD, Basis(Vector3.RIGHT, -a))
+			k.lathe("base", Vector3(s * 0.52, 0.45, -0.3), [Vector2(0.45, -0.03), Vector2(0.45, 0.03), Vector2(0.41, 0.03), Vector2(0.41, -0.03), Vector2(0.45, -0.03)], 12, OLD_WOOD, ax)
+			for sp in 4:
+				var a := PI * sp / 4.0
+				k.bar("base", Vector3(s * 0.52, 0.45 + sin(a) * 0.42, -0.3 + cos(a) * 0.42), Vector3(s * 0.52, 0.45 - sin(a) * 0.42, -0.3 - cos(a) * 0.42), 0.04, OLD_WOOD, Vector3(s, 0, 0))
 			k.box("base", Vector3(s * 0.36, 0.8, 1.25), Vector3(0.05, 0.05, 1.0), OLD_WOOD)   # handles
 		k.cyl("iron", Vector3(-0.55, 0.45, -0.3), Vector3(0.55, 0.45, -0.3), 0.025, 0.025, 5, IRON)
 		k.box("base", Vector3(0, 0.78, 0.0), Vector3(0.86, 0.1, 1.7), WOOD)
@@ -194,10 +193,10 @@ static func pushcart(variant: int) -> ArrayMesh:
 				var g: Color = goods[(r * 2 + c + variant) % goods.size()]
 				var cz := -0.55 + r * 0.55
 				var cx := -0.2 + c * 0.4
-				k.bbox("base", Vector3(cx, 0.93, cz), Vector3(0.36, 0.14, 0.48), 0.05, g.darkened(0.25))
-				for b in 5:
-					var o := Vector3((b % 3 - 1) * 0.1, 0.0, (b / 3 - 0.5) * 0.18)
-					k.bbox("base", Vector3(cx, 1.02, cz) + o, Vector3(0.12, 0.08, 0.12), 0.04, g)
+				k.box("base", Vector3(cx, 0.93, cz), Vector3(0.36, 0.14, 0.48), g.darkened(0.3), Basis.IDENTITY, true)
+				for b in 3:
+					var o := Vector3((b - 1) * 0.1, 0.0, (b % 2 - 0.5) * 0.14)
+					k.box("base", Vector3(cx, 1.02, cz) + o, Vector3(0.14, 0.1, 0.16), g.lightened(0.04 * b), Basis(Vector3.UP, b * 0.5), true)
 		if variant == 1:
 			k.cyl("iron", Vector3(0.3, 0.8, -0.6), Vector3(0.3, 2.3, -0.6), 0.02, 0.02, 4, IRON)
 			var top := Vector3(0.3, 2.45, -0.6)
@@ -278,25 +277,26 @@ static func fire_escape(w: float, stair_dir: int, drop: bool) -> ArrayMesh:
 		var col := Color("1c1d1e")
 		# grating platform with a slatted look
 		k.box("iron", Vector3(0, 0.0, d * 0.5), Vector3(w, 0.04, d), col)
-		for g in int(w / 0.12):
-			k.box("iron", Vector3(-w * 0.5 + 0.06 + g * 0.12, 0.024, d * 0.5), Vector3(0.02, 0.01, d), Color("2c2d2e"))
+		for g in int(w / 0.2):
+			k.bar("iron", Vector3(-w * 0.5 + 0.1 + g * 0.2, 0.022, 0.0), Vector3(-w * 0.5 + 0.1 + g * 0.2, 0.022, d), 0.03, Color("2c2d2e"), Vector3.UP)
 		# railing: top rail, a middle rail, balusters
 		for side in [[Vector3(-w * 0.5, 0, d), Vector3(w * 0.5, 0, d)], [Vector3(-w * 0.5, 0, 0.02), Vector3(-w * 0.5, 0, d)], [Vector3(w * 0.5, 0, 0.02), Vector3(w * 0.5, 0, d)]]:
 			var a: Vector3 = side[0]
 			var b: Vector3 = side[1]
+			var out := Vector3(0, 0, 1) if absf(a.z - b.z) < 0.01 else Vector3(signf(a.x), 0, 0)
 			for yy in [0.95, 0.5]:
-				k.cyl("iron", a + Vector3(0, yy, 0), b + Vector3(0, yy, 0), 0.018, 0.018, 4, col, false, false)
-			var n := int(a.distance_to(b) / 0.14)
+				k.bar("iron", a + Vector3(0, yy, 0), b + Vector3(0, yy, 0), 0.04, col, out)
+			var n := int(a.distance_to(b) / 0.2)
 			for i in n + 1:
 				var p := a.lerp(b, float(i) / maxf(n, 1))
-				k.box("iron", p + Vector3(0, 0.475, 0), Vector3(0.014, 0.95, 0.014), col)
+				k.bar("iron", p, p + Vector3(0, 0.95, 0), 0.018, col, out)
 		if drop:
 			# the counterweighted drop ladder, hauled up
 			var x := stair_dir * (w * 0.5 - 0.45)
 			for s in [-0.2, 0.2]:
-				k.box("iron", Vector3(x + s, -1.1, d - 0.12), Vector3(0.03, 2.2, 0.03), col)
+				k.bar("iron", Vector3(x + s, 0.0, d - 0.12), Vector3(x + s, -2.2, d - 0.12), 0.035, col, Vector3.BACK)
 			for r in 9:
-				k.box("iron", Vector3(x, -0.1 - r * 0.25, d - 0.12), Vector3(0.4, 0.02, 0.02), col)
+				k.bar("iron", Vector3(x - 0.2, -0.1 - r * 0.25, d - 0.12), Vector3(x + 0.2, -0.1 - r * 0.25, d - 0.12), 0.025, col, Vector3.BACK)
 		else:
 			# the stair from this platform down to the next, inside the railing
 			var fh := 3.2
@@ -304,15 +304,16 @@ static func fire_escape(w: float, stair_dir: int, drop: bool) -> ArrayMesh:
 			var x1 := stair_dir * (w * 0.5 - 0.5)
 			var z := 0.45
 			for s in [-0.28, 0.28]:
-				k.cyl("iron", Vector3(x0, 0.0, z + s), Vector3(x1, -fh, z + s), 0.03, 0.03, 4, col, false, false)
-				k.cyl("iron", Vector3(x0, 0.9, z + s), Vector3(x1, -fh + 0.9, z + s), 0.015, 0.015, 4, col, false, false)
-			var steps := 14
+				k.bar("iron", Vector3(x0, 0.0, z + s), Vector3(x1, -fh, z + s), 0.12, col, Vector3.BACK)
+				k.bar("iron", Vector3(x0, 0.9, z + s), Vector3(x1, -fh + 0.9, z + s), 0.03, col, Vector3.BACK)
+			var steps := 10
 			for st in steps:
 				var t := (st + 0.5) / steps
-				k.box("iron", Vector3(lerpf(x0, x1, t), -fh * t, z), Vector3(0.16, 0.02, 0.56), Color("2a2b2c"))
+				var tx := lerpf(x0, x1, t)
+				k.bar("iron", Vector3(tx, -fh * t, z - 0.28), Vector3(tx, -fh * t, z + 0.28), 0.18, Color("2a2b2c"), Vector3.UP)
 		# brackets into the wall
 		for s in [-1.0, 1.0]:
-			k.cyl("iron", Vector3(s * w * 0.4, -0.5, 0.02), Vector3(s * w * 0.4, 0.0, d * 0.9), 0.02, 0.02, 4, col, false, false))
+			k.bar("iron", Vector3(s * w * 0.4, -0.5, 0.02), Vector3(s * w * 0.4, 0.0, d * 0.9), 0.04, col, Vector3.RIGHT))
 
 
 static func water_tower() -> ArrayMesh:
@@ -357,8 +358,8 @@ static func chimney() -> ArrayMesh:
 		k.box("base", Vector3(0, 0.7, 0), Vector3(0.8, 1.4, 0.6), brick)
 		k.box("base", Vector3(0, 1.45, 0), Vector3(0.92, 0.1, 0.72), Color("8a8074"))
 		for s in [-0.18, 0.18]:
-			k.cyl("base", Vector3(s, 1.5, 0), Vector3(s, 1.78, 0), 0.1, 0.08, 8, Color("a0603a"))
-			k.cyl("base", Vector3(s, 1.779, 0), Vector3(s, 1.78, 0), 0.07, 0.0, 8, Color("151210")))
+			k.cyl("base", Vector3(s, 1.5, 0), Vector3(s, 1.78, 0), 0.1, 0.08, 6, Color("a0603a"))
+			k.cyl("base", Vector3(s, 1.779, 0), Vector3(s, 1.78, 0), 0.07, 0.0, 6, Color("151210")))
 
 
 ## Stair bulkhead: the little brick hut over the roof stairs with a door.
@@ -433,8 +434,9 @@ static func barrel() -> ArrayMesh:
 
 static func sack() -> ArrayMesh:
 	return _mk("sack", func(k: MeshKit) -> void:
-		k.bbox("base", Vector3(0, 0.14, 0), Vector3(0.9, 0.28, 0.55), 0.11, Color("a8946c"))
-		k.bbox("base", Vector3(0.38, 0.16, 0), Vector3(0.18, 0.2, 0.3), 0.07, Color("9a865e")))
+		k.bbox("base", Vector3(0, 0.14, 0), Vector3(0.9, 0.28, 0.55), 0.11, Color("857454"))
+		k.bbox("base", Vector3(0.38, 0.16, 0), Vector3(0.18, 0.2, 0.3), 0.07, Color("786848"))
+		k.box("base", Vector3(-0.1, 0.285, 0), Vector3(0.3, 0.005, 0.3), Color("5a3a2a")))
 
 
 ## Wooden pallet of four crates, lashed.
