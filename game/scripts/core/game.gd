@@ -634,7 +634,8 @@ func _tick_booze() -> void:
 			var mv := mini(left, maxi(0, Syndicate.SPEAK_CAP - int(b["stock"])))
 			b["stock"] = int(b["stock"]) + mv
 			left -= mv
-		Syndicate._report(nation, fid, "Booze run: %s trucked %d crates from the quay to %d speakeasies" % [c["name"], n, speaks.size()])
+		Syndicate._report(nation, fid, "Booze run: %s trucked %d crates from the quay to %s" % [c["name"], n,
+			speaks[0]["name"] if speaks.size() == 1 else "%d speakeasies" % speaks.size()])
 
 
 func _federal_raid(f: Dictionary) -> void:

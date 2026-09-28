@@ -19,6 +19,8 @@ var _sim_start := 0
 var _checks := {}
 var _wh_id := -1
 var _speak_id := -1
+var _pending := ""
+var _pending_frames := 0
 
 
 func _ready() -> void:
@@ -78,39 +80,57 @@ func _ready() -> void:
 		[16.6, func() -> void: _shot("union")],
 		[16.8, func() -> void:
 			world.hud._choose(0)       # put the local on the payroll
-			world.cam.dist_goal = 40.0],
-		[19.0, func() -> void: _shot("zoom")],
-		[19.2, func() -> void:
+			# the longshoremen at work on the middle pier
+			var pier: Dictionary = world.plan.piers[1]
+			world.local_actor.place(Vector3(world.plan.water_x - 5.0, 0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 6.0), PI * 0.5)
+			world.cam.dist_goal = 26.0
+			world.cam.snap()],
+		[19.0, func() -> void:
+			var carrying := 0
+			for a in world.actors.values():
+				if (a as Actor).kind == "docker" and (a as Actor).carrying:
+					carrying += 1
+			_checks["dockers_work"] = carrying > 0
+			_shot("piers")],
+		[19.2, func() -> void: world.cam.dist_goal = 40.0],
+		[21.0, func() -> void: _shot("zoom")],
+		[21.2, func() -> void:
 			Game.clock = 0.74
 			world.cam.dist_goal = 18.0],
-		[22.0, func() -> void: _shot("night")],
-		[22.2, func() -> void:
+		[24.0, func() -> void: _shot("night")],
+		[24.2, func() -> void:
 			world.hud.close_dialog()
 			world.hud._modal = ""
 			world.hud.toggle_nation()],
-		[23.2, func() -> void: _shot("nation")],
-		[23.3, func() -> void:
+		[25.2, func() -> void: _shot("nation")],
+		[25.3, func() -> void:
 			world.hud._nation._sel = {"type": "rail", "id": "rail_nyc_chi"}
+			world.hud._nation.focus_on("buf", 2.4)
 			world.hud._nation._fill()],
-		[24.0, func() -> void: _shot("nation_rail")],
-		[24.2, func() -> void:
+		[26.0, func() -> void: _shot("nation_rail")],
+		[26.2, func() -> void:
 			world.hud.toggle_nation()
 			world.hud._modal = ""
 			world.hud._fam_tab = "case"
 			world.hud.toggle_family()],
-		[25.0, func() -> void: _shot("case")],
-		[25.2, func() -> void:
+		[27.0, func() -> void: _shot("case")],
+		[27.2, func() -> void:
 			world.hud._fam_tab = "supply"
 			world.hud._fill_family()],
-		[26.0, func() -> void: _shot("supply")],
-		[26.2, func() -> void:
+		[28.0, func() -> void: _shot("supply")],
+		[28.2, func() -> void:
 			world.hud.toggle_family()
 			world.hud.show_newspaper(-1)],
-		[27.0, func() -> void: _shot("paper")],
-		[27.3, func() -> void: _finish()],
+		[29.0, func() -> void: _shot("paper")],
+		[29.3, func() -> void: _finish()],
 	]
 	Game.notice.connect(func(fam: int, text: String, _k: String) -> void:
 		if fam == 0 or fam == -1: _log.append("notice: " + text))
+	_checks["nyc_stock_filled"] = false
+	Game.month_passed.connect(func(_m: int) -> void:
+		for l in Game.nation.get("supply", {}).get("0", []):
+			if String(l).contains("into the New York warehouse"):
+				_checks["nyc_stock_filled"] = true)
 	Net.event.connect(func(n: String, args: Array) -> void:
 		if n == "reply": _log.append("reply: " + String(args[0])))
 
@@ -148,10 +168,9 @@ func _supply_setup() -> void:
 func _load_truck() -> void:
 	var wh := Game.biz_by_id(_wh_id)
 	var have := Syndicate.stock(Game.nation, "nyc", 0)
-	_checks["nyc_stock_filled"] = have > 0 or Game.month < 1
 	print("  nyc warehouse before loading: ", have, " crates")
-	if have < 12:
-		Syndicate.put_stock(Game.nation, "nyc", 0, 40)       # a quiet month of seizures: top it up for the pictures
+	if have < 150:
+		Syndicate.put_stock(Game.nation, "nyc", 0, 150 - have)       # a full quay for the picture
 		Game.mark_dirty()
 	var basis := Basis(Vector3.UP, float(wh["yaw"]))
 	var door := Vector3(wh["door"][0], 0, wh["door"][1])
@@ -167,7 +186,7 @@ func _load_truck() -> void:
 	world.controller._use()
 	_checks["truck_loaded"] = truck.load > 0 and Syndicate.stock(Game.nation, "nyc", 0) == before - truck.load
 	print("  truck loaded ", truck.load, " crates at the warehouse door; ", Syndicate.stock(Game.nation, "nyc", 0), " left")
-	world.cam.dist_goal = 16.0
+	world.cam.dist_goal = 21.0
 	world.cam.snap()
 	Game.mark_dirty()
 
@@ -186,12 +205,13 @@ func _nearest_shop(p: Vector3) -> Dictionary:
 	return best
 
 
+## Screenshots wait a few rendered frames, so what the step before opened is on screen.
 func _shot(name: String) -> void:
 	if DisplayServer.get_name() == "headless":
 		print("shot (headless) ", name)
 		return
-	get_viewport().get_texture().get_image().save_png("%s_%s.png" % [_out, name])
-	print("shot ", name)
+	_pending = name
+	_pending_frames = 3
 
 
 func _finish() -> void:
@@ -223,6 +243,13 @@ func _finish() -> void:
 
 
 func _process(delta: float) -> void:
+	if _pending != "":
+		_pending_frames -= 1
+		if _pending_frames <= 0:
+			get_viewport().get_texture().get_image().save_png("%s_%s.png" % [_out, _pending])
+			print("shot ", _pending)
+			_pending = ""
+		return
 	_t += delta
 	while not _steps.is_empty() and _t >= _steps[0][0]:
 		var s: Array = _steps.pop_front()

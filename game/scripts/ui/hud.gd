@@ -608,10 +608,18 @@ func _open(title: String, body: String, options: Array, modal: String = "dialog"
 		n += 1
 	_dialog.visible = true
 	_modal = modal
-	_dialog.reset_size()
-	_dialog.position.y = -_dialog.size.y - 130.0
+	_place_dialog()
+	_place_dialog.call_deferred()
 	if world and world.audio:
 		world.audio.ui("paper_open", -12.0)
+
+
+## Centred above the prompt. (`position` is relative to the parent's top-left, not to the
+## bottom-centre anchor, so it's computed from the screen size.)
+func _place_dialog() -> void:
+	_dialog.reset_size()
+	var area := _dialog.get_parent_area_size()
+	_dialog.position = Vector2((area.x - _dialog.size.x) * 0.5, maxf(70.0, area.y - _dialog.size.y - 130.0))
 
 
 func _choose(i: int) -> void:
@@ -1154,8 +1162,8 @@ func _fill_supply(f: Dictionary, me: int) -> void:
 		for b in speaks:
 			in_cellars += int(b["stock"])
 		var runners := Game.crew.filter(func(c: Dictionary) -> bool: return c["family"] == me and c["state"] == "free" and c["task"] == "booze")
-		t += "%s, %s: %d crates · %d speakeasies hold %d · booze run: %s" % [wh["name"], wh.get("address", "West St."), Syndicate.stock(n, "nyc", me),
-			speaks.size(), in_cellars, ", ".join(runners.map(func(c: Dictionary) -> String: return "%s %d/mo" % [c["name"], int(c.get("booze", 20))])) if not runners.is_empty() else "nobody"]
+		t += "%s, %s: %d crates · %d speakeasy cellar%s hold %d · booze run: %s" % [wh["name"], wh.get("address", "West St."), Syndicate.stock(n, "nyc", me),
+			speaks.size(), "" if speaks.size() == 1 else "s", in_cellars, ", ".join(runners.map(func(c: Dictionary) -> String: return "%s %d/mo" % [c["name"], int(c.get("booze", 20))])) if not runners.is_empty() else "nobody"]
 	var nl := _label(t, 18, GOLD2, cond)
 	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	nl.custom_minimum_size = Vector2(900, 0)

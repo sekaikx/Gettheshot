@@ -76,7 +76,11 @@ var _sel := {}
 var _panel: VBoxContainer
 var _info: RichTextLabel
 var _buttons: VBoxContainer
-var _area := Rect2()
+var _area := Rect2()      # the whole map, on screen (bigger than the frame when zoomed in)
+var _frame := Rect2()     # the part of the screen the map is shown in
+var _zoom := 1.0
+var _center := Vector2(0.5, 0.5)   # map UV at the middle of the frame
+var _drag := false
 var _t := 0.0
 var _cache := {}          # path key -> PackedVector2Array in UV
 
@@ -148,14 +152,18 @@ func _layout() -> void:
 	var avail := Rect2(Vector2(24, 66), Vector2(size.x - 490.0, size.y - 112.0))
 	var aspect := Syndicate.map_aspect()
 	var w := minf(avail.size.x, avail.size.y * aspect)
-	_area = Rect2(avail.position, Vector2(w, w / aspect))
+	_frame = Rect2(avail.position, Vector2(w, w / aspect))
+	var half := Vector2(0.5, 0.5) / _zoom
+	_center = _center.clamp(half, Vector2.ONE - half)
+	var sz := _frame.size * _zoom
+	_area = Rect2(_frame.get_center() - _center * sz, sz)
 
 
 func _draw() -> void:
 	_layout()
 	var bg := Color("15120f")
 	draw_rect(Rect2(Vector2.ZERO, size), bg)
-	draw_rect(_area, WATER)
+	draw_rect(_frame, WATER)
 	var font := get_theme_default_font()
 	var land := _pts("coast", COAST)
 	draw_colored_polygon(land, LAND)
@@ -171,19 +179,12 @@ func _draw() -> void:
 	for k in RIVERS.size():
 		draw_polyline(_pts("riv%d" % k, RIVERS[k]), RIVER, 2.5 if k == 0 else 1.6, true)
 	_dashed_poly(_pts("border", BORDER), Color(0.62, 0.56, 0.46, 0.45), 1.2, 7.0)
-	# the twelve-mile limit, roughly: Rum Row sits just outside it
 	var nation: Dictionary = Game.nation
-	# frame off whatever spilled outside the map
-	draw_rect(Rect2(0, 0, size.x, _area.position.y), bg)
-	draw_rect(Rect2(0, _area.end.y, size.x, size.y - _area.end.y), bg)
-	draw_rect(Rect2(0, 0, _area.position.x, size.y), bg)
-	draw_rect(Rect2(_area.end.x, 0, size.x - _area.end.x, size.y), bg)
-	draw_rect(_area, LAND_EDGE, false, 2.0)
 	for lab in [["CANADA", 48.2, -84.0], ["UNITED STATES", 37.5, -86.0], ["ATLANTIC OCEAN", 33.5, -70.5], ["GULF OF MEXICO", 25.8, -91.0], ["CUBA", 22.2, -80.5]]:
 		var at := _area.position + Syndicate.project(lab[1], lab[2]) * _area.size
 		draw_string(font, at, lab[0], HORIZONTAL_ALIGNMENT_CENTER, -1, 15, Color(1, 1, 1, 0.22))
-	draw_string(font, Vector2(24, 48), "The country · %s" % Game.date_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, INK)
 	if nation.is_empty():
+		_mask(bg, font)
 		return
 	var me := int(Game.player(Net.my_id()).get("family", -1))
 	# mother-ship lanes
@@ -219,12 +220,15 @@ func _draw() -> void:
 		if int(r["ambush"].get(str(me), 0)) > 0:
 			draw_string(font, _along(pl, 0.5) + Vector2(6, -6), "✕ ambush", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("ff8a7a"))
 	# sources
+	var blocks: Array[Rect2] = []
+	var labels := []     # [text, anchor point, marker radius, size, colour, priority]
 	for src in Syndicate.SOURCES:
 		var p := _at(src["id"])
 		var sel: bool = _sel.get("id", "") == src["id"]
 		draw_rect(Rect2(p - Vector2(6, 6), Vector2(12, 12)), Color("c9a54a"))
 		draw_rect(Rect2(p - Vector2(6, 6), Vector2(12, 12)), Color(0, 0, 0, 0.7), false, 1.0)
-		draw_string(font, p + Vector2(9, 5), src["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, 15 if sel else 13, GOLD2)
+		blocks.append(Rect2(p - Vector2(7, 7), Vector2(14, 14)))
+		labels.append([src["name"], p, 7.0, 15 if sel else 13, GOLD2, 50 if sel else 1])
 	# cities
 	for c in Syndicate.CITIES:
 		var p := _at(c["id"])
@@ -263,19 +267,73 @@ func _draw() -> void:
 		if bool(c["yard"]):
 			marks.append(["Y", int(cs["yard"])])
 		var mx := p.x - marks.size() * 6.0
+		blocks.append(Rect2(p - Vector2(rad + 4, rad + 4), Vector2(rad * 2 + 8, rad * 2 + 8)))
+		if not marks.is_empty():
+			blocks.append(Rect2(Vector2(mx, p.y + rad + 5.0), Vector2(marks.size() * 12.0, 11)))
 		for m in marks:
 			var mc := _fam_color(m[1]) if int(m[1]) >= 0 else Color(0.3, 0.27, 0.23)
 			draw_rect(Rect2(Vector2(mx, p.y + rad + 5.0), Vector2(11, 11)), mc)
 			draw_string(font, Vector2(mx + 1.5, p.y + rad + 14.5), m[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, INK if int(m[1]) >= 0 else MUTE)
 			mx += 12.0
 		var sel: bool = _sel.get("id", "") == c["id"]
-		var off := Vector2(rad + 5, 5)
-		if c["id"] in ["phl", "bal", "wnd", "det"]:
-			off = Vector2(-rad - 5 - font.get_string_size(c["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x, 5)
-		draw_string(font, p + off, c["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, 16 if sel else 14, GOLD2 if sel else INK)
+		labels.append([c["name"], p, rad + 3.0, 16 if sel else 14, GOLD2 if sel else INK, 100 if sel else 10 + int(c["demand"]) / 10 + (40 if c["id"] == "nyc" else 0)])
 		if sel:
 			draw_arc(p, rad + 8.0, 0, TAU, 32, GOLD2, 2.0)
+	_draw_labels(font, labels, blocks)
+	_mask(bg, font)
 	# legend
+	_legend(font)
+
+
+## Everything outside the frame is covered (the map spills when zoomed), then the title.
+func _mask(bg: Color, font: Font) -> void:
+	draw_rect(Rect2(0, 0, size.x, _frame.position.y), bg)
+	draw_rect(Rect2(0, _frame.end.y, size.x, size.y - _frame.end.y), bg)
+	draw_rect(Rect2(0, 0, _frame.position.x, size.y), bg)
+	draw_rect(Rect2(_frame.end.x, 0, size.x - _frame.end.x, size.y), bg)
+	draw_rect(_frame, LAND_EDGE, false, 2.0)
+	draw_string(font, Vector2(24, 48), "The country · %s" % Game.date_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, INK)
+	if _zoom > 1.01:
+		draw_string(font, Vector2(_frame.end.x - 260, 48), "zoom x%.1f · wheel / right-drag" % _zoom, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, MUTE)
+
+
+## Names next to their markers, each where it doesn't sit on another name or marker: right,
+## left, above, below, then the diagonals. The most important places pick first.
+func _draw_labels(font: Font, labels: Array, blocks: Array[Rect2]) -> void:
+	labels.sort_custom(func(a, b) -> bool: return int(a[5]) > int(b[5]))
+	var placed: Array[Rect2] = []
+	for l in labels:
+		var text: String = l[0]
+		var p: Vector2 = l[1]
+		var r: float = l[2]
+		var fs: int = l[3]
+		var ts := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+		var h := ts.y * 0.8
+		var cands := [Vector2(r + 3, -h * 0.5), Vector2(-r - 3 - ts.x, -h * 0.5), Vector2(-ts.x * 0.5, -r - 3 - h),
+			Vector2(-ts.x * 0.5, r + 16), Vector2(r, -r - h), Vector2(r, r), Vector2(-r - ts.x, -r - h), Vector2(-r - ts.x, r)]
+		var best: Vector2 = cands[0]
+		var best_hits := 999
+		for c in cands:
+			var rect := Rect2(p + c, Vector2(ts.x, h))
+			var hits := 0
+			for o in placed:
+				if o.intersects(rect):
+					hits += 2
+			for o in blocks:
+				if o.intersects(rect) and not o.has_point(p):
+					hits += 1
+			if hits < best_hits:
+				best_hits = hits
+				best = c
+				if hits == 0:
+					break
+		var at: Vector2 = p + best
+		placed.append(Rect2(at, Vector2(ts.x, h)))
+		draw_string_outline(font, at + Vector2(0, h), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.05, 0.04, 0.03, 0.85))
+		draw_string(font, at + Vector2(0, h), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, l[4])
+
+
+func _legend(font: Font) -> void:
 	var ly := size.y - 58.0
 	var lx := 30.0
 	for f in Game.families:
@@ -284,6 +342,22 @@ func _draw() -> void:
 		lx += 130
 	draw_string(font, Vector2(30, size.y - 22), "Click a city, a source, a route or a rail line · ring = who holds the city · marks: D docks, W your warehouse, B brewery, S still, Y rail yard · J to close",
 		HORIZONTAL_ALIGNMENT_LEFT, size.x - 500.0, 14, MUTE)
+
+
+## Zoom by `f` keeping the map point under `screen` where it is.
+func zoom_at(screen: Vector2, f: float) -> void:
+	var uv := (screen - _area.position) / _area.size
+	_zoom = clampf(_zoom * f, 1.0, 4.0)
+	var sz := _frame.size * _zoom
+	_center = uv - (screen - _frame.get_center()) / sz
+	queue_redraw()
+
+
+## Show a place: centre on it and zoom in.
+func focus_on(id: String, zoom: float = 2.5) -> void:
+	_zoom = zoom
+	_center = Syndicate.uv(id)
+	queue_redraw()
 
 
 ## A point `t` (0..1) of the way along a polyline, by length.
@@ -348,6 +422,20 @@ func _near_poly(m: Vector2, pl: PackedVector2Array) -> float:
 
 
 func _gui_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and e.pressed and e.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		if _frame.has_point(e.position):
+			zoom_at(e.position, 1.25 if e.button_index == MOUSE_BUTTON_WHEEL_UP else 0.8)
+		accept_event()
+		return
+	if e is InputEventMouseButton and e.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
+		_drag = e.pressed
+		accept_event()
+		return
+	if e is InputEventMouseMotion and _drag:
+		_center -= e.relative / _area.size
+		queue_redraw()
+		accept_event()
+		return
 	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 		var m: Vector2 = e.position
 		var best := {}
