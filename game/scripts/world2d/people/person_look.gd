@@ -382,6 +382,17 @@ static func _build(kind: String, look: int, fam: Color, extra: Dictionary, summe
 			d["stubble"] = false
 		_:
 			pass
+	# story characters can pin a hat: extra = {"hat": "bowler", "hat_col": Color(...)}
+	if extra.has("hat"):
+		d["hat"] = String(extra["hat"])
+		var own: Dictionary = {"boater": STRAW, "toque": WHITE, "paper": WHITE, "police": NAVY, "visor": Color("3a6a4a"),
+			"headband": BRASS, "cloche": Color("5a2a30"), "top": Color("121214"), "watch": Color("2a2e3a")}
+		if own.has(d["hat"]):
+			d["hat_col"] = own[d["hat"]]
+		if d["hat"] == "headband" and d["feather"] == NONE:
+			d["feather"] = WHITE
+	if extra.has("hat_col"):
+		d["hat_col"] = extra["hat_col"]
 	if d["trousers"] == NONE:
 		d["trousers"] = (d["coat_col"] as Color).darkened(0.12) if d["coat"] in ["suit", "three", "tux", "overcoat", "tunic", "trench", "peacoat"] else _pick(r, [Pal.SUITS[1], Pal.SUITS[3], Pal.SUITS[5], Color("3a3630")])
 	if d["hat"] == "" and d["hair_style"] == "short" and not d["female"]:

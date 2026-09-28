@@ -2,7 +2,9 @@ extends Node2D
 ## Test sheets for Person2D (people from above) and Portrait (busts for dialogs). Builds a few
 ## groups far apart in the world, points the camera at each, saves a PNG and quits.
 ##   xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 --path game res://tools/test/test_people.tscn
-## Env: OUT_DIR=dir (default /tmp), SHOTS=kinds,shops,anims,actions,z10,z06,night,portraits,portraits_small (default all)
+## Env: OUT_DIR=dir (default /tmp), SHOTS=kinds,shops,anims,actions,hats,z10,z06,night,portraits,portraits_small
+## (default: all of these), plus close, portraits_big, perf, bench on request; CROPS=1 also saves
+## 2x-magnified quarters of each shot.
 
 const KINDS := ["boss", "aiboss", "crew", "cop", "fed", "ped", "woman", "kid", "newsboy", "shop", "recruit",
 	"smuggler", "dealer", "docker", "unionboss", "consigliere", "bartender", "patron"]
@@ -66,7 +68,7 @@ func _ready() -> void:
 	if OS.get_environment("OUT_DIR") != "":
 		out_dir = OS.get_environment("OUT_DIR")
 	var want := OS.get_environment("SHOTS")
-	var shots := ["kinds", "shops", "anims", "actions", "z10", "z06", "night", "portraits", "portraits_small"]
+	var shots := ["kinds", "shops", "anims", "actions", "hats", "z10", "z06", "night", "portraits", "portraits_small"]
 	if want != "":
 		shots = Array(want.split(","))
 	cam = Camera2D.new()
@@ -89,6 +91,7 @@ func _ready() -> void:
 			"portraits_big": await _shot_portraits_big()
 			"perf": await _perf()
 			"bench": await _bench()
+			"hats": await _shot_hats()
 	get_tree().quit()
 
 
@@ -370,7 +373,11 @@ func _shot_close() -> void:
 	if env != "":
 		ks = Array(env.split(","))
 	for i in ks.size():
-		var p := _person(g, ks[i], 1000 + i * 31, Vector2(-140.0 + (i % 4) * 93.0, -40.0 + floorf(i / 4.0) * 80.0), 0.0, {"trade": "butcher"})
+		var ex := {"trade": "butcher"}
+		if OS.get_environment("CLOSE_HAT") != "":
+			ex["hat"] = OS.get_environment("CLOSE_HAT")
+		var lk := int(OS.get_environment("CLOSE_LOOK")) + i if OS.get_environment("CLOSE_LOOK") != "" else 1000 + i * 31
+		var p := _person(g, ks[i], lk, Vector2(-140.0 + (i % 4) * 93.0, -40.0 + floorf(i / 4.0) * 80.0), 0.0, ex)
 		var anim := OS.get_environment("CLOSE_ANIM")
 		if anim != "":
 			p.pose_at(Person2D.Anim.keys().find(anim), OS.get_environment("CLOSE_ACT"), float(OS.get_environment("CLOSE_T")) if OS.get_environment("CLOSE_T") != "" else 0.0)
@@ -480,6 +487,10 @@ class Bench extends Node2D:
 			for i in n:
 				f.call()
 			print("BENCH %-20s %.2f us" % [k, float(Time.get_ticks_usec() - t0) / n])
+		var tp := Time.get_ticks_usec()
+		for i in 20:
+			Portrait.draw(self, Rect2(0, 0, 160, 160), KINDS[i % KINDS.size()], 100 + i, Color("#c42828"), {"trade": "tailor"}, "")
+		print("BENCH %-20s %.2f ms" % ["Portrait.draw 160px", float(Time.get_ticks_usec() - tp) / 20000.0])
 		var t1 := Time.get_ticks_usec()
 		for i in n:
 			pass
@@ -492,3 +503,19 @@ func _bench() -> void:
 	for i in 3:
 		await get_tree().process_frame
 	b.queue_free()
+
+
+## Every hat (and bare heads) on the same man, facing three ways, up close.
+func _shot_hats() -> void:
+	var origin := Vector2(0, 24000)
+	var g := _group(origin, Rect2(-320, -180, 640, 360))
+	var hats := ["fedora", "homburg", "bowler", "boater", "newsboy", "flat", "cloche", "police", "watch", "toque", "top", "paper", "visor", "headband", ""]
+	for i in hats.size():
+		var c := Vector2(-270.0 + (i % 8) * 77.0, -70.0 + floorf(i / 8.0) * 150.0)
+		for n in 2:
+			var ex := {"hat": hats[i]}
+			var p := _person(g, "ped", 4400 + i, c + Vector2(0, n * 55.0), [0.0, -PI * 0.5][n], ex)
+			p.pose_at(Person2D.Anim.IDLE)
+		_tag(g, hats[i] if hats[i] != "" else "hair", c + Vector2(0, 90), 8)
+	await _snap(origin, 2.6, "hats_z26")
+	await _clear(g)

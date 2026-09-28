@@ -17,6 +17,15 @@ extends Node2D
 ## and the fall are just their transforms. Only the shadow, legs and arms redraw per frame, and only
 ## while walking or acting. An idle person costs no drawing at all; a dead one redraws the spreading
 ## pool a few times a second and then stops.
+##
+## The contract: setup(), set_motion(), action(), play(), carry(), set_weapon(). Added:
+##   set_ring(color)     a soft ring on the ground (mark the player or your men); Color(0,0,0,0) = off
+##   is_busy()           true while a one-shot action plays
+##   lights()            the muzzle flash as a light dict for the World's lightmap ([] otherwise)
+##   pose_at(st, act, t, stride, phase)   freeze on one frame (tests, the family book, cut-scenes)
+## extra keys: "trade" (shopkeepers), "summer" (straw hats; default: June-August by Game.month),
+##   "hat" / "hat_col" (pin a hat for a story character).
+## While DOWN or DEAD, set_motion() with another state is ignored: call play(Anim.IDLE) to get up.
 
 enum Anim {IDLE, WALK, RUN, CARRY, TALK, ARMS, DOWN, DEAD, SIT}
 
@@ -38,7 +47,7 @@ var kind := "ped"          # boss, aiboss, crew, cop, ped, shop, recruit, smuggl
 						   # unionboss, consigliere, bartender, patron, fed, newsboy, woman, kid
 var look := 0              # seed: skin, clothes, hat, build all come from this
 var family_color := Color(0, 0, 0, 0)
-var extra := {}            # e.g. {"trade": "bakery"} for a shopkeeper's apron and hat; {"summer": true}
+var extra := {}            # {"trade": "bakery"}, {"summer": true}, {"hat": "bowler"}: see above
 var state: int = Anim.IDLE
 var speed := 0.0           # metres a second, for the walk cycle
 var carrying := false
