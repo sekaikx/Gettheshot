@@ -1,0 +1,476 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Famiglia Trailer</title>
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script>
+const W = 1280, H = 720;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const SERIF = '"Liberation Serif","DejaVu Serif",serif';
+const MONO = '"Liberation Mono","DejaVu Sans Mono",monospace';
+
+// ---------- helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ease = k => k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+// fade in over [a,a+fi], out over [b-fo,b]
+const win = (t, a, b, fi = 0.4, fo = 0.4) => Math.min(prog(t, a, a + fi), 1 - prog(t, b - fo, b));
+function hash(x, y) { let h = Math.imul(x * 374761393 + y * 668265263, 1274126177); h ^= h >>> 13; h = Math.imul(h, 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+function rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+
+// ---------- families ----------
+const FAM = [
+  { name: 'VITALE', col: [196, 40, 40], seed: [3, 4] },   // you
+  { name: 'RUSSO', col: [60, 110, 200], seed: [9, 2] },
+  { name: "O'HARA", col: [60, 160, 90], seed: [2, 0] },
+  { name: 'MORETTI', col: [212, 165, 50], seed: [10, 6] },
+];
+const COLS = 13, ROWS = 8, CELL = 84, BLK = 70;
+const OX = 52, OY = 24;
+
+function radii(t) {
+  const r = [0, 0, 0, 0];
+  r[0] = t < 3.5 ? 0 : t < 8 ? lerp(0.6, 1.6, ease(prog(t, 3.5, 8))) : lerp(1.6, 3.4, ease(prog(t, 8, 13)));
+  const o = lerp(0, 2.7, ease(prog(t, 8.3, 13)));
+  r[1] = o; r[2] = o * 0.9; r[3] = o;
+  return r;
+}
+function baseOwner(cx, cy, t) {
+  const r = radii(Math.min(t, 13));
+  let best = -1, bd = 1e9;
+  for (let f = 0; f < 4; f++) {
+    const [sx, sy] = FAM[f].seed;
+    const d = Math.hypot(cx - sx, (cy - sy) * 1.1) + hash(cx, cy + f * 31) * 0.9 - 0.3;
+    if (d <= r[f] && d < bd) { bd = d; best = f; }
+  }
+  return best;
+}
+// betrayal: red swallows Russo blocks; Sal defects -> some red blocks go gold
+function owner(cx, cy, t) {
+  let o = baseOwner(cx, cy, t);
+  let flash = 0;
+  if (o === 1) {
+    const ft = 17.35 + Math.hypot(cx - 5, cy - 3) * 0.12 + hash(cx, cy) * 0.15;
+    if (t > ft) { o = 0; flash = 1 - prog(t, ft, ft + 0.5); }
+  }
+  if (o === 0 && t > 18.9) {
+    const sal = (cx === 5 && cy === 6) || (cx === 6 && cy === 6) || (cx === 5 && cy === 7) || (cx === 6 && cy === 5);
+    if (sal) { const ft = 18.9 + (cx + cy) * 0.05; if (t > ft) { o = 3; flash = 1 - prog(t, ft, ft + 0.5); } }
+  }
+  return [o, flash];
+}
+
+// ---------- pre-generated grain ----------
+const grains = [];
+for (let g = 0; g < 6; g++) {
+  const c = document.createElement('canvas'); c.width = 320; c.height = 180;
+  const x = c.getContext('2d'); const id = x.createImageData(320, 180);
+  for (let i = 0; i < id.data.length; i += 4) { const v = hash(i, g * 97) * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; }
+  x.putImageData(id, 0, 0); grains.push(c);
+}
+function post(t, frame) {
+  ctx.save();
+  ctx.globalAlpha = 0.07; ctx.globalCompositeOperation = 'overlay';
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(grains[frame % 6], 0, 0, W, H);
+  ctx.restore();
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.75)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // warm grade
+  ctx.save(); ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(160,110,50,0.18)'; ctx.fillRect(0, 0, W, H); ctx.restore();
+}
+
+// ---------- text ----------
+function caption(t, a, b, text, opts = {}) {
+  const k = win(t, a, b, opts.fi ?? 0.35, opts.fo ?? 0.35);
+  if (k <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = k;
+  ctx.font = `${opts.italic === false ? '' : 'italic '}${opts.bold ? 'bold ' : ''}${opts.size || 40}px ${SERIF}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const y = opts.y ?? H - 90;
+  const dy = (1 - easeOut(prog(t, a, a + 0.6))) * 12;
+  ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 18;
+  ctx.fillStyle = opts.color || '#efe6d2';
+  ctx.fillText(text, W / 2, y + dy);
+  ctx.restore();
+}
+
+// ---------- city ----------
+function drawCity(t, dim = 0) {
+  ctx.fillStyle = '#15120f'; ctx.fillRect(-400, -400, W + 800, H + 800);
+  // river + docks
+  const rx = OX + COLS * CELL - 4;
+  const wg = ctx.createLinearGradient(rx, 0, W + 300, 0);
+  wg.addColorStop(0, '#0f1d26'); wg.addColorStop(1, '#0a141b');
+  ctx.fillStyle = wg; ctx.fillRect(rx, -400, 800, H + 800);
+  for (let i = 0; i < 18; i++) { // ripples
+    const y = (i * 53 + t * 14) % (H + 200) - 100; const x = rx + 20 + hash(i, 7) * 90;
+    ctx.strokeStyle = 'rgba(120,160,180,0.12)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 30 + hash(i, 9) * 30, y); ctx.stroke();
+  }
+  for (let p = 0; p < 5; p++) { // piers
+    const py = OY + 40 + p * 140;
+    ctx.fillStyle = '#3a3027'; ctx.fillRect(rx, py, 70, 16);
+    ctx.fillStyle = '#4b3e32'; ctx.fillRect(rx + 72, py - 10, 26, 36);
+  }
+  ctx.save(); ctx.font = `bold 13px ${MONO}`; ctx.fillStyle = 'rgba(200,190,160,0.55)';
+  ctx.translate(rx + 60, OY + 330); ctx.rotate(Math.PI / 2); ctx.fillText('HUDSON DOCKS', 0, 0); ctx.restore();
+
+  // blocks
+  for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) {
+    const x = OX + cx * CELL + 7, y = OY + cy * CELL + 7;
+    ctx.fillStyle = '#231e19'; ctx.fillRect(x, y, BLK, BLK);
+    // buildings
+    const n = 2 + Math.floor(hash(cx, cy) * 3);
+    const split = hash(cy, cx) > 0.5;
+    for (let i = 0; i < n; i++) {
+      const s = BLK / n;
+      const bx = split ? x + i * s + 3 : x + 3, by = split ? y + 3 : y + i * s + 3;
+      const bw = split ? s - 6 : BLK - 6, bh = split ? BLK - 6 : s - 6;
+      const sh = 40 + hash(cx * 7 + i, cy * 3) * 25;
+      ctx.fillStyle = `rgb(${sh},${sh * 0.88},${sh * 0.74})`; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = 'rgba(255,230,190,0.07)'; ctx.fillRect(bx, by, bw, 3);
+      if (hash(cx + i, cy * 11 + Math.floor(t * 0.5)) > 0.8) { ctx.fillStyle = 'rgba(255,200,110,0.5)'; ctx.fillRect(bx + bw / 2 - 2, by + bh / 2 - 2, 4, 4); }
+    }
+    const [o, flash] = owner(cx, cy, t);
+    if (o >= 0) {
+      const c = FAM[o].col;
+      const pulse = 0.28 + 0.06 * Math.sin(t * 3 + cx + cy);
+      ctx.fillStyle = rgba(c, pulse + flash * 0.6); ctx.fillRect(x, y, BLK, BLK);
+      ctx.strokeStyle = rgba(c, 0.9); ctx.lineWidth = 2.5; ctx.strokeRect(x + 1, y + 1, BLK - 2, BLK - 2);
+      if (flash > 0) { ctx.strokeStyle = `rgba(255,240,220,${flash})`; ctx.lineWidth = 5; ctx.strokeRect(x - 3, y - 3, BLK + 6, BLK + 6); }
+    }
+  }
+  // street lamps
+  for (let cy = 0; cy <= ROWS; cy++) for (let cx = 0; cx <= COLS; cx++) {
+    if (hash(cx * 5, cy * 9) < 0.55) continue;
+    const x = OX + cx * CELL + 3.5, y = OY + cy * CELL + 3.5;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, 18);
+    g.addColorStop(0, 'rgba(255,200,120,0.35)'); g.addColorStop(1, 'rgba(255,200,120,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - 18, y - 18, 36, 36);
+  }
+  // cars
+  for (let i = 0; i < 14; i++) {
+    const horiz = i % 2 === 0; const lane = Math.floor(hash(i, 3) * (horiz ? ROWS : COLS)) + 1;
+    const sp = 40 + hash(i, 5) * 60; const dir = hash(i, 8) > 0.5 ? 1 : -1;
+    const span = horiz ? COLS * CELL : ROWS * CELL;
+    let p = ((hash(i, 2) * span + dir * sp * t) % span + span) % span;
+    const x = horiz ? OX + p : OX + lane * CELL + 1, y = horiz ? OY + lane * CELL + 1 : OY + p;
+    ctx.fillStyle = '#0b0a09'; ctx.fillRect(x - (horiz ? 7 : 3), y - (horiz ? 3 : 7), horiz ? 14 : 6, horiz ? 6 : 14);
+    ctx.fillStyle = 'rgba(255,230,160,0.8)';
+    if (horiz) ctx.fillRect(x + dir * 7, y - 2, 2, 4); else ctx.fillRect(x - 2, y + dir * 7, 4, 2);
+  }
+  if (dim > 0) { ctx.fillStyle = `rgba(8,6,5,${dim})`; ctx.fillRect(-400, -400, W + 800, H + 800); }
+}
+
+function blockCenter(cx, cy) { return [OX + cx * CELL + 7 + BLK / 2, OY + cy * CELL + 7 + BLK / 2]; }
+
+// floating event chips on map
+const CHIPS = [
+  [4.6, 3, 4, '+$80  PROTECTION'],
+  [5.8, 4, 4, 'SPEAKEASY OPENED'],
+  [7.0, 3, 3, '+$150  BOOTLEG RUN'],
+  [9.0, 2, 5, 'BRIBED: CAPT. O’MALLEY'],
+  [10.2, 5, 4, 'NEW CAPO: SAL ESPOSITO'],
+  [11.4, 4, 6, '+$400  NUMBERS RACKET'],
+  [12.2, 8, 2, 'RUSSO: +DOCKS'],
+];
+function drawChips(t, sc = 1) {
+  for (const [t0, cx, cy, txt] of CHIPS) {
+    const k = win(t, t0, t0 + 1.6, 0.2, 0.4); if (k <= 0) continue;
+    const [x, y0] = blockCenter(cx, cy); const y = y0 - 20 - prog(t, t0, t0 + 1.6) * 30;
+    ctx.save(); ctx.globalAlpha = k; ctx.translate(x, y); ctx.scale(1 / sc, 1 / sc); ctx.translate(-x, -y); ctx.font = `bold 17px ${MONO}`;
+    const w = ctx.measureText(txt).width + 20;
+    ctx.fillStyle = 'rgba(12,10,8,0.9)'; ctx.fillRect(x - w / 2, y - 14, w, 28);
+    const red = txt.startsWith('RUSSO');
+    ctx.strokeStyle = red ? '#3c6ec8' : '#d4a532'; ctx.lineWidth = 1.5; ctx.strokeRect(x - w / 2, y - 14, w, 28);
+    ctx.fillStyle = red ? '#9bbcf0' : '#f0d58a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x, y + 1);
+    ctx.restore();
+  }
+}
+
+// ---------- HUD ----------
+function money(t) {
+  if (t < 3.5) return 0;
+  if (t < 13) return Math.round(lerp(40, 4200, Math.pow(prog(t, 3.5, 13), 1.6)) / 10) * 10;
+  if (t < 17.3) return 4200;
+  if (t < 20.5) return Math.round(lerp(4200, 9800, easeOut(prog(t, 17.3, 18.8))) / 10) * 10;
+  return Math.round(lerp(9800, 1570, easeOut(prog(t, 20.9, 21.6))) / 10) * 10;
+}
+function year(t) { if (t < 20.3) return 1923 + Math.floor(clamp(t - 3, 0, 17) / 17 * 9); return Math.round(lerp(1932, 1933, prog(t, 20.3, 20.8))); }
+function drawHUD(t, alpha) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(10,8,7,0.85)'; ctx.fillRect(20, 18, 300, 92);
+  ctx.strokeStyle = 'rgba(212,165,50,0.6)'; ctx.lineWidth = 1; ctx.strokeRect(20, 18, 300, 92);
+  ctx.fillStyle = '#c42828'; ctx.beginPath(); ctx.arc(52, 50, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#f3e3c0'; ctx.font = `bold 20px ${SERIF}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('V', 52, 51);
+  ctx.textAlign = 'left'; ctx.font = `bold 17px ${SERIF}`; ctx.fillStyle = '#efe6d2'; ctx.fillText('VITALE FAMILY', 80, 40);
+  ctx.font = `bold 20px ${MONO}`; ctx.fillStyle = t > 20.9 && t < 24 ? '#ff6b5b' : '#f0d58a';
+  ctx.fillText('$' + money(t).toLocaleString('en-US') + ' / wk', 80, 64);
+  // heat
+  const heat = clamp(t < 17 ? (t - 3.5) / 20 : lerp(0.68, 0.95, prog(t, 17.3, 18.5)));
+  ctx.font = `bold 12px ${MONO}`; ctx.fillStyle = '#b9ad96'; ctx.fillText('HEAT', 34, 94);
+  ctx.fillStyle = '#2a221c'; ctx.fillRect(80, 88, 220, 10);
+  const hot = heat > 0.8 && Math.sin(t * 20) > 0;
+  ctx.fillStyle = hot ? '#ff4a3a' : '#c4552b'; ctx.fillRect(80, 88, 220 * heat, 10);
+  // year
+  ctx.fillStyle = 'rgba(10,8,7,0.85)'; ctx.fillRect(W - 170, 18, 150, 50); ctx.strokeStyle = 'rgba(212,165,50,0.6)'; ctx.strokeRect(W - 170, 18, 150, 50);
+  ctx.textAlign = 'center'; ctx.font = `bold 30px ${SERIF}`; ctx.fillStyle = '#efe6d2'; ctx.fillText(String(year(t)), W - 95, 44);
+  // players list
+  const pl = [['VITALE', 'you', 0], ['RUSSO', 'Marco', 1], ["O'HARA", 'Jess', 2], ['MORETTI', 'Dani', 3]];
+  if (t > 8.5) {
+    ctx.globalAlpha = alpha * prog(t, 8.5, 9.2);
+    pl.forEach(([n, p, f], i) => {
+      const y = 86 + i * 26;
+      ctx.fillStyle = 'rgba(10,8,7,0.8)'; ctx.fillRect(W - 210, y, 190, 22);
+      ctx.fillStyle = rgba(FAM[f].col, 1); ctx.fillRect(W - 210, y, 5, 22);
+      ctx.textAlign = 'left'; ctx.font = `bold 13px ${MONO}`; ctx.fillStyle = '#e8dcc2';
+      ctx.fillText(n, W - 198, y + 12);
+      ctx.fillStyle = '#9b907c'; ctx.textAlign = 'right'; ctx.fillText(p, W - 28, y + 12);
+    });
+  }
+  ctx.restore();
+}
+
+// ---------- deal card ----------
+function drawDeal(t) {
+  const k = win(t, 13.2, 17.05, 0.35, 0.12); if (k <= 0) return;
+  const s = lerp(0.9, 1, easeOut(prog(t, 13.2, 13.7)));
+  ctx.save(); ctx.globalAlpha = k;
+  ctx.translate(W / 2, H / 2 - 20); ctx.scale(s, s);
+  const w = 520, h = 330;
+  ctx.fillStyle = '#e9dfc7'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 40; ctx.fillRect(-w / 2, -h / 2, w, h); ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#6b4a22'; ctx.lineWidth = 2; ctx.strokeRect(-w / 2 + 10, -h / 2 + 10, w - 20, h - 20);
+  ctx.fillStyle = '#2b1d10'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `bold 15px ${MONO}`; ctx.fillText('— SIT-DOWN REQUEST —', 0, -h / 2 + 36);
+  ctx.fillStyle = '#3c6ec8'; ctx.beginPath(); ctx.arc(-w / 2 + 70, -h / 2 + 92, 28, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `bold 26px ${SERIF}`; ctx.fillText('R', -w / 2 + 70, -h / 2 + 93);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#1e140a'; ctx.font = `bold 26px ${SERIF}`; ctx.fillText('Don Russo', -w / 2 + 112, -h / 2 + 82);
+  ctx.font = `italic 16px ${SERIF}`; ctx.fillStyle = '#5a4630'; ctx.fillText('played by Marco  •  online', -w / 2 + 112, -h / 2 + 108);
+  ctx.font = `18px ${SERIF}`; ctx.fillStyle = '#1e140a';
+  const terms = ['Split the Hudson docks 50 / 50', 'No hits between our families', 'Russo pays $20,000 up front'];
+  terms.forEach((tt, i) => { const kk = prog(t, 13.6 + i * 0.25, 13.9 + i * 0.25); ctx.globalAlpha = k * kk; ctx.fillText('•  ' + tt, -w / 2 + 50, -h / 2 + 158 + i * 32); });
+  ctx.globalAlpha = k;
+  // buttons
+  const bx = -w / 2 + 60, by = h / 2 - 70;
+  const pressed = t > 15.2;
+  ctx.fillStyle = pressed ? '#3d6b2f' : '#2d4f22'; ctx.fillRect(bx, by, 180, 44);
+  ctx.fillStyle = '#6e1f1f'; ctx.fillRect(bx + 220, by, 180, 44);
+  ctx.fillStyle = '#f3ead6'; ctx.font = `bold 17px ${MONO}`; ctx.textAlign = 'center';
+  ctx.fillText('ACCEPT', bx + 90, by + 23); ctx.fillText('REFUSE', bx + 310, by + 23);
+  // cursor
+  const cp = ease(prog(t, 14.3, 15.1));
+  const mx = lerp(180, bx + 110, cp), my = lerp(170, by + 28, cp);
+  ctx.save(); ctx.translate(mx, my); ctx.scale(pressed && t < 15.35 ? 0.85 : 1, pressed && t < 15.35 ? 0.85 : 1);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 22); ctx.lineTo(6, 17); ctx.lineTo(11, 27); ctx.lineTo(15, 25); ctx.lineTo(10, 15); ctx.lineTo(17, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  // stamp
+  if (t > 15.3) {
+    const sk = easeOut(prog(t, 15.3, 15.55));
+    ctx.save(); ctx.translate(90, 20); ctx.rotate(-0.22); ctx.scale(lerp(2.2, 1, sk), lerp(2.2, 1, sk)); ctx.globalAlpha = k * sk;
+    ctx.strokeStyle = '#a3201b'; ctx.lineWidth = 5; ctx.strokeRect(-130, -34, 260, 68);
+    ctx.fillStyle = '#a3201b'; ctx.font = `bold 38px ${SERIF}`; ctx.fillText('DEAL SEALED', 0, 2);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// ---------- notification ----------
+function drawNotice(t) {
+  const k = win(t, 18.7, 20.2, 0.25, 0.3); if (k <= 0) return;
+  const x = lerp(W + 20, W - 540, easeOut(prog(t, 18.7, 19.1)));
+  ctx.save(); ctx.globalAlpha = k;
+  ctx.fillStyle = 'rgba(20,6,6,0.95)'; ctx.fillRect(x, 230, 520, 78);
+  ctx.fillStyle = '#d4a532'; ctx.fillRect(x, 230, 6, 78);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = `bold 14px ${MONO}`; ctx.fillStyle = '#ff6b5b'; ctx.fillText('⚠  BETRAYAL', x + 22, 254);
+  ctx.font = `18px ${SERIF}`; ctx.fillStyle = '#efe6d2'; ctx.fillText('Your capo Sal Esposito was bought by the Moretti family.', x + 22, 284);
+  ctx.restore();
+}
+
+// ---------- newspaper ----------
+function newspaper(t, t0, t1, date, head, sub, opts = {}) {
+  const k = win(t, t0, t1, 0.15, 0.15); if (k <= 0) return;
+  const p = easeOut(prog(t, t0, t0 + 0.5));
+  const rot = lerp(opts.spin ?? 6.5, opts.rot ?? -0.05, p);
+  const sc = lerp(0.1, opts.scale ?? 1, p) + (t - t0) * 0.02;
+  ctx.save(); ctx.globalAlpha = k; ctx.translate(W / 2 + (opts.dx || 0), H / 2 - 10 + (opts.dy || 0)); ctx.rotate(rot); ctx.scale(sc, sc);
+  const w = 660, h = 440;
+  ctx.fillStyle = '#e6dcc3'; ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 50; ctx.fillRect(-w / 2, -h / 2, w, h); ctx.shadowBlur = 0;
+  // stains
+  ctx.fillStyle = 'rgba(120,90,40,0.12)'; ctx.beginPath(); ctx.arc(w / 2 - 90, h / 2 - 70, 50, 0, 7); ctx.fill();
+  ctx.fillStyle = '#16100a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `bold 40px ${SERIF}`; ctx.fillText('The Daily Ledger', 0, -h / 2 + 42);
+  ctx.fillRect(-w / 2 + 24, -h / 2 + 70, w - 48, 2); ctx.fillRect(-w / 2 + 24, -h / 2 + 96, w - 48, 1);
+  ctx.font = `13px ${MONO}`; ctx.fillText(date, 0, -h / 2 + 84);
+  ctx.font = `bold ${opts.hs || 54}px ${SERIF}`; ctx.fillText(head, 0, -h / 2 + 150);
+  ctx.font = `italic 22px ${SERIF}`; ctx.fillText(sub, 0, -h / 2 + 200);
+  // photo
+  ctx.fillStyle = '#8f8674'; ctx.fillRect(-w / 2 + 30, -h / 2 + 228, 250, 180);
+  for (let i = 0; i < 26; i++) for (let j = 0; j < 18; j++) {
+    const v = hash(i + head.length, j); ctx.fillStyle = `rgba(20,15,10,${v * 0.5})`; ctx.beginPath(); ctx.arc(-w / 2 + 35 + i * 9.4, -h / 2 + 233 + j * 9.6, 2 + v * 2, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = '#1a130c'; // silhouette in fedora
+  ctx.beginPath(); ctx.arc(-w / 2 + 155, -h / 2 + 305, 26, 0, 7); ctx.fill();
+  ctx.fillRect(-w / 2 + 115, -h / 2 + 280, 80, 8); ctx.fillRect(-w / 2 + 132, -h / 2 + 262, 46, 22);
+  ctx.beginPath(); ctx.moveTo(-w / 2 + 95, -h / 2 + 408); ctx.quadraticCurveTo(-w / 2 + 155, -h / 2 + 300, -w / 2 + 215, -h / 2 + 408); ctx.fill();
+  // columns of text
+  ctx.fillStyle = 'rgba(30,22,14,0.45)';
+  for (let c = 0; c < 2; c++) for (let l = 0; l < 13; l++) {
+    const lw = 160 - hash(c, l + head.length) * 40; ctx.fillRect(-w / 2 + 300 + c * 175, -h / 2 + 232 + l * 13.5, lw, 5);
+  }
+  ctx.restore();
+}
+
+function incomeChart(t) {
+  const k = win(t, 20.4, 23.95, 0.3, 0.2); if (k <= 0) return;
+  ctx.save(); ctx.globalAlpha = k;
+  const x = 60, y = H - 250, w = 300, h = 130;
+  ctx.fillStyle = 'rgba(10,8,7,0.9)'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(212,165,50,0.6)'; ctx.strokeRect(x, y, w, h);
+  ctx.font = `bold 13px ${MONO}`; ctx.fillStyle = '#b9ad96'; ctx.textAlign = 'left'; ctx.fillText('BOOTLEGGING INCOME', x + 14, y + 22);
+  ctx.beginPath(); ctx.lineWidth = 3;
+  const drop = prog(t, 20.9, 21.5);
+  const pts = 30;
+  for (let i = 0; i <= pts; i++) {
+    const u = i / pts; let v = 0.2 + u * 0.55 + Math.sin(u * 17) * 0.04;
+    if (u > 0.8) v = lerp(v, 0.06, clamp((u - 0.8) / 0.2) * drop);
+    const px = x + 14 + u * (w - 28), py = y + h - 14 - v * (h - 44);
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.strokeStyle = drop > 0 ? '#ff4a3a' : '#f0d58a'; ctx.stroke();
+  if (drop > 0.5) { ctx.font = `bold 28px ${MONO}`; ctx.fillStyle = '#ff4a3a'; ctx.textAlign = 'right'; ctx.fillText('-84%', x + w - 14, y + 30); }
+  ctx.restore();
+}
+
+// ---------- scenes ----------
+function rain(t, a) {
+  ctx.save(); ctx.strokeStyle = `rgba(170,180,190,${0.25 * a})`; ctx.lineWidth = 1;
+  for (let i = 0; i < 160; i++) {
+    const x = (hash(i, 1) * W * 1.2 + t * 120) % (W * 1.2) - W * 0.1;
+    const y = (hash(i, 2) * H + t * 900 * (0.7 + hash(i, 3) * 0.5)) % (H + 60) - 30;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 22); ctx.stroke();
+  }
+  ctx.restore();
+}
+function typewriter(t, t0, text, y, size, font = MONO, color = '#efe6d2') {
+  const n = Math.floor(clamp((t - t0) * 20, 0, text.length)); if (n <= 0) return;
+  ctx.save(); ctx.font = `${size}px ${font}`; ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 12;
+  ctx.fillText(text.slice(0, n) + (n < text.length && Math.floor(t * 8) % 2 ? '_' : ''), W / 2, y); ctx.restore();
+}
+
+function scene1(t) { // 0-3.3 : cold open
+  ctx.fillStyle = '#050403'; ctx.fillRect(0, 0, W, H);
+  // lamp post glow
+  const a = prog(t, 0, 1.2);
+  const g = ctx.createRadialGradient(W * 0.72, H * 0.3, 0, W * 0.72, H * 0.3, 380);
+  g.addColorStop(0, `rgba(255,190,110,${0.35 * a})`); g.addColorStop(1, 'rgba(255,190,110,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = `rgba(20,16,12,${a})`; ctx.fillRect(W * 0.72 - 5, H * 0.3, 10, H);
+  ctx.fillStyle = `rgba(255,215,150,${a})`; ctx.beginPath(); ctx.arc(W * 0.72, H * 0.3, 9, 0, 7); ctx.fill();
+  // silhouette figure
+  ctx.fillStyle = `rgba(8,6,5,${a})`;
+  const fx = W * 0.64 + t * 6;
+  ctx.beginPath(); ctx.arc(fx, H * 0.575, 19, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(fx, H * 0.545, 34, 6, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(fx - 18, H * 0.545); ctx.lineTo(fx - 15, H * 0.495); ctx.quadraticCurveTo(fx, H * 0.485, fx + 15, H * 0.495); ctx.lineTo(fx + 18, H * 0.545); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(fx - 95, H); ctx.lineTo(fx - 70, H * 0.66); ctx.quadraticCurveTo(fx, H * 0.6, fx + 70, H * 0.66); ctx.lineTo(fx + 95, H); ctx.fill();
+  ctx.fillRect(fx - 9, H * 0.59, 18, 30);
+  rain(t, 1);
+  typewriter(t, 0.3, 'NEW YORK CITY  —  1923', H * 0.42, 34);
+  caption(t, 1.6, 3.4, 'Every empire starts with one block.', { y: H * 0.54, size: 30 });
+}
+
+function mapScene(t, frame) {
+  // camera
+  let sc, fx, fy;
+  const [rx, ry] = blockCenter(3, 4);
+  if (t < 13) { const k = ease(prog(t, 3.2, 12.5)); sc = lerp(2.3, 1.0, k); fx = lerp(rx, W / 2, k); fy = lerp(ry, H / 2, k); }
+  else { sc = 1 + (t - 13) * 0.006; fx = W / 2; fy = H / 2; }
+  let shx = 0, shy = 0;
+  const shake = Math.max(1 - prog(t, 17.0, 17.9), 0) * (t > 17.0 ? 1 : 0) + (t > 20.8 && t < 21.4 ? 0.5 : 0);
+  if (shake > 0) { shx = (hash(frame, 1) - 0.5) * 24 * shake; shy = (hash(frame, 2) - 0.5) * 24 * shake; }
+  ctx.save();
+  ctx.translate(W / 2 + shx, H / 2 + shy); ctx.scale(sc, sc); ctx.translate(-fx, -fy);
+  const dim = t > 13 && t < 17 ? 0.55 * win(t, 13, 17.1, 0.4, 0.1) : t > 20.2 ? 0.65 * prog(t, 20.2, 20.6) : 0;
+  drawCity(t, dim);
+  drawChips(t, sc);
+  ctx.restore();
+  // reveal from black
+  if (t < 3.8) { ctx.fillStyle = `rgba(0,0,0,${1 - prog(t, 3.3, 3.8)})`; ctx.fillRect(0, 0, W, H); }
+  drawHUD(t, prog(t, 3.8, 4.4));
+  drawDeal(t);
+  drawNotice(t);
+  // red flash on betrayal
+  if (t > 17.0 && t < 17.6) { ctx.fillStyle = `rgba(200,20,10,${0.45 * (1 - prog(t, 17.0, 17.6))})`; ctx.fillRect(0, 0, W, H); }
+  if (t > 17.0 && t < 17.08) { ctx.fillStyle = 'rgba(255,245,230,0.8)'; ctx.fillRect(0, 0, W, H); }
+
+  caption(t, 4.0, 7.9, 'Start with one speakeasy.');
+  caption(t, 8.2, 12.9, 'Run rackets. Buy the cops. Grow.');
+  caption(t, 13.4, 16.9, 'Make deals with your friends…', { fo: 0.1 });
+  caption(t, 17.05, 20.1, '…then break them.', { size: 52, bold: true, color: '#ff5a4a', fi: 0.05 });
+  // era change
+  if (t > 20.2) {
+    newspaper(t, 20.3, 24.0, 'DECEMBER 5, 1933  •  FIVE CENTS', 'PROHIBITION ENDS!', 'Bootleggers ruined overnight — families scramble', { hs: 60, dx: 120, dy: -30, scale: 0.85 });
+    incomeChart(t);
+    caption(t, 21.6, 24.0, 'The world changes. Adapt — or die.', { y: H - 60 });
+  }
+}
+
+function montage(t) { // 24-27
+  ctx.fillStyle = '#0b0907'; ctx.fillRect(0, 0, W, H);
+  const items = [
+    [24.0, '1944  •  WAR RATIONING IN EFFECT', 'BLACK MARKET BOOMS', 'Stolen ration stamps flood the Hudson docks', 0.06],
+    [25.0, 'JUNE 3, 1957  •  EXTRA', 'FEDS RAID FAMILY SUMMIT', 'Forty men arrested — Russo Don still missing', -0.07],
+    [26.0, 'APRIL 1, 1962  •  LAS VEGAS', 'VITALE CASINO OPENS', 'Senators, stars and "businessmen" attend', 0.04],
+  ];
+  for (const [t0, d, h, s, r] of items) newspaper(t, t0, t0 + 1.0, d, h, s, { rot: r, spin: r * 30, hs: h.length > 18 ? 46 : 54 });
+  // flash between cuts
+  for (const c of [24.0, 25.0, 26.0]) if (t > c && t < c + 0.08) { ctx.fillStyle = 'rgba(255,240,220,0.6)'; ctx.fillRect(0, 0, W, H); }
+}
+
+function title(t) { // 27-30
+  ctx.fillStyle = '#050403'; ctx.fillRect(0, 0, W, H);
+  rain(t, 0.5);
+  const k = easeOut(prog(t, 27.1, 28.0));
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.globalAlpha = k;
+  const g = ctx.createLinearGradient(0, H / 2 - 70, 0, H / 2 + 30);
+  g.addColorStop(0, '#f6e2a8'); g.addColorStop(0.5, '#d4a532'); g.addColorStop(1, '#8a6420');
+  ctx.font = `bold ${Math.round(lerp(150, 128, k))}px ${SERIF}`;
+  if (ctx.letterSpacing !== undefined) ctx.letterSpacing = `${Math.round(lerp(40, 18, k))}px`;
+  ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 30; ctx.fillStyle = g;
+  ctx.fillText('FAMIGLIA', W / 2 + 9, H / 2 - 40);
+  if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '0px';
+  ctx.shadowBlur = 0;
+  // red line
+  const lw = 520 * easeOut(prog(t, 27.6, 28.3));
+  ctx.fillStyle = '#b3241c'; ctx.fillRect(W / 2 - lw / 2, H / 2 + 38, lw, 3);
+  ctx.restore();
+  caption(t, 28.0, 30.5, 'Build your empire. Betray your friends.', { y: H / 2 + 85, size: 30, fo: 0.01 });
+  caption(t, 28.5, 30.5, 'ONLINE CAMPAIGN  •  2–8 PLAYERS  •  PC', { y: H / 2 + 150, size: 18, italic: false, bold: true, color: '#b9ad96', fo: 0.01 });
+  caption(t, 28.8, 30.5, 'concept trailer', { y: H - 40, size: 16, color: '#7d7465', fo: 0.01 });
+}
+
+function draw(t) {
+  const frame = Math.round(t * 30);
+  ctx.save(); ctx.clearRect(0, 0, W, H);
+  if (t < 3.3) scene1(t);
+  else if (t < 24.0) mapScene(t, frame);
+  else if (t < 27.0) montage(t);
+  else title(t);
+  // fade from black at start / to black at the very end
+  if (t < 0.4) { ctx.fillStyle = `rgba(0,0,0,${1 - t / 0.4})`; ctx.fillRect(0, 0, W, H); }
+  if (t > 29.5) { ctx.fillStyle = `rgba(0,0,0,${prog(t, 29.5, 30)})`; ctx.fillRect(0, 0, W, H); }
+  post(t, frame);
+  ctx.restore();
+}
+window.draw = draw;
+draw(0);
+</script></body></html>
