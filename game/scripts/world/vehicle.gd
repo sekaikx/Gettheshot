@@ -52,6 +52,10 @@ func setup(w: Node, k: String, kd: String, fam_color: Color = Color(0, 0, 0, 0))
 
 
 func max_load() -> int:
+	if kind in ["van", "delivery"]:
+		return 6
+	if kind != "truck":
+		return 0
 	if family >= 0 and Rackets.has_ring(family, "tools"):
 		return 16
 	return MAX_LOAD

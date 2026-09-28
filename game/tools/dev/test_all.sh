@@ -17,6 +17,8 @@ run() {  # name, pass-pattern, args...
     fail=1
   fi
 }
+# register new classes and assets first
+timeout 300 godot --headless --path "$P" --import > "$T.import.log" 2>&1
 run scripts "CHECK OK" res://tools/dev/check_scripts.tscn
 run autotest "AUTOTEST OK" res://scenes/main.tscn -- --autotest
 run tutorial "TUTTEST OK" res://scenes/main.tscn -- --autotest --tuttest

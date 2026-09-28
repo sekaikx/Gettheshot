@@ -183,7 +183,7 @@ func _near_vehicle(a: Actor) -> Vehicle:
 	var bd := 3.2 * W.M
 	for v in world.vehicles.values():
 		var ve := v as Vehicle
-		if not ve.lane.is_empty() or ve.driver != 0 or not ve.key.begins_with("t"):
+		if ve.driver != 0 or (not ve.lane.is_empty() and absf(ve.speed) > 4.0 * W.M):
 			continue
 		var d := ve.position.distance_to(a.position)
 		if d < bd:
@@ -256,10 +256,18 @@ func _find_focus(a: Actor) -> void:
 	if best.is_empty():
 		for v in world.vehicles.values():
 			var ve := v as Vehicle
-			if not ve.key.begins_with("t") or ve.driver != 0:
+			if ve.driver != 0:
 				continue
 			var d3 := ve.position.distance_to(p)
 			if d3 < 3.0 * W.M and d3 < bd:
+				if not ve.key.begins_with("t"):
+					if absf(ve.speed) > 4.0 * W.M:
+						continue
+					bd = d3
+					var what: String = {"taxi": "taxi", "police": "police car", "delivery": "delivery truck", "van": "van"}.get(ve.kind, "car")
+					best = {"type": "truck", "key": ve.key, "pos": ve.position,
+						"label": ("Steal the %s" % what) if not ve.lane.is_empty() else ("Drive the %s" % what)}
+					continue
 				bd = d3
 				var mine := ve.family == a.family
 				var lab3 := "Put the crate on the truck" if a.carrying else ("Take a crate off the truck (%d)" % ve.load if ve.load > 0 and mine else "Drive the %s truck" % ("family" if mine else Game.fam(ve.family).get("name", "") + " family's"))

@@ -62,6 +62,7 @@ var _job_t := 0.5
 var _obj_t := 0.0
 var _my_obj := false
 var _marks: Node2D
+var floats: FloatText
 var _rings_done := {}     # family id -> {ring id: true}
 
 
@@ -94,6 +95,9 @@ func _ready() -> void:
 	roofs.name = "Roofs"
 	roofs_layer.add_child(roofs)
 	roofs.build(plan)
+	floats = FloatText.new()
+	floats.z_index = 60
+	roofs_layer.add_child(floats)
 	_marks = Node2D.new()
 	_marks.name = "Marks"
 	_marks.z_index = 50
@@ -1459,7 +1463,11 @@ func _scare_owner(perp: Actor, b: Dictionary, how: String, amount: float) -> voi
 		return
 	if int(b.get("shake", -1)) != fam:
 		Rackets.start(Game, fam, int(b["id"]))
+	var before := float(b["fear"])
 	Rackets.scare(Game, fam, int(b["id"]), how, amount, _crew_near(fam, int(b["lot"])))
+	var owner := actor("s%d" % b["id"])
+	if owner and float(b["fear"]) - before >= 1.0:
+		float_all(owner.position, ("FEAR +%d" % int(float(b["fear"]) - before)) + ("  weak spot!" if String(b.get("weak", "")) == how else ""), "fear")
 	var r: Dictionary = Rackets.check(Game, int(b["id"]))
 	if not r.is_empty():
 		_shake_result(b, r)
@@ -1885,6 +1893,11 @@ func fx_all(kind: String, args: Array) -> void:
 	Net.to_all("fx", [kind] + args)
 
 
+## Words floating up over a spot, on every screen ("money" gold, "heat" orange, "fear" red, "info" cream).
+func float_all(at: Vector2, text: String, kind: String = "money") -> void:
+	fx_all("float", [at.x, at.y, text, kind])
+
+
 # ------------------------------------------------------------------ requests (host)
 
 func _on_request(peer: int, method: String, args: Array) -> void:
@@ -1937,6 +1950,7 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 					if c.kind == "cash":
 						p["wallet"] += c.amount
 						r = {"ok": true, "msg": "Picked up $%d." % c.amount}
+						float_all(me.position, "+$%d" % c.amount, "money")
 						Game.mark_dirty()
 					elif not me.carrying:
 						me.set_carry(true)
@@ -1965,6 +1979,17 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 					Net.to_peer(peer, "carry", [true])
 		"enter":
 			var v: Vehicle = vehicles.get(String(args[0]))
+			if v and v.driver == 0 and not v.lane.is_empty() and absf(v.speed) < 4.0 * W.M and v.position.distance_to(me.position) < 4.0 * W.M and not me.carrying:
+				# a car from the traffic: pull the driver out and take it
+				v.lane = []
+				v.speed = 0.0
+				var drv := _make_actor("n%dx" % randi_range(100, 99999))
+				if drv:
+					drv.sim = true
+					drv.place(v.position + v.forward().orthogonal() * -1.8 * W.M, v.yaw)
+					drv.scare(me.position, 8.0)
+				crime(me, 14.0 if v.kind == "police" else 9.0, me.position, "car theft")
+				fx_all("punch", [me.key])
 			if v and v.driver == 0 and v.lane.is_empty() and v.position.distance_to(me.position) < 4.0 * W.M and not me.carrying:
 				if v.family >= 0 and v.family != family:
 					crime(me, 8.0, me.position, "car theft", v.family)
@@ -2291,10 +2316,12 @@ func _act(peer: int, me: Actor, family: int, what: String, target: int, extra: V
 			crime(me, 10.0, me.position, "vandalism", b["protector"])
 			return r
 		"collect":
+			var w0 := int(Game.player(peer)["wallet"])
 			var r := Game.act_collect(peer, target)
 			if r["ok"]:
 				happened.emit("collected", {"biz": target})
 				fx_all("cash", [me.key])
+				float_all(me.position, "+$%d" % (int(Game.player(peer)["wallet"]) - w0), "money")
 			return r
 		"buy":
 			var r := Game.act_buy(family, target)
@@ -2322,7 +2349,11 @@ func _act(peer: int, me: Actor, family: int, what: String, target: int, extra: V
 			happened.emit("delivered", {"biz": target, "n": n})
 			return Game.act_deliver(peer, target, n)
 		"rob":
-			return Rackets.rob_register(Game, self, peer, me, target)
+			var w1 := int(Game.player(peer)["wallet"])
+			var rr := Rackets.rob_register(Game, self, peer, me, target)
+			if rr["ok"]:
+				float_all(me.position, "+$%d" % (int(Game.player(peer)["wallet"]) - w1), "money")
+			return rr
 		"safe_rob":
 			return Rackets.rob_safe(Game, self, peer, me, target)
 		"wh_load", "wh_store", "wh_steal":
@@ -2487,6 +2518,8 @@ func _on_event(ev_name: String, args: Array) -> void:
 			hud.toast(String(args[0]), "good" if bool(args[1]) else "info")
 		"heat":
 			hud.toast(String(args[0]), "warn" if float(args[1]) > 0.5 else "info")
+			if local_actor and float(args[1]) >= 1.0:
+				floats.pop(local_actor.position, "Heat +%d" % int(round(float(args[1]))), Color("ff9a4a"), 20)
 		"notice":
 			var fam := int(args[0])
 			var mine := int(Game.player(Net.my_id()).get("family", -2))
@@ -2597,6 +2630,9 @@ func _fx(args: Array) -> void:
 				if local_actor and at.distance_to(local_actor.position) < 12.0 * W.M:
 					cam.shake(0.35)
 				interiors.update_from_game()
+		"float":
+			var col: Color = {"money": Pal.GOLD2, "heat": Color("ff9a4a"), "fear": Pal.UI_RED, "info": Pal.INK, "good": Pal.UI_GREEN}.get(String(args[4]), Pal.INK)
+			floats.pop(Vector2(float(args[1]), float(args[2])), String(args[3]), col)
 		"yes":
 			pass
 
