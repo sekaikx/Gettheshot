@@ -4,15 +4,6 @@ extends CharacterBody3D
 ## and sends it to the host with its pose) and carry crates in the back; traffic cars drive the
 ## lanes on the host. Everyone else interpolates.
 
-const MODELS := {
-	"truck": "res://assets/kenney/cars/truck.glb",
-	"delivery": "res://assets/kenney/cars/delivery.glb",
-	"sedan": "res://assets/kenney/cars/sedan.glb",
-	"van": "res://assets/kenney/cars/van.glb",
-	"taxi": "res://assets/kenney/cars/taxi.glb",
-	"police": "res://assets/kenney/cars/police.glb",
-}
-const SCALE := 1.55
 const MAX_SPEED := 15.0
 const MAX_LOAD := 10
 
@@ -35,6 +26,14 @@ var _crates: Array[MeshInstance3D] = []
 var _body_mat_color := Color(0, 0, 0, 0)
 var _lights: Array[SpotLight3D] = []
 var _engine: AudioStreamPlayer3D
+var _wheels: Array[Node3D] = []       # spinning wheel meshes
+var _steer_pivots: Array[Node3D] = []
+var _wheel_r := 0.35
+var _wheel_ang := 0.0
+var _vis_steer := 0.0
+var _last_pos := Vector3.ZERO
+var _last_yaw := 0.0
+var _body: MeshInstance3D
 
 
 func setup(w: Node, k: String, kd: String, fam_color: Color = Color(0, 0, 0, 0)) -> void:
@@ -45,37 +44,76 @@ func setup(w: Node, k: String, kd: String, fam_color: Color = Color(0, 0, 0, 0))
 	collision_layer = 4
 	collision_mask = 1
 	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
-	var model := (load(MODELS[kd]) as PackedScene).instantiate() as Node3D
-	model.scale = Vector3.ONE * SCALE
-	add_child(model)
-	# 1920s: most cars were black; family trucks carry the family colour on the cab
-	var tint := Color("1b1a19") if kd in ["sedan", "taxi", "van"] and randf() < 0.7 else Color(0, 0, 0, 0)
+	var sp := CarModels.spec(kd)
+	_body = MeshInstance3D.new()
+	_body.name = "Body"
+	_body.mesh = CarModels.body(kd)
+	add_child(_body)
+	# 1920s: most private cars were black; family trucks carry the family colour on the cab
+	var tint := Color("1c1d20")
+	match kd:
+		"sedan":
+			var pal := [Color("1c1d20"), Color("1c1d20"), Color("1c1d20"), Color("3a1a18"), Color("1f2a3a"), Color("26382c"),
+				Color("3b3226"), Color("4a4f55")]
+			tint = pal[randi() % pal.size()]
+		"taxi":
+			tint = Color("c89a2e")
+		"van":
+			var vp := [Color("6b2320"), Color("2f4a38"), Color("c9b98f"), Color("2b3a55")]
+			tint = vp[randi() % vp.size()]
+		"delivery":
+			tint = Color("3c4a36")
+		"police":
+			tint = Color("1e2428")
 	if fam_color.a > 0.0:
-		tint = fam_color.darkened(0.45)
-	if tint.a > 0.0:
-		for mi in model.find_children("*", "MeshInstance3D", true, false):
-			var m := mi as MeshInstance3D
-			for s in m.mesh.get_surface_count():
-				var src := m.get_active_material(s) as BaseMaterial3D
-				if src:
-					var mat := src.duplicate() as BaseMaterial3D
-					mat.albedo_color = tint.lerp(Color.WHITE, 0.15)
-					m.set_surface_override_material(s, mat)
+		tint = fam_color.darkened(0.35)
+	var ps := CarModels.paint_surface(kd)
+	if ps >= 0:
+		_body.set_surface_override_material(ps, CarModels.paint(tint))
+	for wh in sp["wheels"]:
+		var pivot := Node3D.new()
+		pivot.position = wh[0]
+		add_child(pivot)
+		var wm := MeshInstance3D.new()
+		wm.mesh = CarModels.wheel(sp["wheel"], wh[1])
+		if (wh[0] as Vector3).x < 0.0:
+			wm.rotation.y = PI
+		var spin := Node3D.new()
+		spin.add_child(wm)
+		pivot.add_child(spin)
+		_wheels.append(spin)
+		if wh[2]:
+			_steer_pivots.append(pivot)
+		_wheel_r = wh[1]
+	if kd == "police":
+		for s in [1.0, -1.0]:
+			var l := Label3D.new()
+			l.text = "POLICE"
+			l.font = load("res://assets/fonts/signs/AlfaSlabOne-Regular.ttf")
+			l.font_size = 48
+			l.pixel_size = 0.0045
+			l.outline_size = 0
+			l.modulate = Color("e8e0c8")
+			l.shaded = true
+			l.double_sided = false
+			l.position = Vector3(s * 0.85, 1.52, -0.7)
+			l.rotation.y = PI * 0.5 * s
+			add_child(l)
 	var cs := CollisionShape3D.new()
 	var bx := BoxShape3D.new()
-	bx.size = Vector3(2.2, 1.8, 4.6)
+	bx.size = Vector3(float(sp["width"]) + 0.2, 1.8, float(sp["length"]))
 	cs.shape = bx
 	cs.position.y = 0.9
 	add_child(cs)
-	for s in [-0.55, 0.55]:
+	for lp in sp["lamps"]:
 		var l := SpotLight3D.new()
 		l.light_color = Color("ffe0a8")
 		l.spot_range = 16.0
 		l.spot_angle = 32.0
 		l.light_energy = 0.0
-		l.position = Vector3(s, 0.9, 2.3)
-		l.rotation.x = -0.25
+		l.position = lp + Vector3(0, 0, 0.12)
 		l.rotation.y = PI
+		l.rotation.x = -0.22
 		add_child(l)
 		_lights.append(l)
 	if kd in ["truck", "delivery"]:
@@ -85,7 +123,8 @@ func setup(w: Node, k: String, kd: String, fam_color: Color = Color(0, 0, 0, 0))
 			bm.size = Vector3(0.6, 0.42, 0.5)
 			c.mesh = bm
 			c.material_override = Crate.material()
-			c.position = Vector3(-0.35 + (n % 2) * 0.7, 1.35 + (n / 6) * 0.44, -0.3 - (n / 2 % 3) * 0.6)
+			c.position = Vector3(-0.35 + (n % 2) * 0.7, float(sp["bed_y"]) + 0.215 + (n / 6) * 0.44, -0.5 - (n / 2 % 3) * 0.66)
+			c.rotation.y = (randf() - 0.5) * 0.12
 			c.visible = false
 			add_child(c)
 			_crates.append(c)
@@ -93,6 +132,8 @@ func setup(w: Node, k: String, kd: String, fam_color: Color = Color(0, 0, 0, 0))
 
 func place(p: Vector3, y: float) -> void:
 	position = Vector3(p.x, 0.0, p.z)
+	_last_pos = position
+	_last_yaw = y
 	yaw = y
 	rotation.y = y
 	net_pos = position
@@ -108,6 +149,32 @@ func set_load(n: int) -> void:
 func set_night(v: float) -> void:
 	for l in _lights:
 		l.light_energy = v * 3.0
+		l.visible = v > 0.05
+	CarModels.set_night(v)
+
+
+func _process(delta: float) -> void:
+	# wheels turn with the distance actually covered, front wheels follow the turn
+	var moved := position - _last_pos
+	moved.y = 0.0
+	var fwd := Vector3(sin(rotation.y), 0, cos(rotation.y))
+	var d := moved.dot(fwd)
+	if moved.length() > 6.0:
+		d = 0.0
+	_wheel_ang = fmod(_wheel_ang + d / _wheel_r, TAU)
+	for w in _wheels:
+		w.rotation.x = _wheel_ang
+	var dyaw := wrapf(rotation.y - _last_yaw, -PI, PI)
+	var want := 0.0
+	if absf(d) > 0.01:
+		want = clampf(dyaw / d * 2.6, -0.5, 0.5)
+	elif driver != 0:
+		want = steer * 0.45
+	_vis_steer = lerpf(_vis_steer, want, clampf(delta * 8.0, 0.0, 1.0))
+	for p in _steer_pivots:
+		p.rotation.y = _vis_steer
+	_last_pos = position
+	_last_yaw = rotation.y
 
 
 func forward() -> Vector3:
