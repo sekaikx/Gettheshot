@@ -71,7 +71,12 @@ func _ready() -> void:
 	set_process(false)
 	if Game.plan == null:
 		await Game.state_changed
+	# a title card while the city is built (the first frames freeze otherwise)
+	var card := _loading_card()
+	await get_tree().process_frame
+	await get_tree().process_frame
 	set_process(true)
+	var t0 := Time.get_ticks_msec()
 	plan = Game.plan
 	for b in Game.biz:
 		_biz_of_lot[int(b["lot"])] = int(b["id"])
@@ -105,6 +110,8 @@ func _ready() -> void:
 	_marks.draw.connect(_draw_marks)
 	roofs_layer.add_child(_marks)
 	_build_walls()
+	if "--timing" in OS.get_cmdline_user_args():
+		print("TIMING pieces+walls %d ms" % (Time.get_ticks_msec() - t0))
 	_boat()
 	_shape_up_board()
 	cam = CameraRig.new()
@@ -148,6 +155,12 @@ func _ready() -> void:
 	if Net.is_host():
 		_host_spawn()
 	_ensure_local_boss()
+	if "--timing" in OS.get_cmdline_user_args():
+		print("TIMING world ready %d ms" % (Time.get_ticks_msec() - t0))
+	var fade := create_tween()
+	fade.tween_interval(0.25)
+	fade.tween_property(card.get_child(0), "modulate:a", 0.0, 0.6)
+	fade.tween_callback(card.queue_free)
 	_on_state_changed()
 	var args := OS.get_cmdline_user_args()
 	if (bool(Game.cfg.get("tutorial", false)) and not "--autotest" in args) or "--tuttest" in args:
@@ -164,6 +177,38 @@ func _ready() -> void:
 		t.world = self
 		t.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(t)
+
+
+func _loading_card() -> CanvasLayer:
+	var cl := CanvasLayer.new()
+	cl.layer = 100
+	add_child(cl)
+	var root := ColorRect.new()
+	root.color = Color("0c0a08")
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cl.add_child(root)
+	var title := Label.new()
+	title.text = "New York, %s" % Game.date_text()
+	title.add_theme_font_override("font", W.ui_font("deco"))
+	title.add_theme_font_size_override("font_size", 54)
+	title.add_theme_color_override("font_color", Pal.GOLD)
+	title.set_anchors_preset(Control.PRESET_CENTER)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.position = Vector2(-500, -60)
+	title.size = Vector2(1000, 70)
+	root.add_child(title)
+	var sub := Label.new()
+	sub.text = "The city wakes up. The %s family has work to do." % String(Game.fam(int(Game.player(Net.my_id()).get("family", 0))).get("name", ""))
+	sub.add_theme_font_override("font", W.ui_font("fell"))
+	sub.add_theme_font_size_override("font_size", 24)
+	sub.add_theme_color_override("font_color", Pal.INK)
+	sub.set_anchors_preset(Control.PRESET_CENTER)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.position = Vector2(-500, 20)
+	sub.size = Vector2(1000, 40)
+	root.add_child(sub)
+	return cl
 
 
 # ------------------------------------------------------------------ the city: lookup, walls, paths
