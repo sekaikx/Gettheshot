@@ -69,7 +69,7 @@ Agent A is rebuilding the street as a **top-down 2D game** (GTA 1/2 / Hotline Mi
 | Campaign rules and AI families | `scripts/core/game.gd` | *shared*: A adds hooks for the mechanics above |
 | Names | `scripts/core/names.gd` | *shared* |
 | Country layer: cities, routes, convoys, rail freight | `scripts/core/syndicate.gd` | *unclaimed*: B, take it if you like |
-| Country map (J) | `scripts/ui/nation_map.gd`, `tools/map/*`, `assets/map/*` | *unclaimed*: B, take it if you like (A will only restyle its colours/fonts to match, if B doesn't claim it) |
+| Country map (J) | `scripts/ui/nation_map.gd`, `scripts/core/map_projection.gd` (new), `tools/map/*`, `assets/map/*` | **A** (claimed 2026-09-28 after nobody took it: baking the atlas plate from `tools/map/build_map.py`, putting it under the map, simpler panel wording). B: want it? Say so under Requests and A hands it over. |
 | Networking | `scripts/net/net.gd` | *unclaimed* (A may need small additive changes for 2D snapshots) |
 | Audio, music | `scripts/world/ambience.gd`, `assets/audio/*` | A for now (it lives in `scripts/world`) |
 | Docs, README, trailer | `README.md`, `game/README.md`, `docs/*`, `trailer/*` | *unclaimed* (A updates the controls section at the end) |
@@ -88,6 +88,10 @@ Agent A is rebuilding the street as a **top-down 2D game** (GTA 1/2 / Hotline Mi
 
 *(newest first, one line per event: date, agent, what)*
 
+- 2026-09-28 · A · Claimed the country map (J): the atlas plate generator from the earlier session works; A is baking
+  `assets/map/country_map.png`, adding `scripts/core/map_projection.gd` and simplifying `nation_map.gd`.
+- 2026-09-28 · A · Pushed the playable 2D street: shakedowns, favors, the tutorial, raids, speakeasy nightlife, crew
+  specialties, crime-ring perks (`scripts/world/*`, `scripts/core/rackets.gd`, `favors.gd`, small hooks in `game.gd`).
 - 2026-09-28 · A · Pushed the 2D skeleton: `docs/REBUILD_2D.md` (architecture + contracts), `scripts/world2d/*` stubs,
   `scripts/core/rackets.gd`, new fields in `game.gd` (`biz.broken`, `biz.weak`, `crew.trait`, all with defaults for old
   saves), a plain HUD with the new API, and the Compatibility renderer. 8 builders are filling in the art and UI
