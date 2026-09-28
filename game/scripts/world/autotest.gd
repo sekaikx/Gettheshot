@@ -39,6 +39,9 @@ func _ready() -> void:
 	if "--favortest" in OS.get_cmdline_user_args():
 		_favortest.call_deferred()
 		return
+	if "--pausetest" in OS.get_cmdline_user_args():
+		_pausetest.call_deferred()
+		return
 	Game.clock = 0.2
 	_steps = [
 		[0.3, func() -> void:
@@ -407,6 +410,27 @@ func _tuttest() -> void:
 	var ok: bool = String(t.STEPS[mini(t.step, t.STEPS.size() - 1)][0]) == "done"
 	print("  step ", t.step, " tut=", Game.player(1).get("tut", -1), " gift=", Game.player(1).get("tut_gift", false))
 	print("TUTTEST %s" % ("OK" if ok else "FAIL"))
+	get_tree().quit()
+
+
+# ------------------------------------------------------------------ solo pause
+
+func _pausetest() -> void:
+	await _wait(0.8)
+	var c0 := Game.clock
+	await _wait(1.0)
+	var runs: bool = Game.clock > c0
+	world.hud.toggle_family()
+	await _wait(0.3)
+	var c1 := Game.clock
+	var p1: Vector2 = world.actor("n0").position if world.actor("n0") else Vector2.ZERO
+	await _wait(1.5)
+	var stopped: bool = is_equal_approx(Game.clock, c1) and (world.actor("n0") == null or world.actor("n0").position == p1) and get_tree().paused
+	world.hud.toggle_family()
+	await _wait(0.5)
+	var resumed: bool = not get_tree().paused and Game.clock > c1
+	print("  runs=%s stopped=%s resumed=%s" % [runs, stopped, resumed])
+	print("PAUSETEST %s" % ("OK" if runs and stopped and resumed else "FAIL"))
 	get_tree().quit()
 
 

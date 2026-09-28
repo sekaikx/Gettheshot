@@ -23,4 +23,5 @@ run scripts "CHECK OK" res://tools/dev/check_scripts.tscn
 run autotest "AUTOTEST OK" res://scenes/main.tscn -- --autotest
 run tutorial "TUTTEST OK" res://scenes/main.tscn -- --autotest --tuttest
 run favors "FAVORTEST OK" res://scenes/main.tscn -- --autotest --favortest
+run pause "PAUSETEST OK" res://scenes/main.tscn -- --autotest --pausetest
 exit $fail

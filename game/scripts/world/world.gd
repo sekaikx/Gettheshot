@@ -121,7 +121,15 @@ func _ready() -> void:
 	add_child(audio)
 	hud = preload("res://scripts/ui/hud.gd").new()
 	hud.world = self
+	hud.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(hud)
+	# playing alone, the city waits while you read a menu, a map or the book
+	var pauser := Node.new()
+	pauser.name = "Pauser"
+	pauser.process_mode = Node.PROCESS_MODE_ALWAYS
+	pauser.set_script(preload("res://scripts/world/pauser.gd"))
+	pauser.set("world", self)
+	add_child(pauser)
 	controller = PlayerController.new()
 	controller.world = self
 	add_child(controller)
@@ -153,6 +161,7 @@ func _ready() -> void:
 	if "--autotest" in OS.get_cmdline_user_args():
 		var t = load("res://scripts/world/autotest.gd").new()
 		t.world = self
+		t.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(t)
 
 
