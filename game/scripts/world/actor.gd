@@ -55,6 +55,7 @@ var attack_target_hint: Actor = null   # players point at someone (R); the crew 
 var _stuck_t := 0.0
 var _stuck_at := Vector2.ZERO
 var _lot_t := 0.0
+var _dwell := 0.0
 
 # network smoothing
 var net_pos := Vector2.ZERO
@@ -339,6 +340,25 @@ func _think_ped(delta: float) -> void:
 		velocity = Vector2.ZERO
 		return
 	if path_i >= path.size():
+		if lot >= 0:
+			if _dwell > 0.0:
+				# in the shop: look around, chat at the counter
+				wait_t = _dwell
+				talk_t = _dwell * 0.6
+				_dwell = 0.0
+				return
+			# done shopping: back out to the street
+			var n2: int = randi() % world.plan.nodes.size()
+			go_to(W.pa(world.plan.nodes[n2]))
+			return
+		if kind == "ped" and randf() < 0.3:
+			var b: Dictionary = world.shop_near(position, 30.0 * W.M)
+			if not b.is_empty():
+				var lay: Dictionary = world.layout_of_biz(int(b["id"]))
+				var room: Rect2 = (lay["shop"] as Rect2).grow(-0.8 * W.M)
+				go_to(world.talk_spot(int(b["id"])).lerp(room.get_center(), randf_range(0.2, 0.8)))
+				_dwell = randf_range(4.0, 9.0)
+				return
 		var n: int = randi() % world.plan.nodes.size()
 		go_to(W.pa(world.plan.nodes[n]) + Vector2(randf_range(-0.6, 0.6), randf_range(-0.6, 0.6)) * W.M)
 		wait_t = randf_range(0.0, 3.0) if randf() < 0.4 else 0.0

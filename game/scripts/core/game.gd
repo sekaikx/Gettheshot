@@ -1381,6 +1381,16 @@ func _ai_month(f: Dictionary) -> void:
 	if men.size() < want_men and f["dirty"] > 900 and (men.size() < 2 or Syndicate._net_dirty(f) > 200):
 		f["dirty"] -= 250
 		_add_crew(id, "associate")
+	# with men to spare, post guards outside the best shops (two stay at the club)
+	var at_club := men.filter(func(c: Dictionary) -> bool: return c["task"] == "guard" and int(c["target"]) == int(f["hq"]))
+	if at_club.size() > 2:
+		var mine := shops_of(id).filter(func(b: Dictionary) -> bool: return int(b["id"]) != int(f["hq"]))
+		mine.sort_custom(func(a, b) -> bool: return int(a["rate"]) + int(a["value"]) / 20 > int(b["rate"]) + int(b["value"]) / 20)
+		for b in mine.slice(0, at_club.size() - 2):
+			if not men.any(func(c: Dictionary) -> bool: return c["task"] == "guard" and int(c["target"]) == int(b["id"])):
+				var g: Dictionary = at_club.pop_back()
+				g["task"] = "guard"
+				g["target"] = b["id"]
 	# booze: from its warehouse on the quay if it has one, else abstract runs from the docks
 	for b in owned_by(id):
 		if b["speak"] and b["stock"] < 10 and Syndicate.stock(nation, "nyc", id) > 0:

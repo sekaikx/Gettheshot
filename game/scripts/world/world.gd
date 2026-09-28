@@ -408,6 +408,17 @@ func owner_pos(biz_id: int) -> Vector2:
 	return lay.get("owner_spot", W.door(Game.biz_by_id(biz_id)))
 
 
+## A random open shop near a point (for people going shopping), or {}.
+func shop_near(p: Vector2, r: float) -> Dictionary:
+	var cands := []
+	for b in Game.biz:
+		if b["kind"] in ["club", "precinct", "warehouse", "poolhall"] or int(b["closed_until"]) >= Game.month:
+			continue
+		if W.door(b).distance_to(p) < r:
+			cands.append(b)
+	return cands[randi() % cands.size()] if not cands.is_empty() else {}
+
+
 ## Where to stand to talk to a shop's owner: in front of the counter.
 func talk_spot(biz_id: int) -> Vector2:
 	var lay := layout_of_biz(biz_id)
@@ -1116,6 +1127,7 @@ func _host_tick(delta: float) -> void:
 	if _job_t <= 0.0:
 		_job_t = 0.5
 		_check_jobs()
+		_check_victory()
 	var smug := actor("z1")
 	if smug:
 		smug.visible = _boat_here()
@@ -1134,6 +1146,18 @@ func _host_tick(delta: float) -> void:
 						var drv := actor("p%d" % veh.driver)
 						if drv:
 							crime(drv, 10.0, ac.position, "hit and run", ac.family)
+
+
+## Host: every other family finished? The last one standing runs New York.
+func _check_victory() -> void:
+	if Game.over or not Game.running:
+		return
+	var alive := Game.families.filter(func(f: Dictionary) -> bool: return bool(f["alive"]))
+	if alive.size() == 1 and Game.families.size() > 1:
+		Game._headline("THE %s FAMILY RUNS NEW YORK. The last rival don is gone." % String(alive[0]["name"]).to_upper(), true)
+		Game.over = true
+		Game.mark_dirty()
+		Net.to_all("over", [])
 
 
 ## Host: put the people a favor needs on the street.
