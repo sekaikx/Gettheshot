@@ -386,11 +386,7 @@ func _tuttest() -> void:
 			Net.to_host("act", ["cop", c["id"], 0])
 	await _wait(1.2)
 	print("  step ", t.step, " ", t.STEPS[t.step][0], " bank=", Game.fam(0)["clean"])
-	var front := -1
-	for b in Game.shops_of(0):
-		if int(b["owned_by"]) < 0 and b["kind"] not in ["club", "warehouse", "precinct"]:
-			front = int(b["id"])
-			break
+	var front := int(world.cheapest_front(0).get("id", -1))
 	me.place(world.talk_spot(front))
 	await _wait(0.3)
 	Net.to_host("act", ["buy", front, 0])

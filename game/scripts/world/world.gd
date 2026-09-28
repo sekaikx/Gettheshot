@@ -1357,6 +1357,16 @@ func _draw_marks() -> void:
 		Draw.text(_marks, c + Vector2(0, 8), "!", 24, Color("3a2410"), W.font("serif"), HORIZONTAL_ALIGNMENT_CENTER)
 
 
+## The cheapest shop that pays a family and could be bought as a front, or {}.
+func cheapest_front(family: int) -> Dictionary:
+	var best := {}
+	for b in Game.shops_of(family):
+		if int(b["owned_by"]) < 0 and b["kind"] not in ["club", "warehouse", "precinct"]:
+			if best.is_empty() or int(b["value"]) < int(best["value"]):
+				best = b
+	return best
+
+
 ## A family that just took every shop of a trade gets the ring's perk; one that lost one loses it.
 func _check_rings() -> void:
 	for f in Game.families:
@@ -2063,8 +2073,13 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 			p["tut"] = int(args[0])
 			if args.size() > 1 and String(args[1]) == "gift" and not bool(p.get("tut_gift", false)):
 				p["tut_gift"] = true
-				Game.fam(family)["clean"] += 2500
-				r = {"ok": true, "msg": "Uncle Carmine put $2,500 in the Bank for you."}
+				# enough for the cheapest shop that pays you, and never less than $2,500
+				var gift := 2500
+				var cheapest := cheapest_front(family)
+				if not cheapest.is_empty():
+					gift = maxi(gift, int(cheapest["value"]) - int(Game.fam(family)["clean"]) + 200)
+				Game.fam(family)["clean"] += gift
+				r = {"ok": true, "msg": "Uncle Carmine put $%s in the Bank for you." % W.money(gift)}
 			elif args.size() > 1 and String(args[1]) == "done" and not bool(p.get("tut_done", false)):
 				p["tut_done"] = true
 				Game.fam(family)["rep"] += 5

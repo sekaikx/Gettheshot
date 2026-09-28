@@ -25,7 +25,7 @@ const STEPS := [
 	["scare", "Scare him until he pays", "Break his things (F) · rough him up · watch the FEAR bar", "He said no. Now you show him. Break something, give him a slap. Watch his fear: when it reaches the mark, he pays. Too far and he runs to the cops."],
 	["hire", "Hire a man", "The pool hall", "Good. One shop is a start. Now you need men. The pool hall is full of boys looking for work."],
 	["cop", "Put a cop on the payroll", "Find a patrolman · $100", "The law sees everything you do. That's heat. A cop on the payroll looks the other way. Find a patrolman and slip him a hundred."],
-	["buy", "Buy a front", "A shop that pays you · with Bank money", "Dirty money can't buy anything legal. A shop you own washes your Stash into clean Bank money every month. I put $2,500 in the Bank for you. Buy one of your shops."],
+	["buy", "Buy a front", "A shop that pays you · with Bank money", "Dirty money can't buy anything legal. A shop you own washes your Stash into clean Bank money every month. I put money in the Bank for you. Buy one of your shops: go in and make the owner an offer."],
 	["speak", "Open a speakeasy", "In the back of your shop · $600", "Now the real money. Open a speakeasy in the back of your shop. Prohibition makes every cellar a gold mine."],
 	["booze", "Bring booze to your speakeasy", "At night · the middle pier on the Waterfront", "A speakeasy needs whisky. At night a boat ties up at the middle pier. Buy crates, load them on your truck, drive them to your speakeasy."],
 	["book", "Open the family book", "Press Tab", "Press Tab any time: your men, your rackets, the heat on you, your rivals. M shows the whole city, J the country."],
@@ -153,9 +153,9 @@ func _target(id: String) -> Vector2:
 						best2 = ac.position
 			return best2
 		"buy":
-			for b in Game.shops_of(me):
-				if int(b["owned_by"]) < 0 and b["kind"] not in ["club", "warehouse", "precinct"]:
-					return world.talk_spot(int(b["id"]))
+			var front: Dictionary = world.cheapest_front(me)
+			if not front.is_empty():
+				return world.talk_spot(int(front["id"]))
 		"speak":
 			for b in Game.owned_by(me):
 				if b["kind"] not in ["club", "warehouse"] and not b["speak"]:
