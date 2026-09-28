@@ -298,6 +298,15 @@ func clear_objective() -> void:
 	set_objective({})
 
 
+func get_objective() -> Dictionary:
+	return _objective.duplicate()
+
+
+## A banner when you walk into a place: its name, and who it pays (World calls it on entering).
+func show_place(title: String, sub: String) -> void:
+	toast("%s · %s" % [title, sub] if sub != "" else title, "info")
+
+
 func set_waypoint(px: Vector2) -> void:
 	_waypoint = px
 	toast("Waypoint set.", "info")

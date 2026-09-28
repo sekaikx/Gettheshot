@@ -201,7 +201,8 @@ A CanvasLayer the World creates (`hud.world = self`). What it shows, and the API
   "action": Callable, "keep_open": bool}]}`. Keys 1–9 pick, Esc closes. `close_conversation()`.
 - `set_meter(id, world_pos, value 0..1, mark 0..1, label, color)` / `clear_meter(id)`: small bars
   floating over people in the world (the shakedown fear meter over a shop owner, a crewman's health).
-- `set_objective({"title", "detail", "target": Vector2 px or INF, "step", "of"})` and
+- `show_place(title, sub)`: a short banner when you walk into a place ("Mulberry Bakery" / "Pays nobody").
+- `set_objective({"title", "detail", "target": Vector2 px or INF, "step", "of"})`, `get_objective()` and
   `clear_objective()`: the current goal, top-left under the money, plus an arrow at the screen edge
   pointing to `target` when it's off screen, and a marker on the minimap.
 - `mentor_say(name, text, portrait, seconds := 8.0)`: the tutorial mentor's line, bottom-left, not modal.

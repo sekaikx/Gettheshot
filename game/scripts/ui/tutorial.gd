@@ -186,7 +186,7 @@ func _process(delta: float) -> void:
 	var id := String(STEPS[step][0])
 	# moving targets (people) and shops that changed
 	if id in ["hire", "cop", "booze", "pitch", "scare"]:
-		var o: Dictionary = world.hud.get("_objective") if world.hud.get("_objective") is Dictionary else {}
+		var o: Dictionary = world.hud.call("get_objective") if world.hud.has_method("get_objective") else {}
 		if not o.is_empty():
 			o["target"] = _target(id)
 			world.hud.set_objective(o)
