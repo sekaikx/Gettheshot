@@ -89,8 +89,8 @@ def font(family: str, filename: str, dest: Path) -> Path:
     return p
 
 
-def font_licence(family: str, dest: Path) -> Path:
-    p = dest / "OFL.txt"
+def font_licence(family: str, dest: Path, name: str = "OFL.txt") -> Path:
+    p = dest / name
     if not p.exists():
         p.write_bytes(cached("ofl_" + family + ".txt", FONT_BASE + family + "/OFL.txt").read_bytes())
     return p
