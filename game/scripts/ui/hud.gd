@@ -272,7 +272,7 @@ func _build_family(root: Control) -> void:
 	v.add_theme_constant_override("separation", 10)
 	_family.add_child(v)
 	var tabs := HBoxContainer.new()
-	for t in [["crew", "THE FAMILY"], ["biz", "BUSINESSES"], ["case", "THE CASE"], ["deals", "SIT-DOWNS & RIVALS"], ["books", "THE BOOKS"]]:
+	for t in [["crew", "THE FAMILY"], ["biz", "BUSINESSES"], ["supply", "SUPPLY"], ["case", "THE CASE"], ["deals", "SIT-DOWNS & RIVALS"], ["books", "THE BOOKS"]]:
 		var b := Button.new()
 		b.text = t[1]
 		var key: String = t[0]
@@ -345,6 +345,7 @@ func _build_help(root: Control) -> void:
 [b]Rivals[/b] (AI families or your friends): press E on their boss or at their club for a [b]sit-down[/b]: truces, tribute, alliances. Nothing is enforced. Breaking your word is remembered.
 
 [b]The country (J)[/b]: send capos with men and guns to take Chicago, Detroit, Atlantic City and more. Buy the officials along a smuggling route, run convoys, ambush rival convoys, order hits.
+[b]Supply[/b] (Tab, SUPPLY): convoys unload into your [b]warehouse[/b] in a city (or get dumped at half price). In New York buy a warehouse on the West St. quay: park the truck at its door and press E to load it, or put a man on the [b]booze run[/b]. Pay the longshoremen's local (the hiring boss on the quay), buy breweries and stills, bribe yardmasters, ship crates by rail.
 [b]Guns[/b] from Izzy outside the pawnshop. [b]Evidence[/b] (Tab, THE CASE): pay or scare witnesses, dump the gun in the river, burn the books.
 
 [b]Keys[/b]: J country · WASD move · Shift sprint · Alt walk · E talk/use · F punch · G pistol (very loud) · R sic your crew · Q drop crate · V truck · Z/C turn camera · scroll zoom · Tab family · M map · N newspaper · Esc menu"""
@@ -647,7 +648,7 @@ func _biz_dialog(b: Dictionary) -> void:
 	var p := _me()
 	var opts := []
 	var body := ""
-	var who := "[color=#9b907c]%s[/color]" % b["district"]
+	var who := "[color=#9b907c]%s · %s[/color]" % [b.get("address", ""), b["district"]]
 	if b["kind"] == "precinct":
 		body = "The desk sergeant looks you over. \"The Captain might see you. For the right reasons.\"\n"
 		for d in CityPlan.DISTRICTS:
@@ -680,6 +681,9 @@ func _biz_dialog(b: Dictionary) -> void:
 		return
 	if b["kind"] == "club" and int(b["hq_of"]) >= 0:
 		_sitdown(int(b["hq_of"]))
+		return
+	if b["kind"] == "warehouse":
+		_warehouse_dialog(b)
 		return
 	body = "%s · owner [b]%s[/b]\n" % [who, b["owner_name"]]
 	var prot: int = b["protector"]
@@ -767,11 +771,16 @@ func _actor_dialog(focus: Dictionary) -> void:
 		"crew":
 			var c := Game.crew_by_id(int(focus["id"]))
 			var near = _nearest_biz(world.local_actor.position)
-			var body := "[b]%s[/b] · %s · loyalty %d · tough %d · $%d a month\nNow: %s" % [c["name"], c["rank"], c["loyalty"], c["tough"], c["wage"], c["task"]]
+			var task := String(c["task"])
+			if task == "booze":
+				task = "on the booze run (%d crates a month)" % int(c.get("booze", 20))
+			var body := "[b]%s[/b] · %s · loyalty %d · tough %d · $%d a month\nNow: %s" % [c["name"], c["rank"], c["loyalty"], c["tough"], c["wage"], task]
 			var opts := [["Follow me", _crew(c["id"], "follow", -1)]]
 			if not near.is_empty():
 				opts.append(["Guard %s" % near["name"], _crew(c["id"], "guard", near["id"])])
 				opts.append(["Collect our envelopes in %s" % near["district"], _crew(c["id"], "collect", near["id"])])
+			if not Game.nyc_warehouse(me).is_empty() and c["task"] != "booze":
+				opts.append(["Run the booze: truck 20 crates a month from our warehouse to the speakeasies", _crew(c["id"], "booze", 20)])
 			opts.append(["Go back to the club", _crew(c["id"], "idle", -1)])
 			opts.append(["Leave", Callable()])
 			_open("Your man", body, opts)
@@ -783,6 +792,8 @@ func _actor_dialog(focus: Dictionary) -> void:
 				["A box of 25 rounds ($%d)" % Game.dealer["ammo"], func() -> void: Net.to_host("gun", ["ammo"]), int(p["wallet"]) >= int(Game.dealer["ammo"])],
 				["A Thompson submachine gun ($%d)%s" % [Game.dealer["tommy"], "" if Game.year() >= 1928 else ", not until 1928"], func() -> void: Net.to_host("gun", ["tommy"]), int(p["wallet"]) >= int(Game.dealer["tommy"])],
 				["Leave", Callable()]])
+		"unionboss":
+			_union_dialog()
 		"smuggler":
 			var left := int(Game.boat.get("crates", 0))
 			var body := "\"Canadian whisky, straight off the boat. $%d a crate, cash. %d left tonight.\"\nCrates go on the pier. You carry them, the truck waits on the quay." % [Game.CRATE_COST, left]
@@ -791,6 +802,85 @@ func _actor_dialog(focus: Dictionary) -> void:
 				["Buy 5 crates ($%d)" % (Game.CRATE_COST * 5), _act("crates", 0, 5), int(p["wallet"]) >= Game.CRATE_COST * 5 and left >= 5],
 				["Buy 10 crates ($%d)" % (Game.CRATE_COST * 10), _act("crates", 0, 10), int(p["wallet"]) >= Game.CRATE_COST * 10 and left >= 10],
 				["Leave", Callable()]])
+
+
+## The warehouses on the West St. quay: yours (stock, the truck, the booze run), a rival's, or for sale.
+func _warehouse_dialog(b: Dictionary) -> void:
+	var me := _my_family()
+	var f := Game.fam(me)
+	var own := int(b["owned_by"])
+	var door := Vector3(b["door"][0], 0, b["door"][1])
+	var carrying: bool = world.local_actor != null and world.local_actor.carrying
+	var opts := []
+	var body := "[color=#9b907c]%s · the Waterfront[/color]\n" % b.get("address", "West St.")
+	if own == me:
+		var have := Syndicate.stock(Game.nation, "nyc", me)
+		body += "[b]Your warehouse.[/b] %d crates on the pallets (it holds %d).\nConvoys landing in New York unload here. Your speakeasies sell what you bring them: park the truck at the door and load it, or put a man on the booze run." % [have, Syndicate.WAREHOUSE_CAP]
+		var truck: Vehicle = world.parked_truck(me, door, 9.0)
+		if truck:
+			body += "\nThe truck is at the door with %d crates in the back." % truck.load
+		else:
+			body += "\n[color=#9b907c]The truck isn't here. Park it at the door to load it.[/color]"
+		var runners := Game.crew.filter(func(c: Dictionary) -> bool: return c["family"] == me and c["state"] == "free" and c["task"] == "booze")
+		for c in runners:
+			body += "\n%s is on the booze run: %d crates a month to your speakeasies." % [c["name"], int(c.get("booze", 20))]
+		opts.append(["Load the truck (up to %d crates)" % Vehicle.MAX_LOAD, _act("wh_load", b["id"]), truck != null and truck.load < Vehicle.MAX_LOAD and have > 0])
+		opts.append(["Stack the truck's crates in the warehouse", _act("wh_store", b["id"]), carrying or (truck != null and truck.load > 0)])
+		var free := Game.crew_of(me).filter(func(c: Dictionary) -> bool: return c["task"] != "booze")
+		if not free.is_empty():
+			var c0: Dictionary = free[0]
+			opts.append(["Put %s on the booze run (20 crates a month)" % c0["name"], _crew(c0["id"], "booze", 20)])
+		for c in runners:
+			opts.append(["Take %s off the booze run" % c["name"], _crew(c["id"], "idle", -1)])
+		opts.append(["The supply ledger (Tab)", func() -> void:
+			close_dialog()
+			_fam_tab = "supply"
+			toggle_family()])
+	elif own >= 0:
+		var n := Syndicate.stock(Game.nation, "nyc", own)
+		body += "The [b]%s[/b] family's warehouse. A watchman on an upturned crate, %d crates on the pallets by the door." % [Game.fam(own)["name"], n]
+		opts.append(["Help yourself to a crate (the watchman will talk)", _act("wh_steal", b["id"]), n > 0 and not carrying])
+	else:
+		var price := int(b["value"] * (1.0 if int(b["protector"]) == me else 1.25))
+		body += "Empty bays, a freight elevator and a watchman who sleeps. %s wants out of the lease.\nBuy it and it's your family's warehouse on the quay: convoys landing in New York fill it (it holds %d crates), and you truck them to your speakeasies." % [String(b["owner_name"]).capitalize(), Syndicate.WAREHOUSE_CAP]
+		if Syndicate.has_wh(Game.nation, "nyc", me):
+			body += "\n[color=#9b907c]You already have a warehouse on the quay; this would be a second building.[/color]"
+		opts.append(["Buy the warehouse ($%s clean)" % _money(price), _act("buy", b["id"]), int(f["clean"]) >= price])
+		var prot := int(b["protector"])
+		if prot != me:
+			opts.append(["Offer the watchman protection ($%d a month)" % b["rate"] if prot < 0 else "Tell the watchman he pays you now, not the %s family" % Game.fam(prot)["name"], _act("pitch", b["id"])])
+	opts.append(["Leave", Callable()])
+	_open(b["name"], body, opts)
+
+
+## Red Mulrooney, hiring boss of the longshoremen's local on the West St. piers.
+func _union_dialog() -> void:
+	var me := _my_family()
+	var f := Game.fam(me)
+	var n: Dictionary = Game.nation
+	var cur := int(n["cities"]["nyc"]["docks"])
+	var price := Syndicate.union_price(n, "nyc", me)
+	var wage := Syndicate.union_wage("nyc")
+	var body := "[b]%s[/b], hiring boss of Longshoremen's Local %s. Every morning at seven he picks who works the West St. piers, and whose cargo comes off the boats first.\n" % [Game.UNION_BOSS, Game.UNION_LOCAL]
+	if cur == me:
+		body += "The local is on your payroll ($%d a month): your boats unload fast, the inspectors look at the sky, and other families' boats wait their turn, or turn back." % wage
+	elif cur >= 0:
+		body += "\"The %s family looks after the local. You want to look after us better, that's a conversation.\"" % Game.fam(cur)["name"]
+	else:
+		body += "\"Nobody looks after the local. That's a shame, for a man with boats coming in.\""
+	body += "\n[color=#9b907c]Boats landing at docks you own carry half again as much at half the risk.[/color]"
+	var opts := []
+	if cur != me:
+		opts.append(["Put the local on the payroll ($%s from the stash, then $%d a month)" % [_money(price), wage], _act("union_pay", 0), int(f["dirty"]) >= price])
+	var rp := Syndicate.river_price(n, "nyc", me)
+	for o in Game.families:
+		if o["id"] == me or not o["alive"]:
+			continue
+		var pending: bool = n["sabotage"].has(str(o["id"]))
+		opts.append(["Have the %s family's next shipment \"dropped in the river\" ($%s)%s" % [o["name"], _money(rp), "  (already arranged)" if pending else ""],
+			_act("union_drop", o["id"]), int(f["dirty"]) >= rp and not pending])
+	opts.append(["Leave", Callable()])
+	_open("The shape-up, West St.", body, opts)
 
 
 func _crew(id: int, task: String, target: int) -> Callable:
@@ -876,8 +966,9 @@ func _fill_family() -> void:
 			for c in Game.crew.filter(func(x: Dictionary) -> bool: return x["family"] == me and x["state"] in ["free", "jailed"]):
 				var row := HBoxContainer.new()
 				row.add_theme_constant_override("separation", 10)
+				var task := "booze run, %d/mo" % int(c.get("booze", 20)) if c["task"] == "booze" else String(c["task"])
 				var info := _label("%s · %s · loyalty %d · $%d/mo · %s" % [c["name"], c["rank"], c["loyalty"], c["wage"],
-					"in prison until %s" % Game.date_text(int(c["jail_until"])) if c["state"] == "jailed" else c["task"]], 18,
+					"in prison until %s" % Game.date_text(int(c["jail_until"])) if c["state"] == "jailed" else task], 18,
 					RED if c["loyalty"] < 40 or c["state"] == "jailed" else INK, sans)
 				info.custom_minimum_size = Vector2(560, 0)
 				row.add_child(info)
@@ -893,6 +984,12 @@ func _fill_family() -> void:
 						b2.text = "COLLECT HERE"
 						b2.pressed.connect(_crew(c["id"], "collect", near["id"]))
 						row.add_child(b2)
+					if not Game.nyc_warehouse(me).is_empty() and c["task"] != "booze":
+						var b3 := Button.new()
+						b3.text = "BOOZE RUN"
+						b3.tooltip_text = "Truck 20 crates a month from your warehouse on the quay to your speakeasies"
+						b3.pressed.connect(_crew(c["id"], "booze", 20))
+						row.add_child(b3)
 				_fam_body.add_child(row)
 			if Game.crew_of(me).is_empty():
 				_fam_body.add_child(_label("No men. Hire muscle outside the pool halls.", 18, MUTE))
@@ -918,12 +1015,14 @@ func _fill_family() -> void:
 			var cops := Game.cops.filter(func(c: Dictionary) -> bool: return c["payroll"] == me)
 			_fam_body.add_child(_label("On the payroll: %d patrolmen%s" % [cops.size(),
 				", captains in " + ", ".join(Game.captains.keys().filter(func(d) -> bool: return Game.captains[d] == me)) if Game.captains.values().has(me) else ""], 18, MUTE))
+		"supply":
+			_fill_supply(f, me)
 		"case":
 			_fam_body.add_child(_label("What the Bureau has on the %s family · heat %d" % [f["name"], int(f["heat"])], 28, INK, serif))
 			_fam_body.add_child(_label("At 100 the feds raid you. Everything here fades with time, unless you make it disappear first.", 17, MUTE, sans))
 			var how := {"witness": "Visit him (E at his shop): pay or scare him.", "street": "Street talk. It fades fast; a precinct captain on the payroll makes it fade faster.",
 				"cop": "Put that patrolman on the payroll and his notebook disappears.", "weapon": "Throw the gun in the river at the end of a pier.",
-				"ledger": "Burn the books at your club.", "body": "", "informant": "", "file": ""}
+				"ledger": "Burn the books at your club.", "body": "", "informant": "", "file": "A brewery or still you run. Buying the city's police slows the raids; it fades once the plant is gone."}
 			var items: Array = (f["evidence"] as Array).duplicate()
 			items.sort_custom(func(a, b) -> bool: return float(a["w"]) > float(b["w"]))
 			for e in items:
@@ -998,8 +1097,9 @@ func _fill_family() -> void:
 		"books":
 			_fam_body.add_child(_label("The books · last month", 28, INK, serif))
 			var inc: Dictionary = f.get("income", {})
-			for k in [["protection", "Protection money (after the collector's cut)"], ["speakeasy", "Speakeasy sales"], ["legit", "Legitimate profit (clean)"],
-					["laundered", "Laundered through fronts"], ["wages", "Wages paid"], ["payroll", "Cops and captains"], ["support", "Families of men inside"]]:
+			for k in [["protection", "Protection money (after the collector's cut)"], ["speakeasy", "Speakeasy sales"], ["wholesale", "Wholesale: warehouses and dumped crates"],
+					["legit", "Legitimate profit (clean)"], ["laundered", "Laundered through fronts"], ["wages", "Wages paid"], ["payroll", "Cops and captains"],
+					["support", "Families of men inside"], ["convoys", "Convoys (paid at the source)"], ["supply", "The union, brewing and freight"]]:
 				_fam_body.add_child(_label("%s: $%s" % [k[1], _money(int(inc.get(k[0], 0)))], 19, INK, sans))
 			_fam_body.add_child(_label("Laundering capacity: $%s a month · Heat %d · Reputation %d" % [_money(Game.laundering_capacity(me)), int(f["heat"]), int(f["rep"])], 19, MUTE, sans))
 			var t2 := CheckButton.new()
@@ -1012,6 +1112,168 @@ func _fill_family() -> void:
 			ranks.sort_custom(func(a, b) -> bool: return Game.legacy(a["id"]) > Game.legacy(b["id"]))
 			for o in ranks:
 				_fam_body.add_child(_label("%s  %s" % [o["name"], _money(Game.legacy(o["id"]))], 18, Color(o["color"]).lightened(0.3), sans))
+
+
+# ------------------------------------------------------------------ the supply ledger
+
+func _nbtn(parent: Control, text: String, args: Array, enabled: bool = true, tip: String = "") -> void:
+	var b := Button.new()
+	b.text = text
+	b.disabled = not enabled
+	b.tooltip_text = tip
+	b.pressed.connect(func() -> void: Net.to_host("nation", args))
+	parent.add_child(b)
+
+
+func _owner_txt(id: int, me: int) -> String:
+	if id < 0:
+		return "nobody"
+	if id == me:
+		return "YOURS"
+	return "the %s family" % Game.fam(id).get("name", "?")
+
+
+func _fill_supply(f: Dictionary, me: int) -> void:
+	var n: Dictionary = Game.nation
+	var clean := int(f["clean"])
+	var dirty := int(f["dirty"])
+	_fam_body.add_child(_label("Supply · docks, warehouses, breweries, freight", 28, INK, serif))
+	var intro := _label("Crates landing in a city go into your warehouse there and sell over the months at $%d, up to your share of the city's thirst. Without a warehouse they're dumped at half price. Freight moves crates by rail between your own warehouses." % int(Syndicate.wholesale(Game)), 16, MUTE, sans)
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	intro.custom_minimum_size = Vector2(900, 0)
+	_fam_body.add_child(intro)
+	# New York, in person
+	var wh := Game.nyc_warehouse(me)
+	var nyc: Dictionary = n["cities"]["nyc"]
+	var t := "NEW YORK  ·  "
+	if wh.is_empty():
+		t += "no warehouse: buy one of the two on the West St. quay (E at the door)"
+	else:
+		var speaks := Game.owned_by(me).filter(func(b: Dictionary) -> bool: return b["speak"])
+		var in_cellars := 0
+		for b in speaks:
+			in_cellars += int(b["stock"])
+		var runners := Game.crew.filter(func(c: Dictionary) -> bool: return c["family"] == me and c["state"] == "free" and c["task"] == "booze")
+		t += "%s, %s: %d crates · %d speakeasies hold %d · booze run: %s" % [wh["name"], wh.get("address", "West St."), Syndicate.stock(n, "nyc", me),
+			speaks.size(), in_cellars, ", ".join(runners.map(func(c: Dictionary) -> String: return "%s %d/mo" % [c["name"], int(c.get("booze", 20))])) if not runners.is_empty() else "nobody"]
+	var nl := _label(t, 18, GOLD2, cond)
+	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nl.custom_minimum_size = Vector2(900, 0)
+	_fam_body.add_child(nl)
+	var nrow := HFlowContainer.new()
+	nrow.add_theme_constant_override("h_separation", 6)
+	nrow.add_child(_label("Docks (the West St. local): %s%s   " % [_owner_txt(int(nyc["docks"]), me), "" if int(nyc["docks"]) == me else ", see %s on the quay" % Game.UNION_BOSS], 16, INK, sans))
+	_site_buttons(nrow, "nyc", me, clean, dirty)
+	_fam_body.add_child(nrow)
+	if not wh.is_empty():
+		var free := Game.crew_of(me).filter(func(c: Dictionary) -> bool: return c["task"] != "booze")
+		var brow := HFlowContainer.new()
+		brow.add_theme_constant_override("h_separation", 6)
+		for c in Game.crew.filter(func(x: Dictionary) -> bool: return x["family"] == me and x["state"] == "free" and x["task"] == "booze"):
+			brow.add_child(_label("%s: " % c["name"], 16, INK, sans))
+			for amt in [10, 20, 40]:
+				var bb := Button.new()
+				bb.text = "%d/MO" % amt
+				bb.disabled = int(c.get("booze", 20)) == amt
+				bb.pressed.connect(_crew(c["id"], "booze", amt))
+				brow.add_child(bb)
+			var off := Button.new()
+			off.text = "OFF THE RUN"
+			off.pressed.connect(_crew(c["id"], "idle", -1))
+			brow.add_child(off)
+		if not free.is_empty():
+			var add := Button.new()
+			add.text = "PUT %s ON THE BOOZE RUN" % String(free[0]["name"]).to_upper()
+			add.pressed.connect(_crew(free[0]["id"], "booze", 20))
+			brow.add_child(add)
+		_fam_body.add_child(brow)
+	# the other cities
+	_fam_body.add_child(_label("The other cities", 24, INK, serif))
+	for c in Syndicate.CITIES:
+		var id: String = c["id"]
+		if id == "nyc":
+			continue
+		var cs: Dictionary = n["cities"][id]
+		var line := "%s · thirst %d a month" % [String(c["name"]).to_upper(), int(c["demand"])]
+		if Syndicate.has_wh(n, id, me):
+			line += " · WAREHOUSE %d crates, sold %d last month (sells up to %d)" % [Syndicate.stock(n, id, me), int(cs["sold"].get(str(me), 0)), Syndicate.sell_cap(n, id, me)]
+		else:
+			line += " · no warehouse (you'd sell up to %d a month)" % Syndicate.sell_cap(n, id, me)
+		var bits := []
+		if String(c["plant"]) != "":
+			var closed := "" if int(cs["plant_closed"]) < Game.month else " (padlocked)"
+			bits.append("%s: %s%s" % [c["plant"], _owner_txt(int(cs["plant"]), me), closed])
+		if String(c["port"]) != "":
+			bits.append("docks: %s" % _owner_txt(int(cs["docks"]), me))
+		if bool(c["yard"]):
+			bits.append("rail yard: %s" % _owner_txt(int(cs["yard"]), me))
+		var head := _label(line, 17, INK if Syndicate.has_wh(n, id, me) else MUTE, sans)
+		head.custom_minimum_size = Vector2(900, 0)
+		head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_fam_body.add_child(head)
+		var row := HFlowContainer.new()
+		row.add_theme_constant_override("h_separation", 6)
+		if not bits.is_empty():
+			row.add_child(_label("   " + " · ".join(bits) + "   ", 15, MUTE, sans))
+		_site_buttons(row, id, me, clean, dirty)
+		_fam_body.add_child(row)
+	# freight
+	_fam_body.add_child(_label("Freight by rail", 24, INK, serif))
+	var mine := (n["freight"] as Array).filter(func(o: Dictionary) -> bool: return int(o["fam"]) == me)
+	for o in mine:
+		var r := Syndicate.rail_def(o["line"])
+		var risk := Syndicate.freight_risk(n, o["line"], me, float(f["heat"]))
+		var row2 := HFlowContainer.new()
+		row2.add_theme_constant_override("h_separation", 6)
+		row2.add_child(_label("%s → %s on the %s: %d crates a month · $%d a crate · %s · last month: %s   " % [Syndicate.cname(o["from"]), Syndicate.cname(o["to"]),
+			r.get("name", "?"), int(o["crates"]), Syndicate.freight_cost(o["line"], o["from"], o["to"]), "safe (your yard)" if risk <= 0.0 else "%d%% risk" % int(risk * 100),
+			o["last"] if String(o["last"]) != "" else "not yet"], 16, INK, sans))
+		_nbtn(row2, "+10", ["freight", o["line"], o["from"], o["to"], int(o["crates"]) + 10])
+		_nbtn(row2, "-10", ["freight", o["line"], o["from"], o["to"], maxi(0, int(o["crates"]) - 10)])
+		_nbtn(row2, "STOP", ["freight", o["line"], o["from"], o["to"], 0])
+		_fam_body.add_child(row2)
+	var whs := Syndicate.warehouses_of(n, me)
+	var offers := HFlowContainer.new()
+	offers.add_theme_constant_override("h_separation", 6)
+	for r in Syndicate.RAILS:
+		for a in whs:
+			for b in whs:
+				if a == b or a not in r["stops"] or b not in r["stops"]:
+					continue
+				if mine.any(func(o: Dictionary) -> bool: return o["line"] == r["id"] and o["from"] == a and o["to"] == b):
+					continue
+				_nbtn(offers, "SHIP 20/MO %s → %s" % [Syndicate.cname(a).to_upper(), Syndicate.cname(b).to_upper()], ["freight", r["id"], a, b, 20], true,
+					"%s, $%d a crate" % [r["name"], Syndicate.freight_cost(r["id"], a, b)])
+	if offers.get_child_count() > 0:
+		_fam_body.add_child(offers)
+	elif mine.is_empty():
+		_fam_body.add_child(_label("Freight runs between two of your warehouses on the same line (New York Central, Pennsylvania, Illinois Central...). Buy a second warehouse.", 16, MUTE, sans))
+	# what happened last month
+	var log: Array = n.get("supply", {}).get(str(me), [])
+	if not log.is_empty():
+		_fam_body.add_child(_label("Last month", 24, INK, serif))
+		for l in log.slice(0, 14):
+			_fam_body.add_child(_label("·  " + String(l), 16, INK, sans))
+
+
+## Buttons to take a city's sites: warehouse, brewery/still, union, yard.
+func _site_buttons(row: Control, id: String, me: int, clean: int, dirty: int) -> void:
+	var n: Dictionary = Game.nation
+	var c := Syndicate.city_def(id)
+	var cs: Dictionary = n["cities"][id]
+	if id != "nyc" and not Syndicate.has_wh(n, id, me):
+		var wp := Syndicate.warehouse_price(id)
+		_nbtn(row, "WAREHOUSE $%s CLEAN" % _money(wp), ["warehouse", id], clean >= wp)
+	if String(c.get("plant", "")) != "" and int(cs["plant"]) < 0:
+		var pp := Syndicate.plant_price(id)
+		_nbtn(row, "%s $%s CLEAN" % [String(c["plant"]).to_upper(), _money(pp)], ["plant", id], clean >= pp,
+			"%d crates a month at $%d each, into your warehouse there" % [Syndicate.PLANT_OUT[c["plant"]], Syndicate.PLANT_COST])
+	if id != "nyc" and String(c.get("port", "")) != "" and int(cs["docks"]) != me:
+		var up := Syndicate.union_price(n, id, me)
+		_nbtn(row, "UNION LOCAL $%s" % _money(up), ["union", id], dirty >= up, "%s: $%d a month after" % [c["port"], Syndicate.union_wage(id)])
+	if bool(c.get("yard", false)) and int(cs["yard"]) != me:
+		var yp := Syndicate.yard_price(n, id, me)
+		_nbtn(row, "YARDMASTER $%s" % _money(yp), ["yard", id], dirty >= yp, "Your freight on lines through %s moves safely" % c["name"])
 
 
 # ------------------------------------------------------------------ newspaper, end

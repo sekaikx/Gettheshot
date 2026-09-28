@@ -11,7 +11,7 @@ const SPRINT := 5.6
 
 var world: Node          # World
 var key := ""
-var kind := ""           # boss, crew, cop, ped, recruit, aiboss
+var kind := ""           # boss, crew, cop, ped, recruit, aiboss, smuggler, dealer, unionboss, docker
 var family := -1
 var ref_id := -1
 var person: Person
@@ -45,6 +45,10 @@ var order: Dictionary = {}
 var last_attacker: Actor = null
 var last_attacked_t := 0.0
 var talk_t := 0.0
+var route: Array = []    # longshoremen: a loop of points (pier, quay edge, the pile, quay edge)
+var route_i := 0
+var _stuck_t := 0.0
+var _stuck_at := Vector3.ZERO
 
 # network smoothing
 var net_pos := Vector3.ZERO
@@ -137,7 +141,7 @@ func _anim_for_speed() -> int:
 		return Person.Anim.RUN
 	if speed > 0.2:
 		return Person.Anim.WALK
-	if kind == "recruit":
+	if kind in ["recruit", "unionboss"] or (kind == "docker" and route.is_empty()):
 		return Person.Anim.ARMS
 	if kind == "aiboss":
 		return Person.Anim.TALK
@@ -242,7 +246,8 @@ func think(delta: float) -> void:
 		"ped": _think_ped(delta)
 		"cop": _think_cop(delta)
 		"crew": _think_crew(delta)
-		"recruit", "aiboss": _think_stand(delta)
+		"recruit", "aiboss", "unionboss": _think_stand(delta)
+		"docker": _think_docker(delta)
 		_: velocity = Vector3.ZERO
 
 
@@ -341,6 +346,46 @@ func _think_cop(delta: float) -> void:
 	_follow_path(WALK * 0.9)
 
 
+## A longshoreman's day: take a crate off the boat at the pier, carry it to the pile on the quay,
+## go back for the next one. The two at the shape-up just wait to be picked.
+func _think_docker(delta: float) -> void:
+	if scared_t > 0.0:
+		scared_t -= delta
+		var away := position - scared_from
+		away.y = 0.0
+		velocity = (away.normalized() if away.length() > 0.1 else Vector3.FORWARD) * RUN
+		return
+	if route.is_empty():
+		_think_stand(delta)
+		return
+	if wait_t > 0.0:
+		wait_t -= delta
+		velocity = Vector3.ZERO
+		return
+	var t: Vector3 = route[route_i % route.size()]
+	var to := Vector3(t.x - position.x, 0, t.z - position.z)
+	if to.length() < 0.55:
+		velocity = Vector3.ZERO
+		if route_i % route.size() == 0 and not carrying:
+			set_carry(true)                 # off the boat
+			wait_t = randf_range(1.2, 2.6)
+		elif route_i % route.size() == 2 and carrying:
+			set_carry(false)                # onto the pile
+			wait_t = randf_range(0.8, 2.0)
+			talk_t = wait_t if randf() < 0.3 else 0.0
+		route_i = (route_i + 1) % route.size()
+		_stuck_t = 0.0
+		return
+	velocity = to.normalized() * (WALK * 0.95 if carrying else WALK * 1.15)
+	# walked into a stack of crates: skip ahead rather than push at it all day
+	_stuck_t += delta
+	if _stuck_t > 2.5:
+		if position.distance_to(_stuck_at) < 0.6:
+			route_i = (route_i + 1) % route.size()
+		_stuck_t = 0.0
+		_stuck_at = position
+
+
 func _think_stand(_delta: float) -> void:
 	var to := home - position
 	to.y = 0.0
@@ -406,6 +451,13 @@ func _think_crew(delta: float) -> void:
 				_go_home_idle()
 				return
 			_stand_at(Vector3(b["door"][0], 0, b["door"][1]) + world.guard_offset(ref_id), float(b["yaw"]))
+		"booze":
+			var wh := Game.nyc_warehouse(family)
+			if wh.is_empty():
+				_go_home_idle()
+				return
+			var basis := Basis(Vector3.UP, float(wh["yaw"]))
+			_stand_at(Vector3(wh["door"][0], 0, wh["door"][1]) + basis * Vector3(1.4 + (ref_id % 3) * 0.7, 0, 0.9), float(wh["yaw"]))
 		"collect":
 			if path_i >= path.size():
 				var shops := Game.shops_of(family).filter(func(x: Dictionary) -> bool:

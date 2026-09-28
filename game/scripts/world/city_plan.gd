@@ -18,6 +18,11 @@ const PIER_LEN := 26.0
 const DISTRICTS := ["Hell's Kitchen", "Garment District", "Little Italy", "Lower East Side",
 	"Waterfront"]
 
+## Street names, Lower Manhattan style. N-S streets run along x = i * PITCH (west to east, the
+## last one is West St. on the waterfront); E-W streets along z = j * PITCH (north to south).
+const NS_STREETS := ["Mulberry St.", "Mott St.", "Bowery", "Eldridge St.", "Orchard St.", "Essex St.", "West St."]
+const EW_STREETS := ["Houston St.", "Prince St.", "Broome St.", "Grand St.", "Canal St."]
+
 const SHOP_KINDS := ["bakery", "butcher", "grocer", "tailor", "barber", "cobbler", "pawnshop",
 	"laundry", "restaurant", "cafe", "candy", "hardware", "drugstore", "cigar"]
 
@@ -53,6 +58,40 @@ func district_at(x: float, z: float) -> String:
 	var i := clampi(int(floor(x / PITCH)), 0, NX - 1)
 	var j := clampi(int(floor(z / PITCH)), 0, NZ - 1)
 	return district_of(i, j)
+
+
+## The street nearest a point (x east, z south): the N-S or E-W line it's closest to. The quay
+## and the piers are West St.
+func street_name_at(x: float, z: float) -> String:
+	if x > NX * PITCH + STREET * 0.5:
+		return NS_STREETS[NX]
+	var i := clampi(roundi(x / PITCH), 0, NX)
+	var j := clampi(roundi(z / PITCH), 0, NZ)
+	if absf(x - i * PITCH) <= absf(z - j * PITCH):
+		return NS_STREETS[i]
+	return EW_STREETS[j]
+
+
+## "Mulberry St. & Grand St." for the crossing nearest a point.
+func corner_at(x: float, z: float) -> String:
+	var i := clampi(roundi(x / PITCH), 0, NX)
+	var j := clampi(roundi(z / PITCH), 0, NZ)
+	return "%s & %s" % [NS_STREETS[i].replace(" St.", ""), EW_STREETS[j]]
+
+
+## A street address for a door: house numbers climb away from Houston St. and from Mulberry St.,
+## odd on one side of the street, even on the other.
+func address_at(x: float, z: float) -> String:
+	var i := clampi(roundi(x / PITCH), 0, NX)
+	var j := clampi(roundi(z / PITCH), 0, NZ)
+	var dx := x - i * PITCH
+	var dz := z - j * PITCH
+	var ns := x > NX * PITCH + STREET * 0.5 or absf(dx) <= absf(dz)
+	var along := z if ns else x
+	var num := 2 + int(maxf(0.0, along + STREET) / 2.4) * 2
+	if (dx if ns else dz) > 0.0:
+		num += 1
+	return "%d %s" % [num, street_name_at(x, z)]
 
 
 func _build() -> void:
