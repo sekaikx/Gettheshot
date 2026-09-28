@@ -20,8 +20,9 @@ func setup(w: Node2D) -> void:
 	layer = W.LAYER_WEATHER
 	_fog = TextureRect.new()
 	var noise := FastNoiseLite.new()
-	noise.frequency = 0.004
-	noise.fractal_octaves = 3
+	noise.frequency = 0.0025
+	noise.fractal_octaves = 4
+	noise.fractal_gain = 0.45
 	var nt := NoiseTexture2D.new()
 	nt.noise = noise
 	nt.width = 512
@@ -66,9 +67,9 @@ func _process(delta: float) -> void:
 	_t += delta
 	var fog_a := 0.0
 	if kind == "fog":
-		fog_a = 0.32
+		fog_a = 0.2
 	elif kind == "rain":
-		fog_a = 0.1
+		fog_a = 0.06
 	_fog.modulate.a = lerpf(_fog.modulate.a, fog_a * lerpf(1.0, 0.7, night), clampf(delta, 0.0, 1.0))
 	_fog.modulate = Color(Color(0.82, 0.84, 0.9).lerp(Color(0.25, 0.28, 0.4), night), _fog.modulate.a)
 	if _fog.modulate.a > 0.01:

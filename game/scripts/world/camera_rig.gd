@@ -8,7 +8,7 @@ const ZOOM_MIN := 0.45
 const ZOOM_MAX := 1.7
 
 var target: Node2D
-var user_zoom := 1.0
+var user_zoom := 1.15
 var inside := false
 var _shake := 0.0
 var _focus := Vector2.ZERO

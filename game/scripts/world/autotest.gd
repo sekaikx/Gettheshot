@@ -99,6 +99,7 @@ func _ready() -> void:
 			_checks["union_talk"] = world.hud.is_modal()],
 		[17.0, func() -> void: _shot("union")],
 		[17.2, func() -> void:
+			world.hud.close_conversation()
 			Game.fam(0)["dirty"] += 3000
 			Net.to_host("act", ["union_pay", 0, 0])
 			var pier: Dictionary = world.plan.piers[1]
