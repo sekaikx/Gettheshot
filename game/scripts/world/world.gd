@@ -131,28 +131,46 @@ func _environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("10131a")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("8a93a8")
+	env.ambient_light_color = Color("9a948a")
 	env.ambient_light_energy = 0.55
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_BG
+	# a warm, slightly faded print: filmic curve, lifted sepia shadows, creamy highlights
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = 1.0
+	env.tonemap_white = 6.0
 	env.glow_enabled = true
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.08
+	env.glow_intensity = 0.55
+	env.glow_strength = 1.0
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 0.9
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.fog_enabled = true
-	env.fog_light_color = Color("3a3f4a")
-	env.fog_density = 0.004
+	env.fog_light_color = Color("8f8778")
+	env.fog_density = 0.005
+	env.fog_sky_affect = 0.6
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 0.8
-	env.adjustment_contrast = 1.14
+	env.adjustment_brightness = 1.0
+	env.adjustment_saturation = 0.78
+	env.adjustment_contrast = 1.06
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.18, 0.5, 0.82, 1.0])
+	g.colors = PackedColorArray([Color(0.03, 0.03, 0.04), Color(0.175, 0.175, 0.185), Color(0.5, 0.5, 0.49),
+		Color(0.83, 0.82, 0.78), Color(1.0, 0.975, 0.92)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	gt.width = 256
+	env.adjustment_color_correction = gt
 	env.ssao_enabled = true
-	env.ssao_radius = 1.5
-	env.ssao_intensity = 1.2
+	env.ssao_radius = 1.2
+	env.ssao_intensity = 1.6
+	env.ssao_power = 1.3
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 90.0
-	sun.shadow_blur = 1.5
+	sun.shadow_blur = 1.2
+	sun.light_angular_distance = 0.6
 	add_child(sun)
 	rain = GPUParticles3D.new()
 	var pm := ParticleProcessMaterial.new()
@@ -165,15 +183,15 @@ func _environment() -> void:
 	pm.gravity = Vector3(0, -10, 0)
 	rain.process_material = pm
 	var drop := QuadMesh.new()
-	drop.size = Vector2(0.03, 0.7)
+	drop.size = Vector2(0.025, 0.8)
 	var dm := StandardMaterial3D.new()
-	dm.albedo_color = Color(0.7, 0.75, 0.85, 0.35)
+	dm.albedo_color = Color(0.75, 0.78, 0.82, 0.28)
 	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	dm.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	drop.material = dm
 	rain.draw_pass_1 = drop
-	rain.amount = 2500
+	rain.amount = 3000
 	rain.lifetime = 1.2
 	rain.visibility_aabb = AABB(Vector3(-40, -40, -40), Vector3(80, 80, 80))
 	rain.emitting = false
@@ -186,17 +204,26 @@ func _day_light() -> void:
 	var sun_up := sin(t * TAU)                    # 1 at noon, -1 at midnight
 	var night := clampf(0.5 - sun_up * 0.9, 0.0, 1.0)
 	var dusk := clampf(1.0 - absf(sun_up) * 3.0, 0.0, 1.0)
-	var elev := lerpf(-20.0, -62.0, clampf(sun_up, 0.0, 1.0))
-	sun.rotation_degrees = Vector3(elev if sun_up > 0.0 else -35.0, 35.0 + t * 200.0, 0)
-	var day_col := Color("fff1dc").lerp(Color("ffb070"), dusk)
-	sun.light_color = day_col.lerp(Color("8fa8ff"), night)
-	sun.light_energy = lerpf(1.2, 0.32, night)
-	env.ambient_light_color = Color("aab0c0").lerp(Color("5a6a90"), night)
-	env.ambient_light_energy = lerpf(0.55, 0.5, night)
-	env.background_color = Color("9fb0c4").lerp(Color("0b0e16"), night)
-	env.fog_light_color = Color("8a8f98").lerp(Color("1c2230"), night)
 	var wet := 1.0 if weather == "rain" else 0.0
-	env.fog_density = 0.004 + (0.008 if weather == "fog" else 0.0) + wet * 0.003
+	var fog := 1.0 if weather == "fog" else 0.0
+	var overcast := maxf(wet, fog * 0.8)
+	# the sun by day; by night a high, cold moon that still casts soft shadows
+	var elev := lerpf(-22.0, -60.0, clampf(sun_up, 0.0, 1.0))
+	sun.rotation_degrees = Vector3(elev if sun_up > 0.0 else -52.0, 35.0 + t * 200.0 if sun_up > 0.0 else 150.0, 0)
+	var day_col := Color("fff0da").lerp(Color("ffa060"), dusk)
+	sun.light_color = day_col.lerp(Color("8ea6e8"), night)
+	sun.light_energy = lerpf(1.3, 0.3, night) * lerpf(1.0, 0.45, overcast)
+	sun.shadow_opacity = lerpf(1.0, 0.55, maxf(night, overcast))
+	var amb_day := Color("98a0ae").lerp(Color("a88878"), dusk * 0.6)
+	env.ambient_light_color = amb_day.lerp(Color("5a6a94"), night).lerp(Color("8a8c90"), overcast * (1.0 - night) * 0.5)
+	env.ambient_light_energy = lerpf(0.6, 0.5, night) + overcast * 0.15 * (1.0 - night)
+	var sky := Color("a9b3bd").lerp(Color("d7a278"), dusk * 0.7)
+	env.background_color = sky.lerp(Color("070a12"), night).lerp(Color("7e8084"), overcast * (1.0 - night) * 0.6)
+	env.fog_light_color = Color("8e8a84").lerp(Color("b08868"), dusk * 0.5).lerp(Color("161c2a"), night).lerp(Color("8a8c8e"), fog * (1.0 - night * 0.7))
+	env.fog_density = 0.0045 + fog * 0.013 + wet * 0.005 + night * 0.002
+	env.adjustment_saturation = lerpf(0.9, 0.8, night) - overcast * 0.15
+	env.tonemap_exposure = lerpf(1.0, 1.45, night)
+	env.glow_intensity = lerpf(0.35, 0.9, night) + wet * 0.2
 	city.set_night(night, wet)
 	for v in vehicles.values():
 		(v as Vehicle).set_night(night)
@@ -210,31 +237,10 @@ func _boat_here() -> bool:
 
 
 func _boat() -> void:
-	boat = Node3D.new()
+	# the rum-runner: a long grey launch, loaded to the gunwales, tied up off the middle pier
+	boat = city.make_rum_runner()
 	var tip: Array = plan.piers[1]["tip"]
-	boat.position = Vector3(tip[0] + 8.0, -0.6, tip[1])
-	var hull := StandardMaterial3D.new()
-	hull.albedo_color = Color("2a2522")
-	var deck := StandardMaterial3D.new()
-	deck.albedo_texture = load("res://assets/textures/planks_albedo.jpg")
-	deck.albedo_color = Color(0.6, 0.5, 0.4)
-	var cabin := StandardMaterial3D.new()
-	cabin.albedo_color = Color("d8d0bc")
-	for part in [[Vector3(4.5, 1.4, 13.0), Vector3(0, 0.3, 0), hull], [Vector3(4.2, 0.1, 12.4), Vector3(0, 1.05, 0), deck],
-			[Vector3(2.8, 2.0, 3.6), Vector3(0, 2.1, 2.5), cabin], [Vector3(0.3, 3.0, 0.3), Vector3(0, 3.5, -2.0), hull]]:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = part[0]
-		mi.mesh = bm
-		mi.position = part[1]
-		mi.material_override = part[2]
-		boat.add_child(mi)
-	var lantern := OmniLight3D.new()
-	lantern.light_color = Color("ffb060")
-	lantern.omni_range = 9.0
-	lantern.light_energy = 2.0
-	lantern.position = Vector3(0, 3.4, 0)
-	boat.add_child(lantern)
+	boat.position = Vector3(tip[0] + 5.4, -0.95, tip[1])
 	add_child(boat)
 
 
