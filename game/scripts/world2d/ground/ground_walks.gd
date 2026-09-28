@@ -69,6 +69,9 @@ func paint_block(ci: CanvasItem, b: Dictionary) -> void:
 		_wall_grime(ci, b, b["sides"][s])
 	for s: String in ["N", "S", "W", "E"]:
 		_wear(ci, b["sides"][s], sd)
+	if not b["phantom"]:
+		for s: String in ["N", "S", "W", "E"]:
+			_chalk(ci, b["sides"][s], sd)
 	# the low things
 	for f in b["flats"]:
 		match f["t"]:
@@ -95,7 +98,7 @@ func _edge_normal(q: Vector2, R: Rect2) -> Vector2:
 
 
 ## Two rows of concrete slabs along one side (between the corner squares).
-func _slabs(ci: CanvasItem, b: Dictionary, side: Dictionary, sd: int) -> void:
+func _slabs(ci: CanvasItem, _b: Dictionary, side: Dictionary, sd: int) -> void:
 	var a0 := float(side["a0"]) + SW
 	var a1 := float(side["a1"]) - SW
 	if a1 - a0 < 1.0:
@@ -236,6 +239,48 @@ func _wear(ci: CanvasItem, side: Dictionary, sd: int) -> void:
 			GroundStreets.litter_bit(ci, q, ss + n * 17)
 
 
+## Kids' chalk on the sidewalk in front of the tenements: a hopscotch court.
+func _chalk(ci: CanvasItem, side: Dictionary, sd: int) -> void:
+	var ss := sd + String(side["s"]).unicode_at(0) * 57
+	if GroundUtil.r01(ss, 1) > 0.22:
+		return
+	var homes := []
+	for w in side["walls"]:
+		if w["front"] and not w["lot"]["shop"]:
+			homes.append(w)
+	if homes.is_empty():
+		return
+	var w: Dictionary = homes[GroundUtil.ri(ss, 2, 0, homes.size() - 1)]
+	var door: float = w["door"]
+	var dir := 1.0 if GroundUtil.r01(ss, 3) < 0.5 else -1.0
+	var a0 := door + dir * (GroundLayout.DOOR_CLEAR + 0.3)
+	var rot := GroundLayout.side_rot(side)
+	var chalk := Color(0.95, 0.94, 0.9, 0.55)
+	var f := W.font("fell")
+	# squares 0.45 m along the lane; single, single, double, single, double, home
+	var rows := [1, 1, 2, 1, 2, 1]
+	var num := 1
+	for k in rows.size():
+		var aa := a0 + dir * float(k) * 0.45
+		var ab := aa + dir * 0.45
+		var n: int = rows[k]
+		for q in n:
+			var d0 := 2.1 - 0.25 * float(n) + float(q) * 0.5
+			var p0 := GroundLayout.side_point(side, aa, d0) * M
+			var p1 := GroundLayout.side_point(side, ab, d0 + 0.5) * M
+			var r := Rect2(Vector2(minf(p0.x, p1.x), minf(p0.y, p1.y)), (p1 - p0).abs())
+			ci.draw_rect(r, chalk, false, 1.4, true)
+			var label := str(num) if k < rows.size() - 1 else "H"
+			ci.draw_set_transform(r.get_center(), rot, Vector2.ONE)
+			ci.draw_string(f, Vector2(-3.0, 4.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, chalk)
+			ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			num += 1
+	# a scuffed chalk drawing nearby
+	var c := GroundLayout.side_point(side, a0 + dir * 3.6, 2.1) * M
+	ci.draw_arc(c, 0.22 * M, 0.0, TAU, 16, Color(chalk, 0.35), 1.2, true)
+	ci.draw_line(c + Vector2(-0.3, 0.3) * M, c + Vector2(0.3, -0.25) * M, Color(chalk, 0.3), 1.2, true)
+
+
 # ------------------------------------------------------------------ frontage details (local frames)
 
 func _begin(ci: CanvasItem, f: Dictionary) -> Vector2:
@@ -257,12 +302,12 @@ func stoop(ci: CanvasItem, f: Dictionary) -> void:
 	var d := float(f["d"]) * M
 	var s: int = f["s"]
 	var style: int = f["style"]
-	var stone := Color("7a5645") if style < 2 else Pal.PARAPET_STONE.darkened(0.05)
+	var stone := Color("74503f") if style < 2 else Pal.PARAPET_STONE.darkened(0.16)
 	stone = stone.lightened(GroundUtil.rr(s, 1, -0.05, 0.06))
 	_begin(ci, f)
-	var so := _local_shadow(f, 0.7)
+	var so := _local_shadow(f, 0.9)
 	var body := GroundUtil.rect_pts(Rect2(-w * 0.5, 0, w, d))
-	GroundUtil.shadow_poly(ci, body, so, 1.1)
+	GroundUtil.shadow_poly(ci, body, so, 1.5)
 	ci.draw_colored_polygon(body, stone.darkened(0.12))
 	var cheek := 0.2 * M
 	var steps := 4

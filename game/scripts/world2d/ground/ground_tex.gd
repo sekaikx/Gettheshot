@@ -155,7 +155,7 @@ static func _stones(w: int, h: int, rh: int, min_w: int, max_w: int, pal: Array[
 	var data := PackedByteArray()
 	data.resize(w * h * 4)
 	var rng := W.rng(s)
-	var rows := h / rh
+	var rows := int(float(h) / float(rh))
 	for r in rows:
 		var off := rng.randi_range(0, w - 1)
 		var pos := 0

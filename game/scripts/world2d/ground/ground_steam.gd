@@ -29,11 +29,9 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var k0 := 0
 	var strength := clampf((night - 0.2) / 0.5, 0.0, 1.0) * (0.8 + 0.5 * wet)
 	for v in _on:
 		var p: Vector2 = v
-		k0 += 1
 		var s := int(p.x * 0.37 + p.y * 1.3)
 		for k in 7:
 			var life := 3.2 + Draw.hash01(s, k, 1) * 2.0

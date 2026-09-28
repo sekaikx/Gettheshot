@@ -72,6 +72,10 @@ func plan_quay() -> void:
 	# a lamp at each pier root, on the edge
 	for pr in plan.piers:
 		_lamp(Vector2(xw - 1.1, float(pr["z0"]) - 1.9), true)
+	# a lifebuoy on a post by each pier
+	for pr in plan.piers:
+		_add({"t": "buoy", "m": Vector2(xw - 1.05, float(pr["z1"]) + 1.9), "s": sd + int(float(pr["z1"]))})
+		solids.append(Rect2(Vector2(xw - 1.25, float(pr["z1"]) + 1.7) * M, Vector2(0.4, 0.4) * M))
 	# lanterns at the pier ends
 	for pr in plan.piers:
 		var lp := Vector2(float(pr["x1"]) - 0.35, float(pr["z0"]) + 0.35)
@@ -99,7 +103,11 @@ func plan_quay() -> void:
 				n += 1
 				var ns := sd + n * 37
 				var roll := GroundUtil.r01(ns, 1)
-				var t := "crates" if roll < 0.46 else ("barrels" if roll < 0.64 else ("net" if roll < 0.76 else ("sacks" if roll < 0.88 else ("coil" if roll < 0.94 else "gap"))))
+				var t := "gap"
+				for opt in [[0.34, "crates"], [0.46, "barrels"], [0.54, "drums"], [0.64, "net"], [0.74, "sacks"], [0.83, "tarp"], [0.89, "timber"], [0.94, "coil"]]:
+					if roll < float(opt[0]):
+						t = opt[1]
+						break
 				if zi >= 4:
 					t = "barrels" if roll < 0.5 else ("net" if roll < 0.8 else "coil")
 				var size := Vector2(GroundUtil.ri(ns, 2, 1, 4), GroundUtil.ri(ns, 3, 1, 3))
@@ -110,6 +118,9 @@ func plan_quay() -> void:
 					"net": foot = Vector2(2.1, 1.7)
 					"sacks": foot = Vector2(1.8, 1.4)
 					"coil": foot = Vector2(0.8, 0.8)
+					"drums": foot = Vector2(minf(size.x, 3.0) * 0.62, minf(size.y, 2.0) * 0.62)
+					"tarp": foot = Vector2(GroundUtil.rr(ns, 7, 2.0, 3.0), GroundUtil.rr(ns, 8, 1.4, 2.0))
+					"timber": foot = Vector2(3.4, 1.3)
 					"gap": foot = Vector2(GroundUtil.rr(ns, 6, 1.5, 3.5), 0.5)
 				if zi >= 4:
 					foot = foot.min(Vector2(2.2, 2.0))
@@ -180,7 +191,7 @@ func paint_water(ci: CanvasItem) -> void:
 			ci.draw_polyline(pts, sc, wd * (1.0 - float(q) * 0.3), true)
 	for k in 10:
 		var c := Vector2(GroundUtil.rr(ws, 60 + k, water.position.x + 4.0, water.end.x - 4.0), GroundUtil.rr(ws, 80 + k, water.position.y, water.end.y)) * M
-		GroundUtil.soft_blob(ci, c, GroundUtil.rr(ws, 100 + k, 4.0, 9.0) * M, Color(0.55, 0.65, 0.75, 0.06), ws + k, Vector2(0.6, 1.6))
+		GroundUtil.soft_blob(ci, c, GroundUtil.rr(ws, 100 + k, 3.0, 6.0) * M, Color(0.55, 0.65, 0.75, 0.035), ws + k, Vector2(0.7, 1.4))
 	# the quay wall's shadow on the water, and the scum line along it
 	var sh := GroundUtil.sh(2.2)
 	Draw.hgrad(ci, Rect2(r.position, Vector2(sh.x * 1.6, r.size.y)), Color(0, 0.01, 0.03, 0.45), Color(0, 0.01, 0.03, 0.0))
@@ -266,6 +277,15 @@ func paint_quay(ci: CanvasItem) -> void:
 		ci.draw_line(Vector2(ex, z2), Vector2(ex + EDGE * M, z2), Color(0.12, 0.12, 0.12, 0.8), 1.5, true)
 		z2 += l
 	ci.draw_rect(Rect2(Vector2(edge.end.x - 2.0, r.position.y), Vector2(2.0, r.size.y)), Color(0.1, 0.1, 0.1, 0.5))
+	# fender piles standing in the water against the edge
+	var fz := plan.bounds.position.y + 1.0
+	while fz < plan.bounds.end.y:
+		if not _near_pier(fz, 0.6):
+			var fc := Vector2(plan.water_x + 0.14, fz) * M
+			_c(ci, fc + Vector2(2.0, 3.0), 0.16 * M, Color(0, 0.01, 0.03, 0.35))
+			_c(ci, fc, 0.16 * M, Color("2e261e"))
+			_c(ci, fc + Vector2(-0.8, -0.8), 0.12 * M, Color("5a4a38"))
+		fz += 2.6
 	# mooring rings set in the stone
 	var z3 := plan.bounds.position.y + 6.0
 	while z3 < plan.bounds.end.y:
@@ -276,7 +296,7 @@ func paint_quay(ci: CanvasItem) -> void:
 		_pier(ci, pr)
 
 
-func _hatch(ci: CanvasItem, c: Vector2, s: int) -> void:
+func _hatch(ci: CanvasItem, c: Vector2, _s: int) -> void:
 	var r := Rect2(c - Vector2(0.6, 0.45) * M, Vector2(1.2, 0.9) * M)
 	ci.draw_rect(r.grow(1.5), Color(0.05, 0.04, 0.03, 0.8))
 	ci.draw_rect(r, Pal.PLANKS_DARK.lightened(0.05))
@@ -361,7 +381,8 @@ func paint_shadows(ci: CanvasItem) -> void:
 					GroundUtil.shadow_circle(ci, c + Vector2(0, float(dz)) * M, 0.2 * M, o)
 				ci.draw_line(c + Vector2(0, -0.55) * M + o, c + Vector2(0, 0.55) * M + o, GroundUtil.SH, 3.0, true)
 			"lantern": GroundUtil.shadow_pole(ci, c, 2.2, 3.0)
-			"crates", "barrels", "sacks", "net":
+			"buoy": GroundUtil.shadow_pole(ci, c, 1.4, 3.0)
+			"crates", "barrels", "sacks", "net", "drums", "tarp", "timber":
 				var foot: Vector2 = p["foot"]
 				var h := 0.9 * float((p["size"] as Vector2).x) if p["t"] == "crates" else 0.9
 				GroundUtil.shadow_poly(ci, GroundUtil.rect_pts(Rect2(c - foot * 0.5 * M, foot * M)), GroundUtil.sh(minf(h, 2.2) * 0.8))
@@ -385,6 +406,10 @@ func paint_bodies(ci: CanvasItem) -> void:
 			"crates": _crates(ci, c, p["size"], s)
 			"barrels": _barrels(ci, c, p["size"], s)
 			"sacks": _sacks(ci, c, s, false)
+			"drums": _drums(ci, c, p["size"], s)
+			"tarp": _tarp(ci, c, p["foot"], s)
+			"timber": _timber(ci, c, p["foot"], s)
+			"buoy": _buoy(ci, c)
 			"net": _sacks(ci, c, s, true)
 			"coil": _coil_draw(ci, c, 0.36 * M, s)
 			"shack": _shack(ci, c, s)
@@ -594,13 +619,81 @@ func _sacks(ci: CanvasItem, c: Vector2, s: int, net: bool) -> void:
 		_c(ci, ring, 3.2, Color("5a5550"))
 
 
+func _drums(ci: CanvasItem, c: Vector2, size: Vector2, s: int) -> void:
+	var nx := int(minf(size.x, 3.0))
+	var ny := int(minf(size.y, 2.0))
+	var d := 0.62 * M
+	var origin := c - Vector2(nx, ny) * d * 0.5
+	var cols := [Color("5a2a24"), Color("2a2c2e"), Color("4a5248"), Color("6a5a3a")]
+	var col: Color = cols[GroundUtil.ri(s, 1, 0, cols.size() - 1)]
+	for ix in nx:
+		for iy in ny:
+			var bc := origin + Vector2(ix + 0.5, iy + 0.5) * d
+			var r := 0.29 * M
+			_c(ci, bc, r, col.darkened(0.45))
+			_c(ci, bc, r - 1.5, col)
+			ci.draw_arc(bc, r * 0.8, 0.0, TAU, 20, col.lightened(0.12), 1.4, true)
+			ci.draw_arc(bc, r * 0.55, 0.0, TAU, 16, col.darkened(0.2), 1.0, true)
+			_c(ci, bc + Vector2(r * 0.45, -r * 0.2), 2.4, col.darkened(0.5))
+			_c(ci, bc + Vector2(-r * 0.4, r * 0.25), 1.6, col.darkened(0.5))
+			ci.draw_arc(bc, r - 1.0, PI, PI * 1.5, 8, Color(1, 1, 1, 0.22), 1.3, true)
+
+
+## A heap under a lashed canvas tarpaulin.
+func _tarp(ci: CanvasItem, c: Vector2, foot: Vector2, s: int) -> void:
+	var r := Rect2(c - foot * 0.5 * M, foot * M)
+	var canvas := Color("6a7060").lerp(Color("7a6e58"), GroundUtil.r01(s, 1))
+	Draw.rrect(ci, r, 0.25 * M, canvas.darkened(0.35))
+	Draw.rrect(ci, r.grow(-2.0), 0.22 * M, canvas)
+	# folds catch the light on their north-west faces
+	for k in 5:
+		var y := r.position.y + r.size.y * (0.15 + 0.17 * float(k))
+		var pts := GroundUtil.wave(Vector2(r.position.x + 6.0, y), Vector2(r.end.x - 6.0, y + GroundUtil.rr(s, 10 + k, -4.0, 4.0)), s + k, 2.0, 30.0)
+		ci.draw_polyline(pts, canvas.darkened(0.2), 2.0, true)
+		ci.draw_polyline(GroundUtil._shift_pts(pts, Vector2(-1, -1.2)), canvas.lightened(0.15), 1.0, true)
+	Draw.vgrad(ci, Rect2(r.position + Vector2(3, r.size.y * 0.55), Vector2(r.size.x - 6, r.size.y * 0.42)), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.18))
+	# lashings, and the ropes' ends
+	for k in 3:
+		var x := r.position.x + r.size.x * (0.2 + 0.3 * float(k))
+		ci.draw_line(Vector2(x, r.position.y - 2.0), Vector2(x + 3.0, r.end.y + 2.0), Pal.ROPE.darkened(0.1), 2.0, true)
+	ci.draw_line(Vector2(r.position.x - 2.0, r.get_center().y), Vector2(r.end.x + 2.0, r.get_center().y + 3.0), Pal.ROPE.darkened(0.1), 2.0, true)
+
+
+## A stack of sawn timber, ends toward the street.
+func _timber(ci: CanvasItem, c: Vector2, foot: Vector2, s: int) -> void:
+	var r := Rect2(c - foot * 0.5 * M, foot * M)
+	ci.draw_rect(r, Color("3a2e22"))
+	var n := int(r.size.y / 7.0)
+	for k in n:
+		var y := r.position.y + float(k) * r.size.y / float(n)
+		var wood := Color("a08058").lerp(Color("8a6a44"), GroundUtil.r01(s, k))
+		var off := GroundUtil.rr(s, 20 + k, 0.0, 6.0)
+		var pl := Rect2(r.position.x + off, y + 0.5, r.size.x - off - GroundUtil.rr(s, 40 + k, 0.0, 6.0), r.size.y / float(n) - 1.0)
+		ci.draw_rect(pl, wood)
+		ci.draw_rect(Rect2(pl.position, Vector2(pl.size.x, 1.0)), Color(1, 1, 1, 0.14))
+		ci.draw_rect(Rect2(pl.position, Vector2(2.0, pl.size.y)), wood.lightened(0.2))
+	# the bearers under the stack
+	for x in [r.position.x + 0.5 * M, r.end.x - 0.5 * M]:
+		ci.draw_rect(Rect2(x - 3.0, r.position.y - 3.0, 6.0, r.size.y + 6.0), Color("2a2018"))
+
+
+## A lifebuoy hung on a post: a red and cream ring.
+func _buoy(ci: CanvasItem, c: Vector2) -> void:
+	_c(ci, c, 0.07 * M, Color("3a3028"))
+	var r := 0.3 * M
+	for k in 8:
+		var a0 := TAU * float(k) / 8.0
+		ci.draw_arc(c + Vector2(0, 0.12 * M), r * 0.78, a0, a0 + TAU / 8.0, 4, Pal.AWNING_CREAM if k % 2 == 0 else Color("b83a2e"), r * 0.42, true)
+	ci.draw_arc(c + Vector2(0, 0.12 * M), r * 0.78, PI, PI * 1.5, 8, Color(1, 1, 1, 0.25), 1.2, true)
+
+
 func _ellipse_loop(c: Vector2, r: Vector2) -> PackedVector2Array:
 	var pts := Draw.ellipse_points(c, r, 0.0, 20)
 	pts.append(pts[0])
 	return pts
 
 
-func _shack(ci: CanvasItem, c: Vector2, s: int) -> void:
+func _shack(ci: CanvasItem, c: Vector2, _s: int) -> void:
 	var r := Rect2(c - Vector2(1.0, 0.8) * M, Vector2(2.0, 1.6) * M)
 	ci.draw_rect(r.grow(2.0), Color("2a2420"))
 	# tar-paper roof in two slopes, battens, a stovepipe
@@ -651,7 +744,7 @@ func _crane_base(ci: CanvasItem, p: Dictionary) -> void:
 	var timber := Pal.PLANKS_DARK.darkened(0.1)
 	for a in [PI * 0.25, -PI * 0.25]:
 		var beam := GroundUtil.orect(c, Vector2(4.2, 0.36) * M, float(a))
-		ci.draw_colored_polygon(beam, timber)
+		Draw.poly(ci, beam, timber)
 		GroundUtil.outline(ci, beam, timber.darkened(0.4), 1.2)
 		for e: float in [-1.0, 1.0]:
 			_c(ci, c + Vector2(2.0 * M * e, 0).rotated(float(a)), 3.0, Color("1c1c1c"))

@@ -68,7 +68,8 @@ func _draw() -> void:
 			var a := sin(f * PI) * ca
 			var l := (0.45 + h1 * 0.6) * M * (1.0 + (lod - 1.0) * 0.5)
 			var bend := 0.07 * M
-			var pts := PackedVector2Array([c + Vector2(-l, bend), c + Vector2(-l * 0.4, -bend * 0.3), c + Vector2(l * 0.4, -bend * 0.3), c + Vector2(l, bend)])
+			var tr := Transform2D((hx - 0.5) * 0.5, c)
+			var pts := PackedVector2Array([tr * Vector2(-l, bend), tr * Vector2(-l * 0.4, -bend * 0.3), tr * Vector2(l * 0.4, -bend * 0.3), tr * Vector2(l, bend)])
 			draw_polyline(pts, Color(trough, a * 0.6), w + 1.5, true)
 			draw_polyline(_up(pts, -1.6), Color(crest, a), w, true)
 			# glints: brief sparkles

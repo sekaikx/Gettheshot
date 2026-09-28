@@ -392,7 +392,7 @@ func _ashcans(ci: CanvasItem, p: Dictionary) -> void:
 
 
 func _bench(ci: CanvasItem, p: Dictionary) -> void:
-	var L := _begin(ci, p)
+	_begin(ci, p)
 	var hl := 0.85 * M
 	# iron ends and a middle leg
 	for x: float in [-0.8, 0.0, 0.8]:
@@ -412,7 +412,7 @@ func _bench(ci: CanvasItem, p: Dictionary) -> void:
 
 
 func _newsstand(ci: CanvasItem, p: Dictionary) -> void:
-	var L := _begin(ci, p)
+	_begin(ci, p)
 	var s: int = p["s"]
 	var w := 1.9 * M
 	# the papers laid out on the counter on the walking side
@@ -484,28 +484,35 @@ func _canopy(ci: CanvasItem, p: Dictionary) -> void:
 	var c: Vector2 = (p["p"] as Vector2) + _out(p) * 0.15 * M
 	var R := _crown_r(p)
 	var L := GroundUtil.LIGHT_DIR
-	var dark := LEAF.darkened(0.42)
-	var mid := LEAF.darkened(0.12)
-	var hi := LEAF.lightened(0.12)
-	var top := LEAF.lightened(0.3)
-	ci.draw_colored_polygon(GroundUtil.blob(c, R * 0.95, s, 18, 0.14), Color(dark, 0.95))
-	for k in 9:
-		var a := TAU * float(k) / 9.0 + GroundUtil.r01(s, 7)
-		var q := c + Vector2(cos(a), sin(a)) * R * 0.52
+	var dark := LEAF.darkened(0.45)
+	var mid := LEAF.darkened(0.15)
+	var hi := LEAF.lightened(0.1)
+	var top := LEAF.lightened(0.28)
+	# the crown's mass, then clumps of leaves around it, lit on the north-west
+	Draw.poly(ci, GroundUtil.blob(c, R * 0.97, s, 28, 0.1), dark)
+	for k in 12:
+		var a := TAU * float(k) / 12.0 + GroundUtil.r01(s, 7)
+		var q := c + Vector2(cos(a), sin(a)) * R * GroundUtil.rr(s, 8 + k, 0.5, 0.62)
 		var lit := Vector2(cos(a), sin(a)).dot(L)
-		ci.draw_colored_polygon(GroundUtil.blob(q, R * GroundUtil.rr(s, 10 + k, 0.38, 0.48), s + k, 12, 0.2), mid.lerp(hi, clampf(lit * 0.6 + 0.2, 0.0, 1.0)))
-	for k in 6:
-		var q := c + L * R * GroundUtil.rr(s, 30 + k, 0.1, 0.45) + Vector2(GroundUtil.rr(s, 40 + k, -0.3, 0.3), GroundUtil.rr(s, 50 + k, -0.3, 0.3)) * R
-		ci.draw_colored_polygon(GroundUtil.blob(q, R * GroundUtil.rr(s, 60 + k, 0.18, 0.28), s + 70 + k, 10, 0.25), hi.lerp(top, GroundUtil.r01(s, 80 + k)))
-	# leaf texture
-	for k in 36:
+		var col := mid.lerp(hi, clampf(lit * 0.55 + 0.25, 0.0, 1.0))
+		var rr := R * GroundUtil.rr(s, 10 + k, 0.32, 0.42)
+		ci.draw_colored_polygon(GroundUtil.blob(q + Vector2(1.5, 2.0), rr, s + k, 18, 0.16), Color(dark, 0.6))
+		Draw.poly(ci, GroundUtil.blob(q, rr, s + k, 18, 0.16), col)
+	for k in 7:
+		var q := c + L * R * GroundUtil.rr(s, 30 + k, 0.05, 0.4) + Vector2(GroundUtil.rr(s, 40 + k, -0.35, 0.35), GroundUtil.rr(s, 50 + k, -0.35, 0.35)) * R
+		var rr := R * GroundUtil.rr(s, 60 + k, 0.2, 0.3)
+		ci.draw_colored_polygon(GroundUtil.blob(q + Vector2(1.2, 1.6), rr, s + 70 + k, 16, 0.2), Color(dark, 0.4))
+		Draw.poly(ci, GroundUtil.blob(q, rr, s + 70 + k, 16, 0.2), hi.lerp(top, GroundUtil.r01(s, 80 + k)))
+	# leaf texture: small darker and lighter flecks
+	for k in 60:
 		var a := GroundUtil.r01(s, 100 + k) * TAU
-		var rr := sqrt(GroundUtil.r01(s, 200 + k)) * R * 0.88
+		var rr := sqrt(GroundUtil.r01(s, 200 + k)) * R * 0.9
 		var q := c + Vector2(cos(a), sin(a)) * rr
 		var lit := Vector2(cos(a), sin(a)).dot(L) * rr / R
-		_c(ci, q, GroundUtil.rr(s, 300 + k, 1.4, 2.6), Color(top, 0.5) if lit > 0.15 else Color(dark, 0.55))
+		var sz := GroundUtil.rr(s, 300 + k, 1.1, 2.2)
+		_c(ci, q, sz, Color(top, 0.45) if lit > 0.1 else Color(dark, 0.5))
 	# the far edge in the crown's own shade
-	ci.draw_arc(c, R * 0.86, PI * -0.1, PI * 0.6, 16, Color(0, 0.03, 0.02, 0.25), R * 0.12, true)
+	ci.draw_arc(c, R * 0.84, PI * -0.15, PI * 0.65, 18, Color(0, 0.03, 0.02, 0.22), R * 0.14, true)
 
 
 func _trough(ci: CanvasItem, p: Dictionary) -> void:
@@ -541,7 +548,7 @@ func _hitch(ci: CanvasItem, p: Dictionary) -> void:
 
 func _basket(ci: CanvasItem, p: Dictionary) -> void:
 	var s: int = p["s"]
-	var L := _begin(ci, p)
+	_begin(ci, p)
 	var r := 0.19 * M
 	_c(ci, Vector2.ZERO, r, Color("2d2e2d"))
 	_c(ci, Vector2.ZERO, r - 2.0, Color("4a4845"))
@@ -559,7 +566,7 @@ func _basket(ci: CanvasItem, p: Dictionary) -> void:
 ## A delivery bicycle leaning at the curb (a basket on the front).
 func _bike(ci: CanvasItem, p: Dictionary, shadow: bool) -> void:
 	var off := GroundUtil.sh(0.35) if shadow else Vector2.ZERO
-	var L := _begin(ci, p, off)
+	_begin(ci, p, off)
 	var col := Color(GroundUtil.SH, 0.3) if shadow else Color("1c1d1e")
 	var tyre := Color(GroundUtil.SH, 0.3) if shadow else Color("121212")
 	var wr := 0.34 * M
@@ -674,7 +681,7 @@ func _goods(ci: CanvasItem, r: Rect2, kind: String, s: int, L: Vector2) -> void:
 		"hats":
 			ci.draw_rect(r, Color("4a3a2a"))
 			for k in 8:
-				var c := r.position + Vector2((float(k % 4) + 0.5) / 4.0 * r.size.x, (float(k / 4) + 0.5) / 2.0 * r.size.y)
+				var c := r.position + Vector2((float(k % 4) + 0.5) / 4.0 * r.size.x, (floorf(k / 4.0) + 0.5) / 2.0 * r.size.y)
 				var col: Color = Pal.SUITS[GroundUtil.ri(s, 90 + k, 0, 6)]
 				_c(ci, c, 7.0, col.darkened(0.1))
 				_c(ci, c, 4.6, col.lightened(0.12))
@@ -682,7 +689,7 @@ func _goods(ci: CanvasItem, r: Rect2, kind: String, s: int, L: Vector2) -> void:
 		"shoes":
 			ci.draw_rect(r, Color("6a5a44"))
 			for k in 10:
-				var c := r.position + Vector2((float(k % 5) + 0.5) / 5.0 * r.size.x, (float(k / 5) + 0.5) / 2.0 * r.size.y)
+				var c := r.position + Vector2((float(k % 5) + 0.5) / 5.0 * r.size.x, (floorf(k / 5.0) + 0.5) / 2.0 * r.size.y)
 				var col := Color("2a1c14") if GroundUtil.r01(s, 100 + k) < 0.6 else Color("5a3420")
 				for sx: float in [-2.5, 2.5]:
 					Draw.ellipse(ci, c + Vector2(float(sx), 0), Vector2(2.2, 5.0), col)
@@ -700,7 +707,7 @@ func _goods(ci: CanvasItem, r: Rect2, kind: String, s: int, L: Vector2) -> void:
 		"bread":
 			ci.draw_rect(r, Color("d8cdb0"))
 			for k in 12:
-				var c := r.position + Vector2((float(k % 6) + 0.5) / 6.0 * r.size.x, (float(k / 6) + 0.5) / 2.0 * r.size.y)
+				var c := r.position + Vector2((float(k % 6) + 0.5) / 6.0 * r.size.x, (floorf(k / 6.0) + 0.5) / 2.0 * r.size.y)
 				if k % 3 == 0:
 					Draw.ellipse(ci, c, Vector2(6.0, 3.6), Color("a8743a"), 0.3)
 					ci.draw_line(c - Vector2(3, 1), c + Vector2(3, 1), Color("7a4a1a"), 1.0, true)
@@ -709,7 +716,7 @@ func _goods(ci: CanvasItem, r: Rect2, kind: String, s: int, L: Vector2) -> void:
 		_:
 			ci.draw_rect(r, Color("5a4a3a"))
 			for k in 16:
-				var c := r.position + Vector2((float(k % 8) + 0.5) / 8.0 * r.size.x, (float(k / 8) + 0.5) / 2.0 * r.size.y)
+				var c := r.position + Vector2((float(k % 8) + 0.5) / 8.0 * r.size.x, (floorf(k / 8.0) + 0.5) / 2.0 * r.size.y)
 				var col: Color = [Pal.AWNING_CREAM, Pal.AWNING_COLORS[0], Pal.AWNING_COLORS[2], Pal.BRASS, Pal.AWNING_COLORS[5]][GroundUtil.ri(s, 140 + k, 0, 4)]
 				_c(ci, c, 3.4, col.lightened(0.1))
 				_c(ci, c, 1.2, col.darkened(0.4))
@@ -733,7 +740,7 @@ func _umbrella(ci: CanvasItem, p: Dictionary) -> void:
 		for q in 5:
 			var t := lerpf(a, b, float(q) / 4.0)
 			pts.append(c + Vector2(cos(t), sin(t)) * R)
-		ci.draw_colored_polygon(pts, GroundUtil.shade(base, 0.1 * lit))
+		Draw.poly(ci, pts, GroundUtil.shade(base, 0.1 * lit))
 	var rim := PackedVector2Array()
 	for q in 33:
 		var t := a0 + TAU * float(q) / 32.0

@@ -333,7 +333,7 @@ func _cobble_repairs(ci: CanvasItem, s: Dictionary) -> void:
 	var n := GroundUtil.ri(sd, 150, 0, 2)
 	for k in n:
 		var c := _p(s, GroundUtil.rr(sd, 151 + k, float(s["u0"]) + 5.0, float(s["u1"]) - 5.0), GroundUtil.rr(sd, 154 + k, -4.0, 4.0))
-		var pts := GroundUtil.blob(c, GroundUtil.rr(sd, 157 + k, 0.5, 1.1) * M, sd + k, 10, 0.25, Vector2(1.5, 0.8), GroundUtil.r01(sd, 158 + k) * PI)
+		var pts := GroundUtil.blob(c, GroundUtil.rr(sd, 157 + k, 0.5, 1.1) * M, sd + k, 20, 0.22, Vector2(1.5, 0.8), GroundUtil.r01(sd, 158 + k) * PI)
 		ci.draw_colored_polygon(pts, Pal.ASPHALT.darkened(0.08))
 		GroundUtil.tex_poly(ci, pts, grain, 1.0, Color(1, 1, 1, 0.7))
 		GroundUtil.outline(ci, pts, TAR, 2.0)
@@ -363,7 +363,7 @@ func _oil(ci: CanvasItem, s: Dictionary, busy: bool) -> void:
 
 func _potholes(ci: CanvasItem, s: Dictionary) -> void:
 	var sd: int = s["seed"]
-	if GroundUtil.r01(sd, 230) > 0.55:
+	if s["kind"] == "cobble" or GroundUtil.r01(sd, 230) > 0.55:
 		return
 	var c := _p(s, GroundUtil.rr(sd, 231, float(s["u0"]) + 4.0, float(s["u1"]) - 4.0), _v_free(s, sd, 232, -5.0, 5.0))
 	pothole(ci, c, GroundUtil.rr(sd, 233, 0.25, 0.45) * M, sd + 1)
@@ -568,6 +568,29 @@ func paint_intersection(ci: CanvasItem, x: Dictionary) -> void:
 		for v: float in [-1.7, 1.7]:
 			ci.draw_line(_p(s, r.position.y, float(v)) + o, _p(s, r.end.y, float(v)) + o, Color(0.02, 0.02, 0.04, 0.12), 1.6, true)
 	manhole(ci, (x["manhole"] as Vector2) * M, sd + 5)
+	if x.get("dome", false):
+		traffic_dome(ci, r.get_center() * M)
+
+
+## A 1920s "traffic mushroom": a low cast-iron dome in the middle of the crossing, painted in
+## bands, with a little lamp on top. Cars drive round it (or over it).
+static func traffic_dome(ci: CanvasItem, c: Vector2) -> void:
+	var r := 0.42 * M
+	ci.draw_circle(c + GroundUtil.sh(0.25), r, Color(0, 0, 0.03, 0.3), true, -1.0, true)
+	ci.draw_circle(c, r, Color("2a2a2c"), true, -1.0, true)
+	for k in 3:
+		var rr := r * (0.92 - float(k) * 0.26)
+		ci.draw_circle(c, rr, Pal.GOLD.darkened(0.15) if k % 2 == 0 else Color("222224"), true, -1.0, true)
+	ci.draw_circle(c, r * 0.16, Color("e0d8c0"), true, -1.0, true)
+	ci.draw_arc(c, r - 1.0, PI, PI * 1.5, 10, Color(1, 1, 1, 0.3), 1.4, true)
+
+
+func paint_intersection_glow(ci: CanvasItem, x: Dictionary) -> void:
+	if not x.get("dome", false):
+		return
+	var c := (x["r"] as Rect2).get_center() * M
+	GroundUtil.soft(ci, c, Vector2(0.5, 0.5) * M, Color(1.0, 0.75, 0.35, 0.4), 0.0, 3)
+	ci.draw_circle(c, 0.08 * M, Color(1.0, 0.9, 0.7), true, -1.0, true)
 
 
 func paint_intersection_high(ci: CanvasItem, x: Dictionary) -> void:

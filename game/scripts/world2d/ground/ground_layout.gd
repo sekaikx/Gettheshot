@@ -62,7 +62,6 @@ func _streets() -> void:
 	var top := area.position.y
 	var bottom := area.end.y
 	var left := area.position.x
-	var quay_x: float = plan.quay_rect[0]
 	# north-south streets
 	for i in CityPlan.NX + 1:
 		var c := i * P
@@ -117,6 +116,15 @@ func _streets() -> void:
 		x["manhole"] = r.get_center() + off
 		if GroundUtil.r01(sd, 3) < 0.3:
 			vents.append((r.get_center() + off) * W.M)
+		# traffic domes on a few busy crossings (not on the tracks, not at the quay)
+		var ii: int = x["i"]
+		var jj: int = x["j"]
+		if ii in [3, 4, 5] and jj in BUSY_EW and GroundUtil.r01(sd, 4) < 0.55:
+			x["dome"] = true
+			if x["manhole"].distance_to(r.get_center()) < 1.2:
+				x["manhole"] = r.get_center() + Vector2(2.6, -2.2)
+			lights.append({"pos": r.get_center() * W.M, "r": 1.6 * W.M, "color": Color(1.0, 0.75, 0.35), "e": 0.55,
+				"shape": "round", "flicker": false})
 
 
 ## A point of segment `s` at distance u along it and v across (metres, v = 0 on the centre line).
@@ -298,7 +306,7 @@ func _block_flats(b: Dictionary) -> void:
 			if GroundUtil.r01(sd, 60 + k + end) < 0.35:
 				continue
 			k += 1
-			var a := float(side["a0"]) + 5.2 if end == 0 else float(side["a1"]) - 5.2
+			var a := float(side["a0"]) + 6.9 if end == 0 else float(side["a1"]) - 6.9
 			var pos := side_point(side, a, SW + 0.28)
 			b["flats"].append({"t": "drain", "side": s, "p": pos * W.M, "rot": side_rot(side), "s": sd + k})
 
@@ -450,7 +458,7 @@ func _place_at(b: Dictionary, s: String, t: String, a: float, ps: int, extra: Di
 
 func _fill(b: Dictionary, sd: int, phantom: bool) -> void:
 	var quota := {"mailbox": 1, "newsstand": 1, "alarm": 1, "callbox": 1 if (int(b["i"]) + int(b["j"])) % 2 == 0 else 0,
-		"bench": 2, "tree": 1 if GroundUtil.r01(sd, 300) < 0.45 else 0, "basket": 2, "bike": 1 if GroundUtil.r01(sd, 301) < 0.35 else 0}
+		"bench": 3, "tree": 1 if GroundUtil.r01(sd, 300) < 0.45 else 0, "basket": 3, "bike": 1 if GroundUtil.r01(sd, 301) < 0.4 else 0}
 	if phantom:
 		quota = {"mailbox": 0, "newsstand": 0, "alarm": 0, "callbox": 0, "bench": 0, "tree": 0, "basket": 1, "bike": 0}
 	var k := 0
@@ -500,7 +508,7 @@ func _pick(s: int, quota: Dictionary, home: bool, busy: bool, phantom: bool) -> 
 	if home:
 		bag.append_array(["ashcans", "ashcans", "ashcans", "", ""])
 	else:
-		bag.append_array(["", "", "basket"])
+		bag.append_array(["", "basket", "ashcans"])
 	if busy:
 		bag.append_array(["newsstand", "newsstand", "bench"])
 	bag.append_array(["mailbox", "alarm", "callbox", "bench", "tree", "tree", "bike", "hitch"])
@@ -595,6 +603,11 @@ func _link_wires() -> void:
 
 func _parking() -> void:
 	var inner := plan.bounds
+	var hydrants := []
+	for b in blocks:
+		for p in b["props"]:
+			if p["t"] == "hydrant":
+				hydrants.append((p["p"] as Vector2) / W.M)
 	for s in segs:
 		if s["ns"] and int(s["idx"]) in [ORCHARD, CityPlan.NX]:
 			continue
@@ -609,12 +622,60 @@ func _parking() -> void:
 				for p in s["props"]:
 					if (p["p"] as Vector2).distance_to(pos * W.M) < 3.5 * W.M:
 						ok = false
+				for h in hydrants:
+					if (h as Vector2).distance_to(pos) < 3.4:
+						ok = false
 				if ok and GroundUtil.r01(sd, k * 3 + int(side)) < 0.55:
 					var rot := PI * 0.5 if s["ns"] else 0.0
 					if side < 0.0:
 						rot += PI
 					parking.append({"pos": pos * W.M, "rot": rot})
 				u += 5.6
+
+
+# ---------------------------------------------------------------- self-check
+
+## Checks the sidewalk rules against what was placed; returns one line per problem (empty = fine).
+## Furniture in the furniture zone only, clear of doors (1.2 m each side) and of the corners;
+## low frontage features only in front of homes (lots with shop == false).
+func validate() -> Array:
+	var out := []
+	for b in blocks:
+		if b["phantom"]:
+			continue
+		for p in b["props"]:
+			var t: String = p["t"]
+			if t == "sign" or not p.has("side"):
+				continue
+			var side: Dictionary = b["sides"][p["side"]]
+			var foot: Vector2 = p["foot"]
+			var pm: Vector2 = (p["p"] as Vector2) / W.M
+			var a := pm.x if side["s"] in ["N", "S"] else pm.y
+			var d := absf((pm.y if side["s"] in ["N", "S"] else pm.x) - float(side["wall"]))
+			if t != "tree" and d - foot.y * 0.5 < WALK - 0.05:
+				out.append("%s at %s intrudes on the walking lane (%.2f m from the wall)" % [t, pm, d - foot.y * 0.5])
+			for ad in _doors(side):
+				if absf(a - float(ad)) < DOOR_CLEAR + foot.x * 0.5 - 0.01:
+					out.append("%s at %s is %.2f m from a door" % [t, pm, absf(a - float(ad))])
+			var lim := LANDING if t in ["lamp", "hydrant", "pole"] else CORNER
+			if a - foot.x * 0.5 < float(side["a0"]) + lim - 0.01 or a + foot.x * 0.5 > float(side["a1"]) - lim + 0.01:
+				out.append("%s at %s is too near the corner" % [t, pm])
+		for f in b["flats"]:
+			if f["t"] == "drain":
+				continue
+			var side2: Dictionary = b["sides"][f["side"]]
+			var fm: Vector2 = (f["p"] as Vector2) / W.M
+			var a2 := fm.x if side2["s"] in ["N", "S"] else fm.y
+			var w := _wall_at(side2, a2)
+			if w.is_empty() or w["lot"]["shop"]:
+				out.append("%s at %s sits in front of a shop" % [f["t"], fm])
+	for s in segs:
+		for p in s["props"]:
+			var pm: Vector2 = (p["p"] as Vector2) / W.M
+			var u := pm.y if s["ns"] else pm.x
+			if u - 1.45 < float(s["u0"]) + 3.5 or u + 1.45 > float(s["u1"]) - 3.5:
+				out.append("pushcart at %s blocks a crossing" % [pm])
+	return out
 
 
 # ---------------------------------------------------------------- lights and solids

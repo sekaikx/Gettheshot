@@ -37,12 +37,18 @@ func _ready() -> void:
 	Game.new_campaign({"seed": 1923, "families": 4}, [{"peer": 1, "name": "Alex", "family_name": "Vitale", "color": "#c42828"}])
 	Game.running = false
 	var plan: CityPlan = Game.plan
+	if OS.get_environment("POLYCHECK") == "1":
+		_polycheck()
 	var t0 := Time.get_ticks_usec()
 	ground = CityGround.new()
 	add_child(ground)
 	ground.build(plan)
 	print("ground build: %.1f ms, %d nodes, %d lights, %d solids" % [(Time.get_ticks_usec() - t0) / 1000.0,
 		ground.get_child_count(), ground.lights().size(), ground.solids().size()])
+	var problems: Array = ground.layout.validate()
+	print("layout check: %d problems" % problems.size())
+	for pr in problems.slice(0, 30):
+		print("  ", pr)
 	if OS.get_environment("FRONTS") != "0":
 		fronts = Shopfronts.new()
 		add_child(fronts)
@@ -69,6 +75,15 @@ func _ready() -> void:
 	gt.width = 256
 	gt.height = 256
 	light_tex = gt
+	# close-ups picked from what was placed: a stoop, a newsstand, a tree, the crane
+	var stoop := _find_flat("stoop")
+	if stoop != Vector2.INF:
+		shots.append(["stoop", stoop / W.M + Vector2(1.5, 0.5), 1.5, 0.0, 0.0])
+	for t in ["newsstand", "tree", "trough", "mailbox"]:
+		var at := _find_prop(t)
+		if at != Vector2.INF:
+			shots.append([t, at / W.M + Vector2(1.0, 0.5), 1.5, 0.0, 0.0])
+	shots.append(["crane", Vector2(plan.water_x + 2.0, 74.0), 1.0, 0.0, 0.0])
 	var out_dir := OS.get_environment("OUT_DIR")
 	if out_dir == "":
 		out_dir = "user://"
@@ -80,6 +95,41 @@ func _ready() -> void:
 		await _shot(s, out_dir, first)
 		first = false
 	get_tree().quit()
+
+
+func _polycheck() -> void:
+	var bad := 0
+	for s in 4000:
+		for n: int in [10, 12, 14, 16, 18, 20, 28]:
+			var pts := GroundUtil.blob(Vector2(5000, 3000) + Vector2(s % 17, s % 23) * 3.3, 12.0 + float(s % 19) * 5.0, s, n, [0.1, 0.16, 0.2, 0.3][s % 4])
+			if Geometry2D.triangulate_polygon(pts).is_empty():
+				bad += 1
+				if bad < 4:
+					print("bad blob s=", s, " n=", n, " ", pts)
+	print("bad blobs: ", bad)
+	var badf := 0
+	for k in 3000:
+		var sz := 1.3 + float(k % 13) * 0.1
+		var e := Draw.ellipse_points(Vector2(5000.5, 3000.5) + Vector2(10.5, 10.5) * float(k % 50), Vector2(sz, sz * 0.6), float(k) * 0.1, 6)
+		if Geometry2D.triangulate_polygon(e).is_empty():
+			badf += 1
+	print("bad flecks: ", badf)
+
+
+func _find_flat(t: String) -> Vector2:
+	for b in ground.layout.blocks:
+		if int(b["i"]) >= 1 and int(b["j"]) >= 1 and not b["phantom"]:
+			for f in b["flats"]:
+				if f["t"] == t:
+					return f["p"]
+	return Vector2.INF
+
+
+func _find_prop(t: String) -> Vector2:
+	for p in ground.props():
+		if p["t"] == t:
+			return p["p"]
+	return Vector2.INF
 
 
 func _shot(s: Array, out_dir: String, first: bool) -> void:

@@ -88,6 +88,8 @@ func build(p: CityPlan) -> void:
 		_wet_nodes.append(_chunk("CrossingWet", W.Z_GROUND + 1, _streets.paint_intersection_wet.bind(x)))
 		if x["bowery"]:
 			_chunk("Wires", W.Z_PROP_HIGH, _streets.paint_intersection_high.bind(x))
+		if x.get("dome", false):
+			_glow_nodes.append(_chunk("DomeGlow", W.Z_PROP_HIGH + 1, _streets.paint_intersection_glow.bind(x)))
 	_chunk("Quay", W.Z_GROUND + 2, _quay.paint_quay)
 	_wet_nodes.append(_chunk("QuayWet", W.Z_GROUND + 3, _quay.paint_quay_wet))
 	_shadow_nodes.append(_chunk("QuayShadows", W.Z_FURNITURE - 1, _quay.paint_shadows))

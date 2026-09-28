@@ -171,7 +171,7 @@ func paint_ground(ci: CanvasItem, b: Dictionary) -> void:
 			var inner_st := PackedVector2Array()
 			for v in st:
 				inner_st.append(q + (v - q) * 0.9 + Vector2(-0.6, -0.6))
-			ci.draw_colored_polygon(inner_st, Color("958c7c").darkened(GroundUtil.rr(ps, 50 + k, 0.0, 0.15)))
+			Draw.poly(ci, inner_st, Color("958c7c").darkened(GroundUtil.rr(ps, 50 + k, 0.0, 0.15)))
 			GroundUtil.tex_poly(ci, inner_st, grain, 1.0, Color(1, 1, 1, 0.6))
 	# odds and ends lying about
 	for k in 6:
@@ -326,7 +326,7 @@ func _garment(ci: CanvasItem, g: Dictionary, shadow: bool) -> void:
 	match g["t"]:
 		"shirt":
 			var body := PackedVector2Array([Vector2(-w * 0.3, 0), Vector2(w * 0.3, 0), Vector2(w * 0.3, h), Vector2(-w * 0.3, h)])
-			ci.draw_colored_polygon(body, col)
+			Draw.poly(ci, body, col, not shadow)
 			for sx: float in [-1.0, 1.0]:
 				ci.draw_colored_polygon(PackedVector2Array([Vector2(sx * w * 0.3, 0), Vector2(sx * w * 0.5, h * 0.08),
 					Vector2(sx * w * 0.5, h * 0.5), Vector2(sx * w * 0.3, h * 0.42)]), dark)
@@ -338,7 +338,7 @@ func _garment(ci: CanvasItem, g: Dictionary, shadow: bool) -> void:
 			ci.draw_rect(Rect2(-w * 0.5, h * 0.12, w * 0.46, h * 0.88), col)
 			ci.draw_rect(Rect2(w * 0.04, h * 0.12, w * 0.46, h * 0.88), col)
 		"dress":
-			ci.draw_colored_polygon(PackedVector2Array([Vector2(-w * 0.24, 0), Vector2(w * 0.24, 0), Vector2(w * 0.5, h), Vector2(-w * 0.5, h)]), col)
+			Draw.poly(ci, PackedVector2Array([Vector2(-w * 0.24, 0), Vector2(w * 0.24, 0), Vector2(w * 0.5, h), Vector2(-w * 0.5, h)]), col, not shadow)
 			if not shadow:
 				ci.draw_rect(Rect2(-w * 0.3, h * 0.3, w * 0.6, h * 0.06), col.darkened(0.25))
 		"sheet":
@@ -346,7 +346,7 @@ func _garment(ci: CanvasItem, g: Dictionary, shadow: bool) -> void:
 			for k in 7:
 				var t := 1.0 - float(k) / 6.0
 				pts.append(Vector2(-w * 0.5 + w * t, h + sin(t * TAU * 1.5) * h * 0.05))
-			ci.draw_colored_polygon(pts, col)
+			Draw.poly(ci, pts, col, not shadow)
 			if not shadow:
 				for k in 3:
 					var x := (float(k) - 1.0) * w * 0.28
@@ -441,7 +441,7 @@ func _fence(ci: CanvasItem, f: Array, s: int) -> void:
 	ci.draw_line(gp, gp + (dir.rotated(0.9)) * 0.85 * M, wood.darkened(0.1), 3.6, true)
 
 
-func _roof(ci: CanvasItem, r: Rect2, col: Color, s: int, ridge_along_x: bool) -> void:
+func _roof(ci: CanvasItem, r: Rect2, col: Color, _s: int, ridge_along_x: bool) -> void:
 	ci.draw_rect(r.grow(1.5), col.darkened(0.45))
 	if ridge_along_x:
 		var mid := r.position.y + r.size.y * 0.5
@@ -615,14 +615,14 @@ func _cat(ci: CanvasItem, cat: Dictionary) -> void:
 		Draw.ellipse(ci, Vector2.ZERO, Vector2(9, 8), col)
 		ci.draw_arc(Vector2.ZERO, 7.5, 0.4, PI * 1.6, 12, col.darkened(0.25), 3.0, true)
 		_c(ci, Vector2(5, -3), 3.8, col.lightened(0.05))
-		ci.draw_colored_polygon(PackedVector2Array([Vector2(6.5, -6.5), Vector2(8.5, -4.5), Vector2(5.0, -4.2)]), col.darkened(0.1))
-		ci.draw_colored_polygon(PackedVector2Array([Vector2(3.0, -6.8), Vector2(5.5, -6.8), Vector2(3.2, -4.0)]), col.darkened(0.1))
+		Draw.poly(ci, PackedVector2Array([Vector2(6.5, -6.5), Vector2(8.5, -4.5), Vector2(5.0, -4.2)]), col.darkened(0.1))
+		Draw.poly(ci, PackedVector2Array([Vector2(3.0, -6.8), Vector2(5.5, -6.8), Vector2(3.2, -4.0)]), col.darkened(0.1))
 	else:
 		ci.draw_colored_polygon(Draw.ellipse_points(Vector2(-1, 0) + so, Vector2(8, 5.5), 0.0, 14), Color(GroundUtil.SH, 0.35))
 		Draw.ellipse(ci, Vector2(-1, 0), Vector2(8, 5.5), col)
 		_c(ci, Vector2(7, 0), 4.2, col.lightened(0.04))
-		ci.draw_colored_polygon(PackedVector2Array([Vector2(8.5, -3.8), Vector2(11.5, -3.0), Vector2(9.0, -1.2)]), col.darkened(0.12))
-		ci.draw_colored_polygon(PackedVector2Array([Vector2(8.5, 3.8), Vector2(11.5, 3.0), Vector2(9.0, 1.2)]), col.darkened(0.12))
+		Draw.poly(ci, PackedVector2Array([Vector2(8.5, -3.8), Vector2(11.5, -3.0), Vector2(9.0, -1.2)]), col.darkened(0.12))
+		Draw.poly(ci, PackedVector2Array([Vector2(8.5, 3.8), Vector2(11.5, 3.0), Vector2(9.0, 1.2)]), col.darkened(0.12))
 		var tail := PackedVector2Array()
 		for k in 7:
 			var a := float(k) / 6.0
