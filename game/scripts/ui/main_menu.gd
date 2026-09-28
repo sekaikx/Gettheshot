@@ -166,8 +166,27 @@ func _ready() -> void:
 		_show_main())
 	Net.joined_lobby.connect(_on_joined)
 	Net.game_started.connect(_go_world)
-	if "--autotest" in OS.get_cmdline_user_args():
+	var args := OS.get_cmdline_user_args()
+	if "--autotest" in args:
 		call_deferred("_play_solo")
+	for a in args:
+		if a.begins_with("--name="):
+			_name.text = a.substr(7)
+		if a.begins_with("--family="):
+			_fam.text = a.substr(9)
+	if "--autohost" in args:
+		call_deferred("_host")
+		Net.roster_changed.connect(func() -> void:
+			var want := 2
+			for a2 in OS.get_cmdline_user_args():
+				if a2.begins_with("--players="):
+					want = int(a2.substr(10))
+			if Net.roster.size() >= want and not Net.in_game:
+				get_tree().create_timer(1.0).timeout.connect(_start_hosted))
+	for a in args:
+		if a.begins_with("--autojoin="):
+			_ip.text = a.substr(11)
+			call_deferred("_join")
 
 
 func _theme() -> Theme:
@@ -366,6 +385,8 @@ func _on_roster() -> void:
 
 
 func _start_hosted() -> void:
+	if Net.in_game:
+		return
 	var cfg := _cfg()
 	var humans := _humans()
 	cfg["families"] = humans.filter(func(h: Dictionary) -> bool: return int(h["join"]) < 0).size() + int(_rivals.value)
@@ -375,4 +396,5 @@ func _start_hosted() -> void:
 
 
 func _go_world() -> void:
-	get_tree().change_scene_to_file("res://scenes/world.tscn")
+	if is_inside_tree():
+		get_tree().change_scene_to_file("res://scenes/world.tscn")

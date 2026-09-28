@@ -37,9 +37,15 @@ var _shop_t := 0.0
 var _last_seen := {}
 var _corpses := {}
 var _weather_month := -1
+var _contra_t := 0.0
+var _spotted := {}
 
 
 func _ready() -> void:
+	set_process(false)
+	if Game.plan == null:
+		await Game.state_changed
+	set_process(true)
 	plan = Game.plan
 	_environment()
 	city = CityBuilder.new()
@@ -72,6 +78,39 @@ func _ready() -> void:
 		_host_spawn()
 	_ensure_local_boss()
 	_on_state_changed()
+	if "--mptest" in OS.get_cmdline_user_args():
+		var mt := Node.new()
+		add_child(mt)
+		var t := Timer.new()
+		t.wait_time = 1.0
+		t.autostart = true
+		mt.add_child(t)
+		var ticks := [0]
+		t.timeout.connect(func() -> void:
+			ticks[0] += 1
+			if ticks[0] == 2 and local_actor:
+				controller.auto_move = Vector2(1, 0)
+			if ticks[0] == 4:
+				controller.auto_move = Vector2.ZERO
+				Net.to_host("punch", [])
+				var near := {}
+				var bd := INF
+				for b in Game.biz:
+					if b["kind"] in ["club", "precinct", "warehouse"]:
+						continue
+					var d := Vector3(b["door"][0], 0, b["door"][1]).distance_to(local_actor.position)
+					if d < bd:
+						bd = d
+						near = b
+				Net.to_host("nation", ["send", "det", 2, 0, -1])
+			if ticks[0] == 9:
+				var fam := int(Game.player(Net.my_id()).get("family", -1))
+				print("MPTEST %s id=%d players=%d family=%s actors=%d vehicles=%d month=%d local=%s chicago_det=%s" % [
+					"HOST" if Net.is_host() else "CLIENT", Net.my_id(), Game.players.size(), Game.fam(fam).get("name", "?"),
+					actors.size(), vehicles.size(), Game.month, str(local_actor.position if local_actor else "none"),
+					str(Game.nation["cities"]["det"]["influence"])])
+			if ticks[0] == 11:
+				get_tree().quit())
 	if "--autotest" in OS.get_cmdline_user_args():
 		var t = preload("res://scripts/world/autotest.gd").new()
 		t.world = self
@@ -252,6 +291,8 @@ func _make_actor(key: String) -> Actor:
 					look = int(r["look"])
 		"z":
 			kind = "smuggler"
+		"g":
+			kind = "dealer"
 		_:
 			return null
 	if family >= 0 and not Game.fam(family).is_empty():
@@ -259,9 +300,9 @@ func _make_actor(key: String) -> Actor:
 	a.family = family
 	a.ref_id = id
 	var pk := kind
-	if kind == "smuggler":
+	if kind in ["smuggler", "dealer"]:
 		pk = "recruit"
-	a.setup(self, key, pk if kind != "smuggler" else "recruit", look, color)
+	a.setup(self, key, pk, look, color)
 	a.kind = kind
 	add_child(a)
 	actors[key] = a
@@ -282,6 +323,12 @@ func _host_spawn() -> void:
 			if plan.district_at(p.x, p.z) == c["district"]:
 				nodes.append(n)
 		a.place(plan.node_pos(nodes[randi() % nodes.size()] if not nodes.is_empty() else 0))
+	for b in Game.biz:
+		if b["kind"] == "pawnshop":
+			var g := _make_actor("g1")
+			g.sim = true
+			g.place(_near_door(b, -1.8), float(b["yaw"]))
+			break
 	var tip: Array = plan.piers[1]["tip"]
 	var smug := _make_actor("z1")
 	smug.sim = true
@@ -441,6 +488,10 @@ func _host_tick(delta: float) -> void:
 		_sync_t = 2.0
 		_sync_spawns()
 		_cleanup_corpses()
+	_contra_t -= delta
+	if _contra_t <= 0.0:
+		_contra_t = 0.5
+		_watch_contraband()
 	# the smuggler only deals at night when the boat is in
 	var smug := actor("z1")
 	if smug:
@@ -728,21 +779,74 @@ func crime(perp: Actor, severity: float, at: Vector3, what: String, victim_famil
 				and int(b["closed_until"]) < Game.month:
 			civ += 1
 	var cop_saw := false
+	var cop_id := -1
+	var wbiz := -1
+	var wd := radius * 0.6
+	for b in Game.biz:
+		if b["kind"] in ["precinct", "warehouse", "club"] or int(b["closed_until"]) >= Game.month:
+			continue
+		var dd := _door(b).distance_to(at)
+		if dd < wd:
+			wd = dd
+			wbiz = b["id"]
 	for a in actors.values():
 		var ac := a as Actor
 		if ac.kind != "cop" or ac.is_down():
 			continue
 		if ac.position.distance_to(at) < radius + 6.0 and not Game.cop_ignores(ac.ref_id, perp.family):
 			cop_saw = true
+			cop_id = ac.ref_id
 			if ac.chase == null and perp.kind in ["boss", "crew"]:
 				ac.chase = perp
 				ac.chase_t = 30.0
-	var h := Game.report_crime(perp.family, severity, civ, cop_saw, plan.district_at(at.x, at.z))
+	var who := ""
+	if perp.kind == "boss":
+		who = String(Game.player(int(perp.key.substr(1))).get("name", ""))
+	elif perp.kind == "crew":
+		who = String(Game.crew_by_id(perp.ref_id).get("name", ""))
+	var h := Game.report_crime(perp.family, severity, civ, cop_saw, plan.district_at(at.x, at.z), what, wbiz, cop_id, who)
 	if perp.kind == "boss":
 		var peer := int(perp.key.substr(1))
 		var msg := "%s: %d witness%s%s. Heat +%d." % [what.capitalize(), civ, "" if civ == 1 else "es",
 			", and a cop saw it" if cop_saw else "", int(round(h))]
 		Net.to_peer(peer, "reply", [msg, false])
+
+
+## Patrolmen who aren't paid go after anyone carrying a crate, and write up loaded trucks.
+func _watch_contraband() -> void:
+	for a in actors.values():
+		var boss := a as Actor
+		if boss.kind != "boss" or boss.family < 0:
+			continue
+		var truck: Vehicle = null
+		if boss.hidden_in_car:
+			for v in vehicles.values():
+				if (v as Vehicle).driver == int(boss.key.substr(1)) and (v as Vehicle).load > 0:
+					truck = v
+		if not boss.carrying and truck == null:
+			continue
+		var at: Vector3 = truck.position if truck else boss.position
+		for c in actors.values():
+			var cop := c as Actor
+			if cop.kind != "cop" or cop.is_down() or cop.chase != null:
+				continue
+			if cop.position.distance_to(at) > 9.0 or Game.cop_ignores(cop.ref_id, boss.family):
+				continue
+			var key := "%s:%s" % [cop.key, boss.key]
+			var now := Time.get_ticks_msec() / 1000.0
+			if now - float(_spotted.get(key, -99.0)) < 30.0:
+				continue
+			_spotted[key] = now
+			fx_all("whistle", [cop.key])
+			var peer := int(boss.key.substr(1))
+			if truck:
+				Game.add_evidence(boss.family, "cop", "%s took down the plates of a loaded %s family truck" % [Game.cop_by_id(cop.ref_id).get("name", "A patrolman"), Game.fam(boss.family)["name"]], 8.0, {"cop": cop.ref_id})
+				Net.to_peer(peer, "reply", ["A cop blew his whistle at the truck. He's got the plates.", false])
+			else:
+				cop.chase = boss
+				cop.chase_t = 25.0
+				Net.to_peer(peer, "reply", ["\"Hey, you! What's in the box?\" A cop is coming for you.", false])
+			Game.mark_dirty()
 
 
 func cop_caught(cop: Actor, target: Actor) -> void:
@@ -771,7 +875,8 @@ func on_knocked_down(a: Actor) -> void:
 			p["wallet"] -= lost
 			drop_item("cash", a.position + Vector3(0.8, 0, 0.3), lost)
 			Game.mark_dirty()
-		Net.to_peer(peer, "you_down", [a.down_t])
+		if peer != Net.my_id():
+			Net.to_peer(peer, "you_down", [a.down_t])
 	fx_all("down", [a.key])
 
 
@@ -874,7 +979,11 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 			else:
 				fx_all("punch", [me.key])
 		"shoot":
-			shoot(me)
+			if not Game.can_shoot(peer):
+				r = {"ok": false, "msg": "No gun or no bullets. The arms dealer stands outside the pawnshop."}
+			else:
+				Game.fired(peer, plan.district_at(me.position.x, me.position.z))
+				shoot(me)
 		"sic":
 			var t := actor(String(args[0]))
 			me.attack_target_hint = t
@@ -965,6 +1074,38 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 				r = {"ok": false, "msg": "You bolt. He's after you."}
 		"toggle":
 			r = Game.act_toggle(peer, String(args[0]))
+		"silence":
+			var ev := Game.evidence_by_id(family, int(args[0]))
+			var wb := Game.biz_by_id(int(ev.get("biz", -1)))
+			if wb.is_empty() or _door(wb).distance_to(me.position) > 4.0:
+				r = {"ok": false, "msg": "You have to see him in person."}
+			else:
+				r = Game.act_silence(peer, int(args[0]), bool(args[1]))
+				if bool(args[1]):
+					fx_all("smash", [wb["id"]])
+		"dump_gun":
+			if _near_river(me.position):
+				r = Game.act_dump_gun(peer)
+			else:
+				r = {"ok": false, "msg": "Walk to the end of a pier."}
+		"burn_books":
+			var hq := Game.biz_by_id(int(Game.fam(family)["hq"]))
+			if _door(hq).distance_to(me.position) < 4.0:
+				r = Game.act_burn_books(peer)
+			else:
+				r = {"ok": false, "msg": "The books are at your club."}
+		"cleanup":
+			r = Game.act_cleanup(peer, int(args[0]))
+		"reach":
+			r = Game.act_reach_rat(peer, int(args[0]))
+		"gun":
+			var g := actor("g1")
+			if g and g.position.distance_to(me.position) < 4.0:
+				r = Game.act_buy_gun(peer, String(args[0]))
+			else:
+				r = {"ok": false, "msg": "The dealer isn't here."}
+		"nation":
+			r = _nation(family, args)
 		"save":
 			if peer == Net.my_id():
 				var path := Game.save_campaign()
@@ -972,6 +1113,42 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 	if not r.is_empty() and String(r.get("msg", "")) != "":
 		Net.to_peer(peer, "reply", [r["msg"], r["ok"]])
 	Game.mark_dirty()
+
+
+func _nation(family: int, args: Array) -> Dictionary:
+	var op := String(args[0])
+	match op:
+		"send": return Syndicate.send_men(Game, family, String(args[1]), int(args[2]), int(args[3]), int(args[4]))
+		"police": return Syndicate.bribe_police(Game, family, String(args[1]))
+		"route": return Syndicate.bribe_route(Game, family, String(args[1]))
+		"convoy": return Syndicate.set_convoy(Game, family, String(args[1]), int(args[2]))
+		"ambush": return Syndicate.set_ambush(Game, family, String(args[1]), int(args[2]))
+		"hit": return Syndicate.order_hit(Game, family, String(args[1]), int(args[2]))
+		"recall":
+			var c: Dictionary = Game.nation["cities"][String(args[1])]
+			var men := int(c["men"].get(str(family), 0))
+			c["men"][str(family)] = 0
+			var cap := int(c["capo"].get(str(family), -1))
+			if cap >= 0:
+				var cm := Game.crew_by_id(cap)
+				if not cm.is_empty() and cm["state"] == "away":
+					cm["state"] = "free"
+					cm["task"] = "idle"
+				c["capo"].erase(str(family))
+			Game.fam(family)["arsenal"]["pistol"] += int(c["guns"].get(str(family), 0))
+			c["guns"][str(family)] = 0
+			Game.mark_dirty()
+			_sync_spawns()
+			return {"ok": true, "msg": "%d men come home from %s." % [men, Syndicate.city_def(String(args[1]))["name"]]}
+	return {"ok": false, "msg": ""}
+
+
+func _near_river(p: Vector3) -> bool:
+	for pier in plan.piers:
+		var tip: Array = pier["tip"]
+		if Vector2(tip[0] + 2.0 - p.x, tip[1] - p.z).length() < 4.0:
+			return true
+	return p.x > plan.water_x - 2.0 and p.x < plan.water_x + 0.5
 
 
 func _precinct_door() -> Vector3:
@@ -1186,7 +1363,7 @@ func _leave_vehicle_local(at: Vector3 = Vector3.INF) -> void:
 func _fx(args: Array) -> void:
 	var kind := String(args[0])
 	match kind:
-		"hit", "punch", "shoot", "down", "die", "cheer":
+		"hit", "punch", "shoot", "down", "die", "cheer", "whistle":
 			var a := actor(String(args[1]))
 			if a == null:
 				return

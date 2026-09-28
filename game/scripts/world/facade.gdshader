@@ -45,9 +45,11 @@ void fragment() {
 	float sl = max(dot(seg, seg), 0.001);
 	float t = clamp(dot(wpos - focus, seg) / sl, 0.0, 1.0);
 	float dcut = length(wpos - (focus + seg * t));
+	float dither = fract(dot(floor(FRAGCOORD.xy), vec2(0.7548, 0.5698)) + 0.13);
+	// walls right in front of the lens fade out too, so the top-down view stays readable
+	if (smoothstep(9.0, 15.0, distance(wpos, cam_pos)) < dither) discard;
 	if (t > 0.02 && wpos.y > 1.2) {
 		float keep = smoothstep(2.6, 4.2, dcut);
-		float dither = fract(dot(floor(FRAGCOORD.xy), vec2(0.7548, 0.5698)) + 0.13);
 		if (keep < dither) discard;
 	}
 	vec3 n = normalize(lnrm);
@@ -96,7 +98,7 @@ void fragment() {
 					if (glass) {
 						col = vec3(0.07, 0.08, 0.09);
 						rough = 0.12;
-						emit = vec3(1.0, 0.72, 0.42) * (0.25 + 1.6 * night);
+						emit = vec3(1.0, 0.72, 0.42) * (0.08 + 0.55 * night);
 					}
 				} else if (front && abs(u) < 0.7 && y < 2.6) {
 					col = vec3(0.12, 0.08, 0.06);  // tenement stoop door
@@ -117,7 +119,7 @@ void fragment() {
 					bool shade = r > 0.8;
 					col = shade ? vec3(0.32, 0.27, 0.2) : vec3(0.06, 0.07, 0.08);
 					rough = 0.15;
-					if (lit) emit = mix(vec3(1.0, 0.7, 0.38), vec3(0.9, 0.85, 0.7), h21(vec2(cl, fl))) * (0.2 + 1.8 * night);
+					if (lit) emit = mix(vec3(1.0, 0.7, 0.38), vec3(0.9, 0.85, 0.7), h21(vec2(cl, fl))) * (0.05 + 0.6 * night);
 					// the sash bar
 					if (abs(fy - 0.51) < 0.015) col = vec3(0.2, 0.16, 0.12);
 				}

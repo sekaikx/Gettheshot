@@ -71,6 +71,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		KEY_C: world.cam.turn(-1)
 		KEY_TAB: hud.toggle_family()
 		KEY_M: hud.toggle_map()
+		KEY_J: hud.toggle_nation()
 		KEY_N: hud.show_newspaper(-1)
 		KEY_H, KEY_F1: hud.toggle_help()
 	var a = world.local_actor
@@ -112,6 +113,9 @@ func _use() -> void:
 	if focus.is_empty():
 		return
 	match focus["type"]:
+		"river":
+			a.person.action("interact")
+			Net.to_host("dump_gun", [])
 		"item":
 			a.person.action("pickup")
 			Net.to_host("pickup", [focus["id"]])
@@ -194,6 +198,10 @@ func _find_focus(a: Actor) -> void:
 				var mine := ve.family == a.family
 				var lab := "Load the crate into the truck" if a.carrying else ("Truck: %d crates  (E unload / V drive)" % ve.load if ve.load > 0 else "Drive the %s truck (V)" % ("family" if mine else Game.fam(ve.family).get("name", "") + " family's"))
 				best = {"type": "truck", "key": ve.key, "label": lab}
+	if best.is_empty() and world._near_river(p):
+		var guns: Array = Game.fam(a.family).get("evidence", []).filter(func(e: Dictionary) -> bool: return e["kind"] == "weapon")
+		if not guns.is_empty():
+			best = {"type": "river", "label": "Throw the gun in the river (it's evidence)"}
 	if best.is_empty():
 		for b in Game.biz:
 			var door := Vector3(b["door"][0], 0.16, b["door"][1])
@@ -231,6 +239,8 @@ func _actor_label(ac: Actor) -> String:
 			return ""
 		"smuggler":
 			return "Talk to the man from the boat" if ac.visible else ""
+		"dealer":
+			return "Talk to Izzy (he sells things that go bang)"
 	return ""
 
 

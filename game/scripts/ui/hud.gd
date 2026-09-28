@@ -26,6 +26,8 @@ var _stash: Label
 var _clean: Label
 var _wallet: Label
 var _men: Label
+var _guns: Label
+var _nation: Control
 var _heat: ProgressBar
 var _date: Label
 var _players: Label
@@ -82,6 +84,11 @@ func _ready() -> void:
 	_build_dialog(root)
 	_build_family(root)
 	_build_map(root)
+	_nation = preload("res://scripts/ui/nation_map.gd").new()
+	_nation.hud = self
+	_nation.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_nation.visible = false
+	root.add_child(_nation)
 	_build_paper(root)
 	_build_help(root)
 	_build_menu(root)
@@ -215,6 +222,7 @@ func _build_bar(root: Control) -> void:
 	_clean = _stat(h, "CLEAN MONEY", GREEN)
 	_wallet = _stat(h, "ON YOU", INK)
 	_men = _stat(h, "MEN", INK)
+	_guns = _stat(h, "GUNS · AMMO", INK)
 	var hv := VBoxContainer.new()
 	hv.add_child(_label("HEAT", 12, MUTE, cond))
 	_heat = ProgressBar.new()
@@ -264,7 +272,7 @@ func _build_family(root: Control) -> void:
 	v.add_theme_constant_override("separation", 10)
 	_family.add_child(v)
 	var tabs := HBoxContainer.new()
-	for t in [["crew", "THE FAMILY"], ["biz", "BUSINESSES"], ["deals", "SIT-DOWNS & RIVALS"], ["books", "THE BOOKS"]]:
+	for t in [["crew", "THE FAMILY"], ["biz", "BUSINESSES"], ["case", "THE CASE"], ["deals", "SIT-DOWNS & RIVALS"], ["books", "THE BOOKS"]]:
 		var b := Button.new()
 		b.text = t[1]
 		var key: String = t[0]
@@ -306,8 +314,8 @@ func _build_paper(root: Control) -> void:
 	sb.shadow_color = Color(0, 0, 0, 0.6)
 	sb.shadow_size = 18
 	_paper.add_theme_stylebox_override("panel", sb)
-	_paper.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	_paper.position = Vector2(30, -230)
+	_paper.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_paper.position = Vector2(24, -380)
 	_paper.custom_minimum_size = Vector2(520, 0)
 	_paper.rotation = -0.02
 	_paper.visible = false
@@ -318,7 +326,7 @@ func _build_paper(root: Control) -> void:
 
 
 func _build_help(root: Control) -> void:
-	_help = _panel(root, Vector2(820, 640))
+	_help = _panel(root, Vector2(860, 760))
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
 	_help.add_child(v)
@@ -327,7 +335,7 @@ func _build_help(root: Control) -> void:
 	r.bbcode_enabled = true
 	r.fit_content = true
 	r.custom_minimum_size = Vector2(780, 0)
-	r.text = """[b]You are the boss.[/b] Walk the streets and build an empire one door at a time. It's New York, 1923. Prohibition turns every cellar into a gold mine.
+	r.text = """[b]You are the boss.[/b] Walk the streets of New York and build an empire one door at a time. Prohibition turns every cellar into a gold mine, until December 1933.
 
 [b]Shops[/b]: walk to a door and press [b]E[/b]. Offer [b]protection[/b] (bring your crew: men standing behind you help). If they refuse, [b]lean on them[/b]: the window gets smashed, but witnesses talk. Every month they pay into an envelope: [b]collect it[/b], or put a man on [b]collecting[/b] in that district.
 [b]Money is dirty.[/b] The stash pays wages and bribes. To buy a shop you need [b]clean[/b] money, and a shop you own [b]launders[/b] dirty cash every month. A bought shop can hide a [b]speakeasy[/b] in the back.
@@ -336,7 +344,10 @@ func _build_help(root: Control) -> void:
 [b]The law[/b]: crimes seen by people add [b]heat[/b]. A cop who sees it chases you: bribe him, go quietly, or run. Put cops on the payroll (E on a cop), or buy the precinct captain. At 100 heat, the feds raid you.
 [b]Rivals[/b] (AI families or your friends): press E on their boss or at their club for a [b]sit-down[/b]: truces, tribute, alliances. Nothing is enforced. Breaking your word is remembered.
 
-[b]Keys[/b]: WASD move · Shift sprint · Alt walk · E talk/use · F punch · G pistol (very loud) · R sic your crew · Q drop crate · V truck · Z/C turn camera · scroll zoom · Tab family · M map · N newspaper · Esc menu"""
+[b]The country (J)[/b]: send capos with men and guns to take Chicago, Detroit, Atlantic City and more. Buy the officials along a smuggling route, run convoys, ambush rival convoys, order hits.
+[b]Guns[/b] from Izzy outside the pawnshop. [b]Evidence[/b] (Tab, THE CASE): pay or scare witnesses, dump the gun in the river, burn the books.
+
+[b]Keys[/b]: J country · WASD move · Shift sprint · Alt walk · E talk/use · F punch · G pistol (very loud) · R sic your crew · Q drop crate · V truck · Z/C turn camera · scroll zoom · Tab family · M map · N newspaper · Esc menu"""
 	v.add_child(r)
 	var ok := Button.new()
 	ok.text = "GOT IT  (H to open this again)"
@@ -394,6 +405,8 @@ func refresh() -> void:
 	_clean.text = "$%s" % _money(int(f["clean"]))
 	_wallet.text = "$%s" % _money(int(p.get("wallet", 0)))
 	_men.text = str(Game.crew_of(f["id"]).size())
+	var ars: Dictionary = f.get("arsenal", {})
+	_guns.text = "%d · %d" % [int(ars.get("pistol", 0)) + int(ars.get("tommy", 0)), int(ars.get("ammo", 0))]
 	_heat.value = float(f["heat"])
 	var fill := _heat.get_theme_stylebox("fill") as StyleBoxFlat
 	if fill:
@@ -429,7 +442,13 @@ func _process(delta: float) -> void:
 
 
 var _clock_t := 0.0
+func _hide_paper_if_busy() -> void:
+	if _paper.visible and _modal not in ["", "paper"]:
+		_paper.visible = false
+
+
 func refresh_clock() -> void:
+	_hide_paper_if_busy()
 	_clock_t -= get_process_delta_time()
 	if _clock_t <= 0.0:
 		_clock_t = 0.5
@@ -476,7 +495,9 @@ func toast(text: String, kind: String = "info") -> void:
 	_toasts.add_child(p)
 	_toasts.move_child(p, 0)
 	while _toasts.get_child_count() > 6:
-		_toasts.get_child(_toasts.get_child_count() - 1).queue_free()
+		var old := _toasts.get_child(_toasts.get_child_count() - 1)
+		_toasts.remove_child(old)
+		old.queue_free()
 	var tw := create_tween()
 	tw.tween_interval(6.0)
 	tw.tween_property(p, "modulate:a", 0.0, 1.0)
@@ -501,6 +522,8 @@ func escape() -> void:
 			toggle_family()
 		"map":
 			toggle_map()
+		"nation":
+			toggle_nation()
 		"help":
 			toggle_help()
 		"paper":
@@ -521,6 +544,8 @@ func modal_key(k: int) -> void:
 		toggle_family()
 	elif _modal == "map" and k == KEY_M:
 		toggle_map()
+	elif _modal == "nation" and k == KEY_J:
+		toggle_nation()
 	elif _modal == "help" and (k == KEY_H or k == KEY_F1 or k == KEY_ENTER or k == KEY_SPACE):
 		toggle_help()
 	elif _modal == "paper" and k in [KEY_N, KEY_SPACE, KEY_ENTER]:
@@ -543,6 +568,15 @@ func toggle_map() -> void:
 	_map.visible = not _map.visible
 	_modal = "map" if _map.visible else ""
 	_map.queue_redraw()
+
+
+func toggle_nation() -> void:
+	if _modal not in ["", "nation"]:
+		return
+	_nation.visible = not _nation.visible
+	_modal = "nation" if _nation.visible else ""
+	if _nation.visible:
+		_nation.open()
 
 
 func toggle_help() -> void:
@@ -628,6 +662,14 @@ func _biz_dialog(b: Dictionary) -> void:
 			_money(int(f["dirty"])), _money(int(p["wallet"])), _money(int(f["clean"])), _money(Game.laundering_capacity(me))]
 		opts.append(["Put $%s in the stash" % _money(int(p["wallet"])), _act("bank_in", b["id"]), int(p["wallet"]) > 0])
 		opts.append(["Take $500 from the stash", _act("bank_out", b["id"]), int(f["dirty"]) > 0])
+		var books := (f["evidence"] as Array).filter(func(e: Dictionary) -> bool: return e["kind"] == "ledger")
+		if not books.is_empty():
+			opts.append(["Burn the books (the feds want them; $300 clean to rebuild)", func() -> void: Net.to_host("burn_books", []), int(f["clean"]) >= 300])
+		if int(f.get("cellar", 0)) > 0:
+			body += "\n[b]In the cellar:[/b] %d crates waiting for a speakeasy." % int(f["cellar"])
+		opts.append(["The country: cities, routes, capos (J)", func() -> void:
+			close_dialog()
+			toggle_nation()])
 		opts.append(["Open the family books (Tab)", func() -> void:
 			close_dialog()
 			toggle_family()])
@@ -656,6 +698,13 @@ func _biz_dialog(b: Dictionary) -> void:
 	if int(b["closed_until"]) >= Game.month:
 		body += "\n[color=#ff6b5b]Closed: padlocked by the feds.[/color]"
 	var carrying: bool = world.local_actor and world.local_actor.carrying
+	for e in f["evidence"]:
+		if e["kind"] == "witness" and int(e.get("biz", -1)) == int(b["id"]):
+			body += "\n[color=#ff8a7a]He saw something: %s.[/color]" % e["text"]
+			var eid: int = e["id"]
+			var price := 100 + int(float(e["w"]) * 12.0)
+			opts.append(["Pay him to forget what he saw ($%d)" % price, func() -> void: Net.to_host("silence", [eid, false]), int(p["wallet"]) >= price])
+			opts.append(["Remind him what happens to people who talk", func() -> void: Net.to_host("silence", [eid, true])])
 	if own == me:
 		body += "\nLaunders $%d a month. Legit profit $%d." % [b["launder"], b["legit"]]
 		if b["speak"]:
@@ -726,6 +775,14 @@ func _actor_dialog(focus: Dictionary) -> void:
 			opts.append(["Go back to the club", _crew(c["id"], "idle", -1)])
 			opts.append(["Leave", Callable()])
 			_open("Your man", body, opts)
+		"dealer":
+			var ars: Dictionary = Game.fam(me)["arsenal"]
+			var body := "Izzy, outside the pawnshop, never says where anything comes from.\nThe family has %d revolvers, %d Thompsons, %d rounds.\n[color=#9b907c]Every shot fired is evidence until the gun is at the bottom of the river.[/color]" % [int(ars["pistol"]), int(ars["tommy"]), int(ars["ammo"])]
+			_open("Izzy the Gun", body, [
+				["A .38 revolver ($%d)" % Game.dealer["pistol"], func() -> void: Net.to_host("gun", ["pistol"]), int(p["wallet"]) >= int(Game.dealer["pistol"])],
+				["A box of 25 rounds ($%d)" % Game.dealer["ammo"], func() -> void: Net.to_host("gun", ["ammo"]), int(p["wallet"]) >= int(Game.dealer["ammo"])],
+				["A Thompson submachine gun ($%d)%s" % [Game.dealer["tommy"], "" if Game.year() >= 1928 else ", not until 1928"], func() -> void: Net.to_host("gun", ["tommy"]), int(p["wallet"]) >= int(Game.dealer["tommy"])],
+				["Leave", Callable()]])
 		"smuggler":
 			var left := int(Game.boat.get("crates", 0))
 			var body := "\"Canadian whisky, straight off the boat. $%d a crate, cash. %d left tonight.\"\nCrates go on the pier. You carry them, the truck waits on the quay." % [Game.CRATE_COST, left]
@@ -861,6 +918,42 @@ func _fill_family() -> void:
 			var cops := Game.cops.filter(func(c: Dictionary) -> bool: return c["payroll"] == me)
 			_fam_body.add_child(_label("On the payroll: %d patrolmen%s" % [cops.size(),
 				", captains in " + ", ".join(Game.captains.keys().filter(func(d) -> bool: return Game.captains[d] == me)) if Game.captains.values().has(me) else ""], 18, MUTE))
+		"case":
+			_fam_body.add_child(_label("What the Bureau has on the %s family · heat %d" % [f["name"], int(f["heat"])], 28, INK, serif))
+			_fam_body.add_child(_label("At 100 the feds raid you. Everything here fades with time, unless you make it disappear first.", 17, MUTE, sans))
+			var how := {"witness": "Visit him (E at his shop): pay or scare him.", "street": "Street talk. It fades fast; a precinct captain on the payroll makes it fade faster.",
+				"cop": "Put that patrolman on the payroll and his notebook disappears.", "weapon": "Throw the gun in the river at the end of a pier.",
+				"ledger": "Burn the books at your club.", "body": "", "informant": "", "file": ""}
+			var items: Array = (f["evidence"] as Array).duplicate()
+			items.sort_custom(func(a, b) -> bool: return float(a["w"]) > float(b["w"]))
+			for e in items:
+				var row := HBoxContainer.new()
+				row.add_theme_constant_override("separation", 10)
+				var l := _label("%s  ·  %s  (%d)" % [String(e["kind"]).to_upper(), e["text"], int(round(float(e["w"])))], 18,
+					RED if float(e["w"]) > 15.0 else INK, sans)
+				l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				l.custom_minimum_size = Vector2(600, 0)
+				row.add_child(l)
+				var eid: int = e["id"]
+				match e["kind"]:
+					"body":
+						var b := Button.new()
+						b.text = "CLEANUP CREW $400"
+						b.pressed.connect(func() -> void: Net.to_host("cleanup", [eid]))
+						row.add_child(b)
+					"informant":
+						var b2 := Button.new()
+						b2.text = "REACH HIM $2,000"
+						b2.pressed.connect(func() -> void: Net.to_host("reach", [eid]))
+						row.add_child(b2)
+					_:
+						var hint := _label(how.get(e["kind"], ""), 15, MUTE, sans)
+						hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+						hint.custom_minimum_size = Vector2(290, 0)
+						row.add_child(hint)
+				_fam_body.add_child(row)
+			if items.is_empty():
+				_fam_body.add_child(_label("Nothing. As far as the Bureau knows, you sell bread.", 18, MUTE))
 		"deals":
 			_fam_body.add_child(_label("Sit-downs", 28, INK, serif))
 			var mine := Game.deals.filter(func(d: Dictionary) -> bool: return int(d["to"]) == me)
@@ -946,7 +1039,7 @@ func show_newspaper(m: int) -> void:
 		shown += 1
 		if shown >= (6 if m >= 0 else 12):
 			break
-	_paper.visible = shown > 0
+	_paper.visible = shown > 0 and (_modal == "" or m < 0)
 	_paper_t = 9.0
 	if m < 0 and shown > 0:
 		_modal = "paper" if _modal == "" else _modal

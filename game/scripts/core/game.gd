@@ -60,6 +60,8 @@ var relations: Dictionary = {}  # "a:b" (a < b) -> {truce_until, war, grudge_a, 
 var captains: Dictionary = {}   # district -> family id
 var news: Array = []            # [{month, text}]
 var boat := {"crates": 0, "month": -1}
+var nation: Dictionary = {}     # Syndicate: cities, routes (see syndicate.gd)
+var dealer := {"pistol": 60, "tommy": 250, "ammo": 15}
 var econ := 1.0
 var speak_mult := 1.0
 var next_id := 1
@@ -85,6 +87,8 @@ func new_campaign(config: Dictionary, humans: Array) -> void:
 	econ = 1.0 if month < CRASH_MONTH else 0.75
 	speak_mult = 1.0
 	next_id = 1
+	nation = Syndicate.fresh()
+	boat = {"crates": 12, "month": month}
 	_make_businesses()
 	var count: int = clampi(maxi(int(cfg["families"]), _family_slots_needed(humans)), 1, 8)
 	var hqs := biz.filter(func(b: Dictionary) -> bool: return b["kind"] == "club")
@@ -105,6 +109,8 @@ func new_campaign(config: Dictionary, humans: Array) -> void:
 			fam = slot
 			slot += 1
 		add_player(int(h["peer"]), String(h["name"]), clampi(fam, 0, families.size() - 1))
+	for f in families:
+		_starting_turf(f)
 	_make_cops()
 	_refresh_recruits()
 	for f in families:
@@ -113,6 +119,20 @@ func new_campaign(config: Dictionary, humans: Array) -> void:
 	_headline("A new decade on the Lower East Side: Prohibition turns every cellar into a gold mine.")
 	running = true
 	_dirty = true
+
+
+## Every family starts with a few shops near its club already paying.
+func _starting_turf(f: Dictionary) -> void:
+	var hq := biz_by_id(int(f["hq"]))
+	var door := Vector2(hq["door"][0], hq["door"][1])
+	var cands := biz.filter(func(b: Dictionary) -> bool:
+		return b["protector"] < 0 and b["kind"] not in ["club", "precinct", "poolhall", "warehouse"])
+	cands.sort_custom(func(a, b) -> bool:
+		return Vector2(a["door"][0], a["door"][1]).distance_to(door) < Vector2(b["door"][0], b["door"][1]).distance_to(door))
+	for b in cands.slice(0, 3):
+		b["protector"] = f["id"]
+		b["fear"] = 30.0
+		b["defiance"] = 20
 
 
 func _family_slots_needed(humans: Array) -> int:
@@ -161,6 +181,7 @@ func _add_family(fname: String, color: String, ai: bool, hq: Dictionary) -> Dict
 	var f := {"id": families.size(), "name": fname, "color": color, "ai": ai, "hq": hq["id"],
 		"dirty": 1200, "clean": 600, "heat": 0.0, "rep": 10, "fear": {}, "kept": 0, "broken": 0,
 		"alive": true, "support_jailed": true, "launder_on": true, "income": {}, "score": 0,
+		"arsenal": {"pistol": 1, "tommy": 0, "ammo": 12}, "evidence": [], "cellar": 0,
 		"ethnic": "ir" if fname in ["O'Hara", "Doyle"] else ("je" if fname in ["Kaplan"] else "it")}
 	hq["owned_by"] = f["id"]
 	hq["protector"] = f["id"]
@@ -321,6 +342,12 @@ func legacy(family: int) -> int:
 			v += 800
 	v += shops_of(family).size() * 300.0
 	v += f["rep"] * 15.0 - f["heat"] * 25.0
+	if not nation.is_empty():
+		for c in nation["cities"]:
+			v += float(nation["cities"][c]["influence"].get(str(family), 0.0)) * 60.0
+		for r in nation["routes"]:
+			if int(nation["routes"][r]["owner"]) == family:
+				v += 1500.0
 	for p in players.values():
 		if int(p["family"]) == family:
 			v += float(p["wallet"]) * 0.5
@@ -384,6 +411,8 @@ func _advance_month() -> void:
 	_tick_businesses()
 	_tick_families()
 	_tick_crew()
+	Syndicate.tick(self)
+	_tick_evidence()
 	for f in families:
 		if f["ai"] and f["alive"]:
 			_ai_month(f)
@@ -397,10 +426,14 @@ func _advance_month() -> void:
 		for t in _month_log.slice(0, 4):
 			_headline(t)
 	elif _rng.randf() < 0.6:
-		_headline(Names.pick(_rng, ["Reformer promises to 'clean up the ward' at Tammany rally.",
+		var filler: String = Names.pick(_rng, ["Reformer promises to 'clean up the ward' at Tammany rally.",
 			"Dry agents smash 40 barrels in a Brooklyn cellar.", "Longshoremen threaten strike on West St.",
 			"Babe Ruth hits two at the Polo Grounds.", "Fire on Orchard St. — tenants blame the landlord.",
-			"Police commissioner: 'There is no Mafia in New York.'"]))
+			"Police commissioner: 'There is no Mafia in New York.'", "Coast Guard cutter fires on a rum boat off Montauk.",
+			"Mayor Walker opens a new casino in Central Park. The Tammany boys cheer.", "Speakeasies outnumber churches, says the Anti-Saloon League.",
+			"A Ziegfeld girl marries a bootlegger. Society gasps.", "Chicago: seven men shot in a garage on North Clark Street."])
+		if news.slice(0, 8).all(func(n: Dictionary) -> bool: return n["text"] != filler):
+			_headline(filler)
 	month_passed.emit(month)
 	if month >= int(cfg["end_month"]) and not over:
 		over = true
@@ -496,8 +529,13 @@ func _tick_families() -> void:
 				else:
 					captains.erase(d)
 		# heat cools, fear fades
-		var cool := 3.0 + (4.0 if captains.values().has(f["id"]) else 0.0)
-		f["heat"] = maxf(0.0, f["heat"] * 0.9 - cool)
+		# cellar stock flows into speakeasies
+		if int(f.get("cellar", 0)) > 0:
+			for b in owned_by(f["id"]):
+				if b["speak"] and f["cellar"] > 0:
+					var mv := mini(int(f["cellar"]), maxi(0, 30 - int(b["stock"])))
+					b["stock"] += mv
+					f["cellar"] -= mv
 		var fear: Dictionary = f["fear"]
 		for d in fear.keys():
 			fear[d] = maxf(0.0, fear[d] - 4.0)
@@ -520,7 +558,10 @@ func _federal_raid(f: Dictionary) -> void:
 	if not men.is_empty():
 		var c: Dictionary = men[_rng.randi_range(0, men.size() - 1)]
 		_jail_crew(c, 6)
-	f["heat"] = 45.0
+	# the raid uses up what the feds had: they keep a smaller file
+	for e in f["evidence"]:
+		e["w"] = float(e["w"]) * 0.45
+	_recalc_heat(f)
 	f["rep"] = maxi(0, f["rep"] - 5)
 	_log("FEDS RAID %s FAMILY: $%d cash and %d crates seized." % [f["name"].to_upper(), lost, seized])
 	_notice(f["id"], "Federal raid! Lost $%d from the stash and %d crates." % [lost, seized], "bad")
@@ -538,7 +579,7 @@ func _tick_crew() -> void:
 				if _rng.randf() < flip:
 					c["state"] = "rat"
 					var f: Dictionary = families[c["family"]]
-					f["heat"] += 35.0
+					add_evidence(f["id"], "informant", "%s is talking to the District Attorney" % c["name"], 35.0, {"crew": c["id"]})
 					_log("%s TURNS STATE'S EVIDENCE against the %s family." % [c["name"].to_upper(), f["name"]])
 					_notice(c["family"], "%s flipped. He's talking to the DA." % c["name"], "bad")
 		elif c["state"] == "free":
@@ -558,14 +599,32 @@ func _jail_crew(c: Dictionary, months: int) -> void:
 
 ## A crime happened in the world. `civ` witnesses add evidence; a cop who saw it and is not
 ## bought chases (World handles the chase). Returns the heat added.
-func report_crime(family: int, severity: float, civ: int, cop_saw: bool, district: String) -> float:
+func report_crime(family: int, severity: float, civ: int, cop_saw: bool, district: String,
+		what: String = "crime", witness_biz: int = -1, cop_id: int = -1, who: String = "") -> float:
 	var f := fam(family)
 	if f.is_empty():
 		return 0.0
-	var h := severity * (0.25 + minf(civ, 6) * 0.2) + (severity * 0.8 if cop_saw else 0.0)
-	if captains.get(district, -1) == family:
-		h *= 0.4
-	f["heat"] = minf(150.0, f["heat"] + h)
+	var mult := 0.4 if captains.get(district, -1) == family else 1.0
+	var h := 0.0
+	var by := (" by %s" % who) if who != "" else ""
+	if civ > 0:
+		var w := severity * (0.25 + minf(civ, 6) * 0.2) * mult
+		h += w
+		var wb := biz_by_id(witness_biz)
+		if not wb.is_empty():
+			add_evidence(family, "witness", "%s (%s) saw the %s%s" % [wb["owner_name"], wb["name"], what, by], w * 0.7, {"biz": witness_biz})
+			if civ > 1:
+				add_evidence(family, "street", "%d people on the street saw the %s in %s" % [civ - 1, what, district], w * 0.3)
+		else:
+			add_evidence(family, "street", "%d people saw the %s in %s%s" % [civ, what, district, by], w)
+	else:
+		add_evidence(family, "street", "Talk in %s about a %s" % [district, what], severity * 0.15 * mult)
+		h += severity * 0.15 * mult
+	if cop_saw:
+		var c := cop_by_id(cop_id)
+		var cw := severity * 0.8 * mult
+		h += cw
+		add_evidence(family, "cop", "%s saw the %s%s and wrote it up" % [c.get("name", "A patrolman"), what, by], cw, {"cop": cop_id})
 	var fear: Dictionary = f["fear"]
 	fear[district] = minf(100.0, float(fear.get(district, 0.0)) + severity * 0.6)
 	_dirty = true
@@ -587,7 +646,11 @@ func jail_player(peer: int, seconds: float) -> void:
 	p["wallet"] = 0
 	p["crates"] = 0
 	var f := fam(int(p["family"]))
-	f["heat"] = maxf(0.0, f["heat"] - 15.0)
+	# the time served clears the street talk about him
+	for e in f["evidence"]:
+		if e["kind"] == "street":
+			e["w"] = float(e["w"]) * 0.5
+	_recalc_heat(f)
 	f["rep"] = maxi(0, f["rep"] - 3)
 	_log("%s of the %s family pinched by the 14th Precinct." % [p["name"].to_upper(), f["name"]])
 	_dirty = true
@@ -795,11 +858,14 @@ func act_payroll_cop(peer: int, cop_id: int) -> Dictionary:
 		return _r(false, "You need $100 on you to make the offer.")
 	p["wallet"] -= 100
 	if c["honesty"] > 0.85:
-		var f := fam(family)
-		f["heat"] += 12.0
+		add_evidence(family, "cop", "%s reported a bribe attempt" % c["name"], 12.0, {"cop": cop_id})
 		_dirty = true
 		return _r(false, "\"Are you trying to bribe an officer?\" He takes your name. (+heat)")
 	c["payroll"] = family
+	# a bought cop loses his notebook
+	var fe: Dictionary = fam(family)
+	fe["evidence"] = fe["evidence"].filter(func(e: Dictionary) -> bool: return int(e.get("cop", -1)) != cop_id)
+	_recalc_heat(fe)
 	c["honesty"] = maxf(0.0, c["honesty"] - 0.2)
 	_dirty = true
 	return _r(true, "%s pockets the money. He'll look the other way: $%d a month." % [c["name"], COP_WAGE])
@@ -880,7 +946,7 @@ func act_bribe(peer: int) -> Dictionary:
 	if p["wallet"] < price:
 		return _r(false, "You don't have $%d on you." % price)
 	p["wallet"] -= price
-	fam(family)["heat"] += 4.0
+	add_evidence(family, "cop", "A patrolman took money from your people", 4.0)
 	_dirty = true
 	return _r(true, "The cop counts the money and walks away.")
 
@@ -911,6 +977,185 @@ func act_toggle(peer: int, key: String) -> Dictionary:
 	f[key] = not f[key]
 	_dirty = true
 	return _r(true, "")
+
+
+# ------------------------------------------------------------------ evidence
+
+## Something the Bureau could use: a witness, a cop's notebook, the gun, the books, a body, a
+## man talking to the DA. Heat is the weight of everything in the file.
+func add_evidence(family: int, kind: String, text: String, weight: float, extra: Dictionary = {}) -> void:
+	var f := fam(family)
+	if f.is_empty() or weight <= 0.05:
+		return
+	var e := {"id": next_id, "kind": kind, "text": text, "w": snappedf(weight, 0.1), "month": month}
+	e.merge(extra)
+	next_id += 1
+	# the same witness or the same gun just gets heavier
+	for o in f["evidence"]:
+		if o["kind"] == kind and kind in ["weapon", "street", "witness", "cop"] and o["text"] == text:
+			o["w"] = float(o["w"]) + weight
+			_recalc_heat(f)
+			return
+	f["evidence"].append(e)
+	_recalc_heat(f)
+	_dirty = true
+
+
+func _recalc_heat(f: Dictionary) -> void:
+	var h := 0.0
+	for e in f["evidence"]:
+		h += float(e["w"])
+	f["heat"] = minf(150.0, h)
+
+
+func _tick_evidence() -> void:
+	# memories fade, some files go cold; bodies and informants don't
+	var fade := {"street": 0.75, "witness": 0.88, "cop": 0.9, "weapon": 0.97, "ledger": 0.95, "body": 0.99,
+		"informant": 1.0, "file": 0.85}
+	for f in families:
+		for e in f["evidence"]:
+			e["w"] = float(e["w"]) * float(fade.get(e["kind"], 0.9))
+			if captains.values().has(f["id"]) and e["kind"] in ["street", "cop"]:
+				e["w"] = float(e["w"]) * 0.85
+		f["evidence"] = f["evidence"].filter(func(e: Dictionary) -> bool: return float(e["w"]) >= 0.8)
+		_recalc_heat(f)
+
+
+func evidence_by_id(family: int, ev_id: int) -> Dictionary:
+	for e in fam(family).get("evidence", []):
+		if e["id"] == ev_id:
+			return e
+	return {}
+
+
+func _drop_evidence(family: int, ev_id: int) -> void:
+	var f := fam(family)
+	f["evidence"] = f["evidence"].filter(func(e: Dictionary) -> bool: return e["id"] != ev_id)
+	_recalc_heat(f)
+	_dirty = true
+
+
+## Pay a witness to forget, or remind him what happens to people who talk.
+func act_silence(peer: int, ev_id: int, threaten: bool) -> Dictionary:
+	var p := player(peer)
+	var family := int(p.get("family", -1))
+	var e := evidence_by_id(family, ev_id)
+	if e.is_empty():
+		return _r(false, "")
+	var b := biz_by_id(int(e.get("biz", -1)))
+	if threaten:
+		if not b.is_empty():
+			b["fear"] = minf(100.0, b["fear"] + 30.0)
+		if _rng.randf() < 0.75:
+			_drop_evidence(family, ev_id)
+			return _r(true, "\"I didn't see nothing. I swear on my mother.\"")
+		e["w"] = float(e["w"]) * 1.4
+		_recalc_heat(fam(family))
+		return _r(false, "He goes straight to the precinct. That made it worse.")
+	var price := 100 + int(float(e["w"]) * 12.0)
+	if p["wallet"] < price:
+		return _r(false, "He wants $%d to have a bad memory." % price)
+	p["wallet"] -= price
+	_drop_evidence(family, ev_id)
+	return _r(true, "$%d, and he never saw a thing." % price)
+
+
+func act_dump_gun(peer: int) -> Dictionary:
+	var p := player(peer)
+	var family := int(p.get("family", -1))
+	var f := fam(family)
+	var guns := (f["evidence"] as Array).filter(func(e: Dictionary) -> bool: return e["kind"] == "weapon")
+	if guns.is_empty():
+		return _r(false, "Nothing to get rid of.")
+	for e in guns:
+		_drop_evidence(family, e["id"])
+	var ars: Dictionary = f["arsenal"]
+	ars["pistol"] = maxi(0, int(ars["pistol"]) - 1)
+	return _r(true, "The gun goes into the East River. No gun, no case. You'll need a new piece.")
+
+
+func act_burn_books(peer: int) -> Dictionary:
+	var p := player(peer)
+	var family := int(p.get("family", -1))
+	var f := fam(family)
+	var books := (f["evidence"] as Array).filter(func(e: Dictionary) -> bool: return e["kind"] == "ledger")
+	if books.is_empty():
+		return _r(false, "The books are clean. Your accountant is proud.")
+	if f["clean"] < 300:
+		return _r(false, "The accountant needs $300 clean to rebuild the books without the dirty pages.")
+	f["clean"] -= 300
+	for e in books:
+		_drop_evidence(family, e["id"])
+	return _r(true, "The ledgers go in the stove. The accountant starts a new set, with nothing in it.")
+
+
+func act_cleanup(peer: int, ev_id: int) -> Dictionary:
+	var p := player(peer)
+	var family := int(p.get("family", -1))
+	var f := fam(family)
+	var e := evidence_by_id(family, ev_id)
+	if e.is_empty() or e["kind"] != "body":
+		return _r(false, "")
+	if month - int(e["month"]) > 2:
+		return _r(false, "Too late: the police already have the body.")
+	if f["dirty"] < 400:
+		return _r(false, "The cleanup crew wants $400.")
+	f["dirty"] -= 400
+	_drop_evidence(family, ev_id)
+	return _r(true, "Lime, a car trunk and the Jersey marshes. There never was a body.")
+
+
+func act_reach_rat(peer: int, ev_id: int) -> Dictionary:
+	var p := player(peer)
+	var family := int(p.get("family", -1))
+	var f := fam(family)
+	var e := evidence_by_id(family, ev_id)
+	if e.is_empty() or e["kind"] != "informant":
+		return _r(false, "")
+	if f["dirty"] < 2000:
+		return _r(false, "Getting to a man in protective custody costs $2,000: a guard, a cook, a cellmate.")
+	f["dirty"] -= 2000
+	if _rng.randf() < 0.6:
+		_drop_evidence(family, ev_id)
+		add_evidence(family, "body", "A state's witness found hanged in his cell", 10.0)
+		_log("STATE'S WITNESS FOUND DEAD IN HIS CELL. The DA's case collapses.")
+		return _r(true, "He never makes it to the trial. The DA's case falls apart.")
+	e["w"] = float(e["w"]) + 15.0
+	_recalc_heat(f)
+	return _r(false, "The guard talked. They moved the rat, and now the DA knows you tried.")
+
+
+# ------------------------------------------------------------------ guns
+
+func act_buy_gun(peer: int, kind: String) -> Dictionary:
+	var p := player(peer)
+	var f := fam(int(p.get("family", -1)))
+	if kind == "tommy" and year() < 1928:
+		return _r(false, "\"The Thompson? Not yet. Army's still got 'em all. Ask me again in '28.\"")
+	var price := int(dealer.get(kind, 0))
+	if p["wallet"] < price:
+		return _r(false, "$%d, cash." % price)
+	p["wallet"] -= price
+	var ars: Dictionary = f["arsenal"]
+	match kind:
+		"ammo": ars["ammo"] = int(ars["ammo"]) + 25
+		_: ars[kind] = int(ars.get(kind, 0)) + 1
+	_dirty = true
+	var what := {"pistol": "A .38 revolver, serial number filed off.", "tommy": "A Thompson submachine gun in a violin case.",
+		"ammo": "A box of cartridges (25)."}
+	return _r(true, what.get(kind, ""))
+
+
+func can_shoot(peer: int) -> bool:
+	var ars: Dictionary = fam(int(player(peer).get("family", -1))).get("arsenal", {})
+	return (int(ars.get("pistol", 0)) > 0 or int(ars.get("tommy", 0)) > 0) and int(ars.get("ammo", 0)) > 0
+
+
+func fired(peer: int, district: String) -> void:
+	var family := int(player(peer).get("family", -1))
+	var ars: Dictionary = fam(family)["arsenal"]
+	ars["ammo"] = maxi(0, int(ars["ammo"]) - 1)
+	add_evidence(family, "weapon", "Your gun: bullets from it in %s" % district, 6.0)
 
 
 # ------------------------------------------------------------------ deals
@@ -1012,7 +1257,7 @@ func _ai_month(f: Dictionary) -> void:
 			var n := mini(16, int(f["dirty"] / CRATE_COST / 2))
 			f["dirty"] -= n * CRATE_COST
 			if _rng.randf() < f["heat"] / 250.0:
-				f["heat"] += 6.0
+				add_evidence(f["id"], "ledger", "A seized truck traced to the %s family" % f["name"], 6.0)
 				_log("Dry agents seize a %s family truck on the West Side Highway." % f["name"])
 			else:
 				b["stock"] += n
@@ -1146,7 +1391,7 @@ func get_state() -> Dictionary:
 	return {"cfg": cfg, "month": month, "clock": clock, "families": families, "biz": biz,
 		"crew": crew, "cops": cops, "recruits": recruits, "players": players, "deals": deals,
 		"relations": relations, "captains": captains, "news": news, "boat": boat, "econ": econ,
-		"speak_mult": speak_mult, "next_id": next_id, "over": over, "running": running}
+		"speak_mult": speak_mult, "next_id": next_id, "over": over, "running": running, "nation": nation}
 
 
 func apply_state(s: Dictionary) -> void:
@@ -1159,6 +1404,7 @@ func apply_state(s: Dictionary) -> void:
 	deals = s["deals"]; relations = s["relations"]; captains = s["captains"]; news = s["news"]
 	boat = s["boat"]; econ = s["econ"]; speak_mult = s["speak_mult"]; next_id = s["next_id"]
 	over = s["over"]; running = s["running"]
+	nation = s.get("nation", Syndicate.fresh())
 	state_changed.emit()
 
 

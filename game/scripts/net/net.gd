@@ -178,6 +178,8 @@ func start_peer(peer: int) -> void:
 
 @rpc("authority", "reliable", "call_local")
 func _start() -> void:
+	if OS.get_cmdline_user_args().has("--mptest"):
+		print("start received")
 	in_game = true
 	game_started.emit()
 
@@ -222,7 +224,9 @@ func _ev(name: String, args: Array) -> void:
 func send_state(state: Dictionary, peer: int = 0) -> void:
 	if not is_host() or is_solo:
 		return
-	var bytes := var_to_bytes(state).compress(FileAccess.COMPRESSION_ZSTD)
+	var bytes := var_to_bytes(state).compress(FileAccess.COMPRESSION_GZIP)
+	if OS.get_cmdline_user_args().has("--mptest"):
+		print("state sent ", bytes.size(), " to ", peer)
 	if peer == 0:
 		_state.rpc(bytes)
 	else:
@@ -231,7 +235,9 @@ func send_state(state: Dictionary, peer: int = 0) -> void:
 
 @rpc("authority", "reliable")
 func _state(bytes: PackedByteArray) -> void:
-	var raw := bytes.decompress_dynamic(-1, FileAccess.COMPRESSION_ZSTD)
+	if OS.get_cmdline_user_args().has("--mptest"):
+		print("state received ", bytes.size())
+	var raw := bytes.decompress_dynamic(-1, FileAccess.COMPRESSION_GZIP)
 	var s = bytes_to_var(raw)
 	if s is Dictionary:
 		Game.apply_state(s)
