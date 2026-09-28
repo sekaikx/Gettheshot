@@ -1,0 +1,320 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Famiglia Mockups</title>
+<style>
+:root{--bg:#14110e;--panel:#1d1915;--panel2:#241f1a;--line:#4a3d2c;--gold:#d4a532;--gold2:#f0d58a;--ink:#efe6d2;--mute:#9b907c;--red:#c42828;--red2:#ff6b5b;--blue:#3c6ec8;--green:#3ca05a;--paper:#e9dfc7;
+--serif:"Liberation Serif","DejaVu Serif",serif;--mono:"Liberation Mono","DejaVu Sans Mono",monospace;--sans:"Liberation Sans","DejaVu Sans",sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);width:1280px;height:720px;overflow:hidden}
+.screen{display:none;position:relative;width:1280px;height:720px}
+.top{position:absolute;left:0;top:0;right:0;height:52px;background:linear-gradient(#211c17,#171310);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 16px;gap:22px;font-family:var(--mono);font-size:14px;z-index:5}
+.crest{width:32px;height:32px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font:bold 18px var(--serif);color:#f3e3c0}
+.fam{font:bold 17px var(--serif);letter-spacing:1px}
+.stat{display:flex;flex-direction:column;line-height:1.1}.stat small{color:var(--mute);font-size:10px;letter-spacing:1px}
+.stat b{font-size:16px}.dirty b{color:#c9b36a}.clean b{color:#8fd19e}
+.bar{width:110px;height:8px;background:#2a221c;margin-top:4px}.bar i{display:block;height:100%;background:#c4552b}
+.date{margin-left:auto;text-align:right;font-family:var(--serif)}.date b{font-size:18px}
+.tabs{display:flex;gap:4px;margin-left:10px}.tabs span{padding:6px 10px;border:1px solid var(--line);color:var(--mute);font-size:12px}.tabs span.on{color:var(--gold2);border-color:var(--gold);background:#2a2218}
+.players{display:flex;gap:6px}.players span{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:bold 12px var(--sans);color:#fff;position:relative}
+.players span::after{content:"";position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:#5c5;border:2px solid #171310}
+.players span.off::after{background:#777}
+h2{font:bold 15px var(--mono);letter-spacing:2px;color:var(--gold2);margin:0 0 10px}
+.panel{background:var(--panel);border:1px solid var(--line)}
+.card{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--gold);padding:10px 12px;margin-bottom:10px}
+.card .t{font:bold 15px var(--serif);margin-bottom:4px}.card .d{font-size:12.5px;color:#cfc4ad;line-height:1.35}
+.btns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.btns span{font:bold 11px var(--mono);padding:5px 8px;border:1px solid var(--line);background:#1a1612}
+.btns span.hi{border-color:var(--gold);color:var(--gold2)}.btns span.bad{border-color:#7a2a22;color:#ff8a7a}
+.tag{display:inline-block;font:bold 10px var(--mono);padding:2px 5px;border:1px solid;margin-right:4px}
+.foot{position:absolute;left:0;right:0;bottom:0;height:30px;background:#0e0c0a;border-top:1px solid var(--line);font:12px var(--mono);color:#b9ad96;display:flex;align-items:center;gap:26px;padding:0 14px;white-space:nowrap;overflow:hidden}
+.foot b{color:var(--gold2)}
+.cap{position:absolute;left:14px;bottom:40px;font:italic 13px var(--serif);color:var(--mute);z-index:6}
+/* screen 2 family */
+.tree{position:absolute;left:0;top:52px;right:300px;bottom:30px;padding:18px}
+.node{position:absolute;width:190px;background:var(--panel2);border:1px solid var(--line);padding:8px 10px;font-size:12px}
+.node .n{display:flex;gap:8px;align-items:center}.pic{width:38px;height:38px;border-radius:50%;background:#3a3027;display:flex;align-items:center;justify-content:center;font:bold 16px var(--serif);color:#e9dcc0;flex:none;border:2px solid #6b5a44}
+.node .nm{font:bold 14px var(--serif)}.node .rk{font:10px var(--mono);color:var(--gold);letter-spacing:1px}
+.meter{display:flex;align-items:center;gap:6px;margin-top:5px;font:10px var(--mono);color:var(--mute)}.meter .bar{width:90px;height:6px;margin:0}
+.node.alert{border-color:#a3201b;box-shadow:0 0 0 1px #a3201b,0 0 18px rgba(196,40,40,.35)}
+.side{position:absolute;right:0;top:52px;width:300px;bottom:30px;border-left:1px solid var(--line);background:var(--panel);padding:16px}
+svg.lines{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+/* ledger */
+.flow{position:absolute;left:0;top:52px;right:0;bottom:30px;padding:20px}
+.col{position:absolute;top:80px;width:230px}
+.box{background:var(--panel2);border:1px solid var(--line);padding:8px 10px;margin-bottom:10px;font-size:12.5px}
+.box b{font-family:var(--mono)}.box .s{color:var(--mute);font-size:11px}.box .bar{margin-top:7px}
+/* board */
+.cork{position:absolute;left:0;top:52px;right:320px;bottom:30px;background:
+ radial-gradient(circle at 20% 30%,#7a5a3a 0,transparent 60%),radial-gradient(circle at 80% 70%,#6e4f33 0,transparent 55%),#654a31}
+.polaroid{position:absolute;width:128px;background:#efe9da;padding:7px 7px 6px;box-shadow:3px 4px 10px rgba(0,0,0,.5);color:#222;font:12px var(--serif);text-align:center}
+.polaroid .ph{height:96px;background:#6d6558;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.polaroid .ph i{display:block;width:62px;height:70px;background:#2b241c;border-radius:31px 31px 6px 6px;margin-bottom:-8px}
+.polaroid b{display:block;font-size:13px;margin-top:4px}.polaroid.unk .ph{background:#4a453d}
+.pin{position:absolute;top:-6px;left:58px;width:12px;height:12px;border-radius:50%;background:#b3241c;box-shadow:1px 2px 2px rgba(0,0,0,.5)}
+.note{position:absolute;background:#f3e79b;color:#2a2410;font:13px var(--mono);padding:8px 10px;box-shadow:2px 3px 8px rgba(0,0,0,.45);width:170px;line-height:1.3}
+.stamp{position:absolute;border:3px solid #a3201b;color:#a3201b;font:bold 20px var(--serif);padding:2px 10px;transform:rotate(-12deg);opacity:.85}
+/* sitdown */
+.room{position:absolute;left:0;top:52px;right:0;bottom:30px;background:radial-gradient(ellipse at 50% 30%,#3b2a1a 0,#16110c 70%)}
+.paper{background:var(--paper);color:#1e140a;box-shadow:0 10px 40px rgba(0,0,0,.7)}
+.term{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px dashed #b8a887;font:15px var(--serif)}
+.term .who{font:bold 11px var(--mono);padding:3px 6px;color:#fff;flex:none;width:74px;text-align:center}
+</style></head><body>
+
+<!-- ============ SCREEN 1: CITY ============ -->
+<div class="screen" id="s1">
+ <div class="top">
+  <div class="crest">V</div><div class="fam">VITALE FAMILY</div>
+  <div class="stat dirty"><small>DIRTY CASH</small><b>$41,300</b></div>
+  <div class="stat clean"><small>CLEAN MONEY</small><b>$6,850</b></div>
+  <div class="stat"><small>MEN</small><b>14</b></div>
+  <div class="stat"><small>FEDERAL ATTENTION</small><div class="bar"><i style="width:34%"></i></div></div>
+  <div class="tabs"><span class="on">CITY</span><span>FAMILY</span><span>LEDGER</span><span>INTEL</span><span>COMMISSION</span></div>
+  <div class="players"><span style="background:var(--red)">A</span><span style="background:var(--blue)">M</span><span class="off" style="background:var(--green)">J</span><span style="background:#b88a20">D</span></div>
+  <div class="date"><b>March 1926</b><br><small style="color:var(--mute);font:11px var(--mono)">WEEK 3 · ▶ ▶▶ ⏸</small></div>
+ </div>
+ <canvas id="map" width="930" height="638" style="position:absolute;left:0;top:52px"></canvas>
+ <div class="panel" style="position:absolute;left:520px;top:250px;width:290px;padding:12px;z-index:4;box-shadow:0 8px 30px rgba(0,0,0,.6)">
+  <div style="font:bold 17px var(--serif)">Weinberg's Tailoring</div>
+  <div style="font:11px var(--mono);color:var(--mute);margin:2px 0 8px">GARMENT DISTRICT · 112 W 37th St</div>
+  <div style="font-size:12.5px;line-height:1.6">
+   Owner: <b>Sol Weinberg</b> — <span style="color:#ff8a7a">Defiant</span><br>
+   Street tax: <b style="font-family:var(--mono)">$0</b> <span style="color:var(--mute)">(refusing for 2 wks)</span><br>
+   Can launder: <b style="font-family:var(--mono)">$250/wk</b> if fronted<br>
+   Neighbours watching: <b>6 shops</b> <span class="tag" style="color:#f0d58a;border-color:#8a6a20">REPUTATION</span><br>
+   Cop on beat: Ptl. Kearney <span class="tag" style="color:#8fd19e;border-color:#2d6a3a">ON PAYROLL</span>
+  </div>
+ </div>
+ <div class="side" style="width:350px">
+  <h2>NEEDS YOUR DECISION</h2>
+  <div class="card" style="border-left-color:#c4552b"><div class="t">The tailor won't pay</div><div class="d">Weinberg refuses the street tax and says he'll go to the papers. Six shops on 37th St are waiting to see what you do.</div>
+   <div class="btns"><span class="hi">SEND FRANKIE TO TALK</span><span class="bad">BREAK HIS WINDOWS</span><span>BUY HIS SHOP</span><span>LET IT GO</span></div></div>
+  <div class="card"><div class="t">Sal wants to hit a whiskey truck</div><div class="d">The shipment is Russo's (Marco). Sal says nobody will know. Your spy puts it at 40% they trace it back.</div>
+   <div class="btns"><span class="hi">APPROVE</span><span>FORBID</span><span>TIP OFF MARCO (+TRUST)</span></div></div>
+  <div class="card" style="border-left-color:#3c6ec8"><div class="t">Letter from Don Russo</div><div class="d">"Our boys keep bumping into each other on the waterfront. Let's sit down Friday."</div>
+   <div class="btns"><span class="hi">ACCEPT SIT-DOWN</span><span>IGNORE</span></div></div>
+  <div class="card" style="border-left-color:#3ca05a"><div class="t">Capt. Doyle wants more</div><div class="d">The 14th Precinct captain says the new commissioner is "asking questions". He wants $300/wk, up from $200.</div>
+   <div class="btns"><span class="hi">PAY</span><span>NEGOTIATE</span><span class="bad">FIND A NEW CAPTAIN</span></div></div>
+ </div>
+ <div class="foot"><b>THE DAILY LEDGER:</b> Truck of Canadian rye vanishes on West St. · Reformer Harlan leads mayoral polls · O'Hara crew opens 3 speakeasies in Hell's Kitchen · Stock market hits record high</div>
+</div>
+
+<!-- ============ SCREEN 2: FAMILY ============ -->
+<div class="screen" id="s2">
+ <div class="top">
+  <div class="crest">V</div><div class="fam">VITALE FAMILY</div>
+  <div class="stat dirty"><small>DIRTY CASH</small><b>$41,300</b></div><div class="stat clean"><small>CLEAN MONEY</small><b>$6,850</b></div><div class="stat"><small>MEN</small><b>14</b></div>
+  <div class="tabs"><span>CITY</span><span class="on">FAMILY</span><span>LEDGER</span><span>INTEL</span><span>COMMISSION</span></div>
+  <div class="date"><b>March 1926</b></div>
+ </div>
+ <div class="tree" id="tree"></div>
+ <div class="side">
+  <h2>SAL ESPOSITO</h2>
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px"><div class="pic" style="width:64px;height:64px;font-size:26px;border-color:#a3201b">S</div>
+   <div style="font-size:12.5px;line-height:1.5"><b style="font:bold 17px var(--serif)">Salvatore "Sal" Esposito</b><br>Capo · Waterfront crew · 41 yrs<br><span style="color:#ff8a7a">ARRESTED — assault, extortion</span></div></div>
+  <div style="font:12px var(--mono);line-height:1.9">
+   Facing ........... <b>6–9 years</b><br>
+   Loyalty .......... <b style="color:#f0d58a">62</b> ▼ was 78<br>
+   Greed ............ <b>High</b><br>
+   Knows about ...... <b style="color:#ff8a7a">docks, 2 hits, you</b><br>
+   Wife &amp; 3 kids ... <b style="color:#ff8a7a">unpaid 2 wks</b><br>
+  </div>
+  <div class="card" style="margin-top:12px;border-left-color:#a3201b"><div class="t" style="color:#ff8a7a">Chance Sal flips: 31%</div>
+   <div class="d">The DA is offering a deal. Every week his family goes unsupported, the odds go up.</div>
+   <div class="btns"><span class="hi">HIRE GOOD LAWYER $2k</span><span class="hi">PAY HIS WIFE $80/wk</span><span>BRIBE THE JUDGE</span><span class="bad">HAVE HIM SILENCED</span></div></div>
+  <div style="font:italic 12px var(--serif);color:var(--mute);margin-top:6px">"A man who's taken care of doesn't talk."</div>
+ </div>
+ <div class="foot"><b>FAMILY:</b> 1 boss · 1 underboss · 1 consigliere · 3 capos · 8 soldiers · 21 associates · Books closed until the Commission votes</div>
+</div>
+
+<!-- ============ SCREEN 3: LEDGER ============ -->
+<div class="screen" id="s3">
+ <div class="top">
+  <div class="crest">V</div><div class="fam">VITALE FAMILY</div>
+  <div class="stat dirty"><small>DIRTY CASH</small><b>$41,300</b></div><div class="stat clean"><small>CLEAN MONEY</small><b>$6,850</b></div>
+  <div class="tabs"><span>CITY</span><span>FAMILY</span><span class="on">LEDGER</span><span>INTEL</span><span>COMMISSION</span></div>
+  <div class="date"><b>March 1926</b><br><small style="color:var(--mute);font:11px var(--mono)">WEEKLY FLOW</small></div>
+ </div>
+ <div class="flow">
+  <svg class="lines" id="flowsvg"></svg>
+  <div style="position:absolute;left:30px;top:24px;font:bold 13px var(--mono);color:var(--gold2);letter-spacing:2px">RACKETS · DIRTY IN</div>
+  <div style="position:absolute;left:395px;top:24px;font:bold 13px var(--mono);color:var(--gold2);letter-spacing:2px">FRONTS · LAUNDERING</div>
+  <div style="position:absolute;left:760px;top:24px;font:bold 13px var(--mono);color:var(--gold2);letter-spacing:2px">WHERE IT GOES</div>
+  <div class="col" style="left:30px;top:60px">
+   <div class="box" id="r1"><b>Bootlegging</b> <span style="float:right;color:#c9b36a;font-family:var(--mono)">$3,900</span><div class="s">4 trucks · Canadian rye via docks</div></div>
+   <div class="box" id="r2"><b>Numbers game</b> <span style="float:right;color:#c9b36a;font-family:var(--mono)">$1,400</span><div class="s">11 runners · Little Italy, Harlem</div></div>
+   <div class="box" id="r3"><b>Loansharking</b> <span style="float:right;color:#c9b36a;font-family:var(--mono)">$900</span><div class="s">$18k on the street · 5% / week</div></div>
+   <div class="box" id="r4"><b>Street tax</b> <span style="float:right;color:#c9b36a;font-family:var(--mono)">$620</span><div class="s">31 shops paying · 4 refusing</div></div>
+   <div class="box" style="border-color:#7a2a22"><b style="color:#ff8a7a">Tribute to Commission</b> <span style="float:right;color:#ff8a7a;font-family:var(--mono)">−$400</span></div>
+   <div class="box" style="border-color:#7a2a22"><b style="color:#ff8a7a">Payroll: cops, judge</b> <span style="float:right;color:#ff8a7a;font-family:var(--mono)">−$750</span></div>
+  </div>
+  <div class="col" style="left:395px;top:60px;width:260px">
+   <div class="box" id="f1"><b>Vitale Bakery</b> <span style="float:right;font-family:var(--mono)">$600 / $600</span><div class="bar" style="width:100%"><i style="width:100%;background:#8fd19e"></i></div></div>
+   <div class="box" id="f2"><b>Mulberry Laundry</b> <span style="float:right;font-family:var(--mono)">$900 / $900</span><div class="bar" style="width:100%"><i style="width:100%;background:#8fd19e"></i></div></div>
+   <div class="box" id="f3"><b>Esposito Trucking</b> <span style="float:right;font-family:var(--mono)">$1.2k / $1.5k</span><div class="bar" style="width:100%"><i style="width:80%;background:#8fd19e"></i></div></div>
+   <div class="box" id="f4" style="border-color:#3c6ec8"><b>O'Hara's "consulting" (Jess)</b> <span style="float:right;font-family:var(--mono)">$1,000</span><div class="s">She takes 15% · she sees your volume</div></div>
+   <div class="card" style="border-left-color:#c4552b;margin-top:16px"><div class="t" style="color:#ff8a7a">$3,120 / week you can't launder</div><div class="d">It sits in the stash under the bakery. If that gets raided, the cash becomes evidence.</div>
+    <div class="btns"><span class="hi">BUY A FRONT</span><span>STASH IN JERSEY</span><span>BRIBE A BANKER</span></div></div>
+  </div>
+  <div class="col" style="left:760px;top:60px;width:470px">
+   <div class="box" id="o1" style="border-color:#2d6a3a"><b style="color:#8fd19e">Clean money</b> <span style="float:right;color:#8fd19e;font-family:var(--mono)">$3,700</span><div class="s">Buy real estate, legit companies, politicians, lawyers. Taxed and visible.</div></div>
+   <div class="box" id="o2" style="border-color:#8a6a20"><b style="color:#c9b36a">Stash (dirty)</b> <span style="float:right;color:#c9b36a;font-family:var(--mono)">+$3,120</span><div class="s">Pays men, bribes, and street loans. Spending it openly draws federal attention.</div></div>
+   <div class="panel" style="padding:14px;margin-top:24px">
+    <div style="font:bold 13px var(--mono);color:var(--gold2);letter-spacing:1px;margin-bottom:8px">WHY YOU CAN'T JUST BUY THINGS</div>
+    <div style="font-size:13px;line-height:1.5;color:#cfc4ad">A baker who owns three Packards gets the Treasury's attention. Every dirty dollar you spend in the open adds <b>evidence</b>. Big purchases need clean money, and clean money has to come through fronts. The more you earn, the harder it is to hide.</div>
+   </div>
+  </div>
+ </div>
+ <div class="foot"><b>TIP:</b> Real mob finances ran on this bottleneck. You grow as fast as you can hide your money.</div>
+</div>
+
+<!-- ============ SCREEN 4: INTEL BOARD ============ -->
+<div class="screen" id="s4">
+ <div class="top">
+  <div class="crest">V</div><div class="fam">VITALE FAMILY</div>
+  <div class="tabs"><span>CITY</span><span>FAMILY</span><span>LEDGER</span><span class="on">INTEL</span><span>COMMISSION</span></div>
+  <div class="stat"><small>SOURCE</small><b style="font-size:13px">Det. Kearney (your man inside)</b></div>
+  <div class="date"><b>March 1926</b></div>
+ </div>
+ <div class="cork" id="cork">
+  <svg class="lines" id="strings"></svg>
+  <div style="position:absolute;left:24px;top:14px;font:bold 22px var(--serif);color:#f3e7c8;text-shadow:0 2px 4px #000">WHAT THE BUREAU KNOWS — as far as Kearney can tell</div>
+ </div>
+ <div class="side" style="width:320px">
+  <h2>CASE: UNITED STATES v. VITALE</h2>
+  <div style="font:12px var(--mono);line-height:2">
+   Against you ........ <b style="color:#f0d58a">23%</b> <span style="color:var(--mute)">(indict at 70%)</span><br>
+   Against Sal ........ <b style="color:#ff8a7a">81%</b><br>
+   Against Frankie .... <b>44%</b><br>
+   Wiretaps ........... <b style="color:#ff8a7a">1 suspected</b> — bakery phone<br>
+   Informants ......... <b>unknown</b>
+  </div>
+  <div class="card" style="margin-top:12px;border-left-color:#c4552b"><div class="t">You're insulated, for now</div><div class="d">Orders to Sal went through Frankie, so there's no direct link to you. But if Sal flips, he can put you in the room for the Castellano hit.</div></div>
+  <div class="card"><div class="t">Options</div><div class="btns"><span class="hi">STOP USING BAKERY PHONE</span><span>MOVE THE STASH</span><span>FEED THEM A FALSE LEAD</span><span class="bad">LEAK: MORETTI DID IT</span></div></div>
+  <div style="font:italic 12px var(--serif);color:var(--mute)">This is only what your mole can see. The real file may be bigger.</div>
+ </div>
+ <div class="foot"><b>INTEL:</b> Agent Rourke (Treasury) was seen at the Moretti social club · Russo's bookkeeper was subpoenaed · O'Hara bought a State Assembly seat</div>
+</div>
+
+<!-- ============ SCREEN 5: SIT-DOWN ============ -->
+<div class="screen" id="s5">
+ <div class="top">
+  <div class="crest">V</div><div class="fam">SIT-DOWN · Umberto's Clam House, Friday 11pm</div>
+  <div class="players" style="margin-left:auto"><span style="background:var(--red)">A</span><span style="background:var(--blue)">M</span></div>
+  <div style="font:12px var(--mono);color:#5c5">● VOICE: Alex, Marco</div>
+ </div>
+ <div class="room">
+  <div style="position:absolute;left:40px;top:40px;width:250px;text-align:center">
+   <div class="pic" style="width:120px;height:120px;font-size:50px;margin:0 auto;border-color:var(--red);background:#3b1d1a">V</div>
+   <div style="font:bold 20px var(--serif);margin-top:10px">Don Vitale</div><div style="font:12px var(--mono);color:var(--mute)">Alex · you</div>
+   <div style="font:12px var(--mono);margin-top:14px;line-height:1.8;text-align:left;background:var(--panel);border:1px solid var(--line);padding:10px">Reputation: <b style="color:#8fd19e">Keeps his word</b><br>Deals kept: 7 · broken: 0<br>Men: 14 · Waterfront: 40%</div>
+  </div>
+  <div style="position:absolute;right:40px;top:40px;width:250px;text-align:center">
+   <div class="pic" style="width:120px;height:120px;font-size:50px;margin:0 auto;border-color:var(--blue);background:#1a2640">R</div>
+   <div style="font:bold 20px var(--serif);margin-top:10px">Don Russo</div><div style="font:12px var(--mono);color:var(--mute)">Marco · online</div>
+   <div style="font:12px var(--mono);margin-top:14px;line-height:1.8;text-align:left;background:var(--panel);border:1px solid var(--line);padding:10px">Reputation: <b style="color:#f0d58a">Unpredictable</b><br>Deals kept: 5 · broken: 2<br>Men: 17 · Waterfront: 45%</div>
+  </div>
+  <div class="paper" style="position:absolute;left:320px;top:28px;width:640px;padding:20px 24px">
+   <div style="text-align:center;font:bold 14px var(--mono);letter-spacing:3px">— THE AGREEMENT —</div>
+   <div style="text-align:center;font:italic 13px var(--serif);color:#5a4630;margin-bottom:10px">Nothing is written down. Everyone remembers.</div>
+   <div class="term"><span class="who" style="background:var(--red)">VITALE</span>Takes Piers 4–7. Russo keeps Piers 1–3</div>
+   <div class="term"><span class="who" style="background:var(--blue)">RUSSO</span>Pays $1,000 a week for 10 weeks for Vitale's trucks</div>
+   <div class="term"><span class="who" style="background:#555">BOTH</span>No hits on each other's made men</div>
+   <div class="term"><span class="who" style="background:#555">BOTH</span>Vote together on the Commission's narcotics ban</div>
+   <div class="term" style="border:none"><span class="who" style="background:#8a6a20">GUARANTEE</span><span>Russo's nephew joins the Vitale crew <i style="color:#5a4630">(a hostage in all but name)</i></span></div>
+   <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+    <span style="font:bold 12px var(--mono);padding:8px 14px;background:#2d4f22;color:#f3ead6">SHAKE HANDS</span>
+    <span style="font:bold 12px var(--mono);padding:8px 14px;background:#6b4a22;color:#f3ead6">COUNTER-OFFER</span>
+    <span style="font:bold 12px var(--mono);padding:8px 14px;background:#6e1f1f;color:#f3ead6">WALK OUT</span>
+    <span style="margin-left:auto;font:12px var(--mono);color:#5a4630">Commission witness: Jess (O'Hara)</span>
+   </div>
+  </div>
+  <div class="panel" style="position:absolute;left:320px;top:392px;width:640px;padding:12px 16px;font-size:13px;line-height:1.5;color:#cfc4ad">
+   <b style="font:bold 12px var(--mono);color:var(--gold2);letter-spacing:1px">WHAT YOU KNOW THAT HE DOESN'T</b><br>
+   · Your spy says Russo's crew is short on men after the Brooklyn arrests.<br>
+   · Sal still hasn't told you who hijacked the truck in February.
+  </div>
+ </div>
+ <div class="foot"><b>RULE:</b> The game never enforces deals. Only reputation, hostages and the Commission do.</div>
+</div>
+
+<script>
+const s = new URLSearchParams(location.search).get('s') || '1';
+document.getElementById('s' + s).style.display = 'block';
+function hash(x,y){let h=Math.imul(x*374761393+y*668265263,1274126177);h^=h>>>13;h=Math.imul(h,1103515245);return((h^(h>>>16))>>>0)/4294967295}
+
+if (s === '1') {
+  const c = document.getElementById('map'), x = c.getContext('2d');
+  x.fillStyle = '#15120f'; x.fillRect(0,0,930,638);
+  x.fillStyle = '#0f1d26'; x.fillRect(840,0,90,638);
+  for (let p=0;p<6;p++){x.fillStyle='#3a3027';x.fillRect(830,40+p*100,60,12);}
+  const cell=58, blk=48, ox=14, oy=10;
+  const own=(cx,cy)=>{ // district ownership
+    if(cx<5&&cy>=4) return [196,40,40];
+    if(cx>=5&&cx<9&&cy>=5) return [196,40,40];
+    if(cx>=10&&cy<5) return [60,110,200];
+    if(cx<5&&cy<3) return [60,160,90];
+    if(cx>=10&&cy>=7) return [212,165,50];
+    return null; };
+  for(let cy=0;cy<11;cy++)for(let cx=0;cx<14;cx++){
+    const px=ox+cx*cell, py=oy+cy*cell; x.fillStyle='#231e19'; x.fillRect(px,py,blk,blk);
+    const n=2+Math.floor(hash(cx,cy)*3); for(let i=0;i<n;i++){const sh=42+hash(cx*7+i,cy)*24; x.fillStyle=`rgb(${sh},${sh*.88},${sh*.74})`; x.fillRect(px+3+i*(blk/n),py+3,blk/n-5,blk-6);}
+    const o=own(cx,cy); if(o){x.fillStyle=`rgba(${o},0.32)`;x.fillRect(px,py,blk,blk);x.strokeStyle=`rgba(${o},0.9)`;x.lineWidth=2;x.strokeRect(px+1,py+1,blk-2,blk-2);}
+    if(hash(cx*3,cy*5)>0.7){x.fillStyle='rgba(255,200,110,.6)';x.fillRect(px+blk/2-2,py+blk/2-2,4,4);}
+  }
+  // contested + selected block
+  x.strokeStyle='#ffd27a';x.lineWidth=3;x.setLineDash([6,4]);x.strokeRect(ox+8*cell-3,oy+4*cell-3,blk+6,blk+6);x.setLineDash([]);
+  x.strokeStyle='#fff';x.lineWidth=3;x.strokeRect(ox+7*cell-4,oy+3*cell-4,blk+8,blk+8);
+  const lab=(t,a,b)=>{x.font='bold 13px "Liberation Mono"';x.fillStyle='rgba(0,0,0,.7)';const w=x.measureText(t).width+12;x.fillRect(a-w/2,b-11,w,22);x.fillStyle='#efe6d2';x.textAlign='center';x.textBaseline='middle';x.fillText(t,a,b);};
+  lab('LITTLE ITALY',150,420); lab('GARMENT DISTRICT',440,150); lab('WATERFRONT',720,110); lab("HELL'S KITCHEN",150,80); lab('LOWER EAST SIDE',420,560); lab('BROOKLYN DOCKS',760,540);
+  // crew markers
+  [[3,5,'F'],[6,6,'S'],[8,4,'!']].forEach(([cx,cy,t])=>{const a=ox+cx*cell+blk/2,b=oy+cy*cell+blk/2;x.fillStyle=t==='!'?'#c4552b':'#c42828';x.beginPath();x.arc(a,b,11,0,7);x.fill();x.strokeStyle='#f3e3c0';x.lineWidth=2;x.stroke();x.fillStyle='#fff';x.font='bold 12px "Liberation Sans"';x.textAlign='center';x.textBaseline='middle';x.fillText(t,a,b+1);});
+  // legend
+  x.fillStyle='rgba(10,8,7,.85)';x.fillRect(14,560,300,58);x.font='12px "Liberation Mono"';x.textAlign='left';
+  [['VITALE (you)',[196,40,40],0],['RUSSO · Marco',[60,110,200],1],["O'HARA · Jess",[60,160,90],2],['MORETTI · Dani',[212,165,50],3]].forEach(([t,c,i])=>{const a=24+(i%2)*150,b=575+Math.floor(i/2)*24;x.fillStyle=`rgb(${c})`;x.fillRect(a,b-6,12,12);x.fillStyle='#e8dcc2';x.fillText(t,a+18,b+1);});
+}
+
+if (s === '2') {
+  const T=document.getElementById('tree');
+  const N=[
+   [400,10,'A','Don Antonio Vitale','BOSS · YOU',90,5,''],
+   [150,120,'F','Frankie "Two Times"','UNDERBOSS',88,30,''],
+   [650,120,'L','Lou Castagna','CONSIGLIERE',95,12,''],
+   [20,250,'S','Sal Esposito','CAPO · WATERFRONT',62,81,'alert'],
+   [300,250,'T','Tommy Bruno','CAPO · LITTLE ITALY',74,38,''],
+   [580,250,'N','Nicky Greco','CAPO · GARMENT',55,20,''],
+   [20,400,'J','Joey Sticks','SOLDIER',70,55,''],
+   [300,400,'P','Paulie Neri','SOLDIER',81,22,''],
+   [580,400,'V','Vinnie "Ears"','SOLDIER',41,18,'']];
+  let svg='<svg class="lines" viewBox="0 0 980 640">';
+  const L=[[0,1],[0,2],[1,3],[1,4],[1,5],[3,6],[4,7],[5,8]];
+  L.forEach(([a,b])=>{const A=N[a],B=N[b];svg+=`<path d="M${A[0]+95} ${A[1]+78} V${(A[1]+78+B[1])/2} H${B[0]+95} V${B[1]}" stroke="#6b5a44" stroke-width="2" fill="none"/>`});
+  svg+='</svg>'; T.innerHTML=svg;
+  N.forEach(([l,t,i,n,r,loy,exp,cl])=>{T.innerHTML+=`<div class="node ${cl}" style="left:${l}px;top:${t}px"><div class="n"><div class="pic">${i}</div><div><div class="nm">${n}</div><div class="rk">${r}</div></div></div>
+   <div class="meter">LOYALTY<div class="bar"><i style="width:${loy}%;background:${loy<60?'#c4552b':'#8fd19e'}"></i></div>${loy}</div>
+   <div class="meter">EXPOSED<div class="bar"><i style="width:${exp}%;background:${exp>60?'#ff4a3a':'#c9b36a'}"></i></div>${exp}</div>
+   ${cl?'<div style="font:bold 10px var(--mono);color:#ff8a7a;margin-top:4px">IN CUSTODY · TALKING TO THE DA?</div>':''}
+   ${n.startsWith('Vinnie')?'<div style="font:bold 10px var(--mono);color:#f0d58a;margin-top:4px">SEEN WITH MORETTI\'S MEN</div>':''}</div>`});
+  T.innerHTML+=`<div style="position:absolute;left:20px;top:540px;font:12px var(--mono);color:var(--mute)">+ 21 associates (not made) · runners, drivers, bookies, a crooked accountant</div>`;
+}
+
+if (s === '3') {
+  const svg=document.getElementById('flowsvg'), fl=document.querySelector('.flow').getBoundingClientRect();
+  const R=id=>{const r=document.getElementById(id).getBoundingClientRect();return {l:r.left-fl.left,r:r.right-fl.left,y:(r.top+r.bottom)/2-fl.top}};
+  let h='';
+  const link=(a,b,w,c)=>{const A=R(a),B=R(b);const mx=(A.r+B.l)/2;h+=`<path d="M${A.r} ${A.y} C${mx} ${A.y},${mx} ${B.y},${B.l} ${B.y}" stroke="${c}" stroke-opacity=".5" stroke-width="${w}" fill="none"/>`};
+  link('r1','f3',16,'#c9b36a');link('r1','f4',10,'#c9b36a');link('r1','o2',14,'#c9b36a');link('r2','f2',12,'#c9b36a');link('r2','o2',6,'#c9b36a');link('r3','f1',8,'#c9b36a');link('r4','f1',5,'#c9b36a');
+  ['f1','f2','f3','f4'].forEach(f=>link(f,'o1',10,'#8fd19e'));
+  svg.innerHTML=h;
+}
+
+if (s === '4') {
+  const cork=document.getElementById('cork');
+  const P=[['sal',70,90,'Sal Esposito','Capo · 81%',0],['fr',330,70,'Frankie ?','Underboss · 44%',0],['you',590,120,'"The Baker"','identity: suspected',1],['bak',90,360,'Vitale Bakery','wiretap?',0],['tr',360,330,'Esposito Trucking','bootleg trucks',0],['cas',620,380,'Castellano','found in river',0]];
+  let html='';P.forEach(([id,l,t,n,s2,u])=>{html+=`<div class="polaroid ${u?'unk':''}" id="p_${id}" style="left:${l}px;top:${t}px;transform:rotate(${(hash(l,t)-.5)*8}deg)"><div class="pin"></div><div class="ph"><i style="${u?'background:#1b1712;filter:blur(1px)':''}"></i></div><b>${n}</b>${s2}</div>`});
+  html+=`<div class="note" style="left:215px;top:285px;transform:rotate(3deg)">Truck plates match 4 bootleg runs, Jan–Feb</div>`;
+  html+=`<div class="note" style="left:600px;top:280px;width:150px;transform:rotate(-4deg)">Who ordered it?? Need a witness</div>`;
+  html+=`<div class="stamp" style="left:600px;top:40px">NOT ENOUGH</div>`;
+  cork.insertAdjacentHTML('beforeend',html);
+  const cr=cork.getBoundingClientRect(), C=id=>{const r=document.getElementById('p_'+id).getBoundingClientRect();return [(r.left+r.right)/2-cr.left,r.top-cr.top+6]};
+  let s2='';[['sal','fr'],['fr','you'],['sal','tr'],['bak','you'],['sal','cas'],['tr','bak']].forEach(([a,b],i)=>{const A=C(a),B=C(b);s2+=`<line x1="${A[0]}" y1="${A[1]}" x2="${B[0]}" y2="${B[1]}" stroke="#b3241c" stroke-width="2.5" ${b==='you'||a==='bak'?'stroke-dasharray="8 6"':''}/>`});
+  document.getElementById('strings').innerHTML=s2;
+}
+</script></body></html>
