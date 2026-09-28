@@ -58,6 +58,10 @@ var _night := -1.0
 var _decor := {}
 var _banner_lot := -2
 var _ring_t := 3.0
+var _job_t := 0.5
+var _obj_t := 0.0
+var _my_obj := false
+var _marks: Node2D
 var _rings_done := {}     # family id -> {ring id: true}
 
 
@@ -90,6 +94,11 @@ func _ready() -> void:
 	roofs.name = "Roofs"
 	roofs_layer.add_child(roofs)
 	roofs.build(plan)
+	_marks = Node2D.new()
+	_marks.name = "Marks"
+	_marks.z_index = 50
+	_marks.draw.connect(_draw_marks)
+	roofs_layer.add_child(_marks)
 	_build_walls()
 	_boat()
 	_shape_up_board()
@@ -495,9 +504,30 @@ func something_ahead(v: Vehicle, dist: float) -> bool:
 
 
 func down_time_mult(a: Actor) -> float:
+	var m := 1.0
 	if a.family >= 0 and Rackets.has_ring(a.family, "drug"):
-		return 0.5
-	return 1.0
+		m *= 0.5
+	if a.family >= 0:
+		for o in actors.values():
+			var ac := o as Actor
+			if ac != a and ac.kind == "crew" and ac.family == a.family and not ac.is_down() and ac.position.distance_to(a.position) < 20.0 * W.M \
+					and String(Game.crew_by_id(ac.ref_id).get("trait", "")) == "medic":
+				m *= 0.5
+				break
+	return m
+
+
+## A crewman with the shooter specialty fires at the man he's fighting (uses the family's bullets).
+func crew_shoot(a: Actor, target: Actor) -> void:
+	var ars: Dictionary = Game.fam(a.family).get("arsenal", {})
+	if int(ars.get("ammo", 0)) <= 0:
+		return
+	ars["ammo"] = int(ars["ammo"]) - 1
+	a.yaw = (target.position - a.position).angle()
+	a.person.rotation = a.yaw
+	a.person.set_weapon("pistol")
+	Game.add_evidence(a.family, "weapon", "Your men's guns: bullets in %s" % plan.district_at(a.position.x / W.M, a.position.y / W.M), 3.0)
+	shoot(a)
 
 
 # ------------------------------------------------------------------ day, night, weather
@@ -592,6 +622,12 @@ func _on_month(m: int) -> void:
 	weather = "rain" if r < 0.3 else ("fog" if r < 0.4 else "clear")
 	Net.to_all("weather", [weather])
 	Net.to_all("newspaper", [m])
+	# favors: old jobs run out, new shops ask for help
+	for k in Game.players:
+		var job: Dictionary = Game.players[k].get("job", {})
+		if not job.is_empty() and int(job.get("until", -1)) < m:
+			_end_job(int(k), Favors.fail(Game, int(k), "Too late: %s found somebody else to help him." % Game.biz_by_id(int(job["biz"])).get("owner_name", "he")))
+	Favors.refresh(Game)
 	# broken things get fixed over the month
 	for b in Game.biz:
 		if not (b.get("broken", []) as Array).is_empty():
@@ -760,6 +796,13 @@ func _make_actor(key: String) -> Actor:
 			kind = "woman" if roll < 0.3 else ("kid" if roll < 0.38 else "ped")
 		"w":
 			kind = "newsboy"
+		"h":
+			kind = "crew"
+			family = id / 1000
+			look = id * 131 + 77
+		"j":
+			kind = "ped"
+			look = id * 211 + 5
 		"s":
 			var b := Game.biz_by_id(id)
 			if b.is_empty():
@@ -791,11 +834,15 @@ func _make_actor(key: String) -> Actor:
 	a.setup(self, key, kind, look, color, extra)
 	if prefix == "s":
 		a.kind = "shop"
+	elif prefix == "h":
+		a.kind = "thug"
+	elif prefix == "j":
+		a.kind = "debtor"
 	elif kind in ["woman", "kid"]:
 		a.kind = "ped"
 	add_child(a)
 	actors[key] = a
-	if kind in ["boss", "crew", "aiboss"]:
+	if kind in ["boss", "crew", "aiboss"] and prefix != "h":
 		_add_ring(a)
 	return a
 
@@ -886,6 +933,7 @@ func _host_spawn() -> void:
 		v.place(v.lane[0], (v.lane[1] - v.lane[0]).angle())
 		vehicles[v.key] = v
 	_sync_spawns()
+	Favors.refresh(Game)
 
 
 ## A clockwise loop around a rectangle of blocks, in the right-hand lane.
@@ -993,6 +1041,11 @@ func _process(delta: float) -> void:
 		if not Net.is_host():
 			_send_pose()
 	_update_meters()
+	_obj_t -= delta
+	if _obj_t <= 0.0:
+		_obj_t = 0.5
+		_show_job()
+		_marks.queue_redraw()
 
 
 ## Fade the roof of the building the local player is in; tell them where they are.
@@ -1059,6 +1112,10 @@ func _host_tick(delta: float) -> void:
 	if _ring_t <= 0.0:
 		_ring_t = 3.0
 		_check_rings()
+	_job_t -= delta
+	if _job_t <= 0.0:
+		_job_t = 0.5
+		_check_jobs()
 	var smug := actor("z1")
 	if smug:
 		smug.visible = _boat_here()
@@ -1077,6 +1134,120 @@ func _host_tick(delta: float) -> void:
 						var drv := actor("p%d" % veh.driver)
 						if drv:
 							crime(drv, 10.0, ac.position, "hit and run", ac.family)
+
+
+## Host: put the people a favor needs on the street.
+func _start_job(peer: int) -> void:
+	var p := Game.player(peer)
+	var job: Dictionary = p.get("job", {})
+	var keys := []
+	match String(job.get("kind", "")):
+		"thugs":
+			var b := Game.biz_by_id(int(job["biz"]))
+			var f := W.front_dir(float(b["yaw"]))
+			for k in 2:
+				var key := "h%d" % (int(job["rival"]) * 1000 + randi_range(1, 999))
+				var t := _make_actor(key)
+				if t:
+					t.sim = true
+					t.tough = 55
+					t.place(W.door(b) + f * (1.4 + k * 0.6) * W.M + f.orthogonal() * (k * 2 - 1) * 1.1 * W.M, (-f).angle())
+					keys.append(key)
+		"debt":
+			var tb := Game.biz_by_id(int(job["target_biz"]))
+			var f2 := W.front_dir(float(tb["yaw"]))
+			var key2 := "j%d" % randi_range(1, 99999)
+			var d := _make_actor(key2)
+			if d:
+				d.sim = true
+				d.place(W.door(tb) + f2 * 2.0 * W.M + f2.orthogonal() * 1.5 * W.M, f2.angle())
+				keys.append(key2)
+	job["keys"] = keys
+	Game.mark_dirty()
+
+
+func _end_job(peer: int, r: Dictionary) -> void:
+	if r.is_empty():
+		return
+	for key in r.get("keys", []):
+		var a := actor(String(key))
+		if a and not a.dead:
+			get_tree().create_timer(12.0).timeout.connect(func() -> void:
+				if is_instance_valid(a) and not a.dead:
+					actors.erase(a.key)
+					a.queue_free())
+	if String(r.get("msg", "")) != "":
+		Net.to_peer(peer, "reply", [r["msg"], bool(r.get("ok", false))])
+	if bool(r.get("ok", false)):
+		Net.to_peer(peer, "job_done", [])
+
+
+## Host: thugs knocked down, debtors knocked down: favors done.
+func _check_jobs() -> void:
+	for k in Game.players:
+		var job: Dictionary = Game.players[k].get("job", {})
+		if job.is_empty():
+			continue
+		match String(job.get("kind", "")):
+			"thugs", "debt":
+				var keys: Array = job.get("keys", [])
+				if keys.is_empty():
+					continue
+				var all_down := true
+				for key in keys:
+					var a := actor(String(key))
+					if a and not a.is_down():
+						# a thug who walked far from the shop has been run off
+						if job["kind"] == "thugs" and a.position.distance_to(a.home) > 20.0 * W.M:
+							continue
+						all_down = false
+				if all_down:
+					_end_job(int(k), Favors.complete(Game, int(k)))
+
+
+## Everyone: the current favor as the goal on screen (when the tutorial isn't showing one).
+func _show_job() -> void:
+	var tut := get_node_or_null("Tutorial")
+	if tut and is_instance_valid(tut) and tut.is_processing():
+		return
+	var p := Game.player(Net.my_id())
+	var job: Dictionary = p.get("job", {})
+	if job.is_empty():
+		if _my_obj:
+			hud.clear_objective()
+			_my_obj = false
+		return
+	var b := Game.biz_by_id(int(job["biz"]))
+	var t := Favors.text(job, b)
+	var target := Vector2.INF
+	match String(job["kind"]):
+		"parcel":
+			target = talk_spot(int(job["target_biz"]))
+		_:
+			var keys: Array = job.get("keys", [])
+			for key in keys:
+				var a := actor(String(key))
+				if a and not a.is_down():
+					target = a.position
+					break
+			if target == Vector2.INF and not keys.is_empty():
+				target = W.door(b)
+	hud.set_objective({"title": String(t.get("title", "A favor")), "detail": String(t.get("detail", "")) + "  ·  $%d" % int(job["reward"]), "target": target})
+	_my_obj = true
+
+
+## "!" over the door of every shop with a favor to ask.
+func _draw_marks() -> void:
+	for b in Game.biz:
+		if not b.has("favor"):
+			continue
+		var at := W.door(b) + Vector2(0, -0.2) * W.M
+		var bob := sin(Time.get_ticks_msec() / 300.0 + float(b["id"])) * 3.0
+		var c := at + Vector2(0, -1.1 * W.M + bob)
+		Draw.circle(_marks, c + Vector2(3, 4), 15.0, Color(0, 0, 0, 0.35))
+		Draw.circle(_marks, c, 15.0, Pal.GOLD2)
+		_marks.draw_arc(c, 15.0, 0, TAU, 32, Color("5a3e1a"), 2.0, true)
+		Draw.text(_marks, c + Vector2(0, 8), "!", 24, Color("3a2410"), W.font("serif"), HORIZONTAL_ALIGNMENT_CENTER)
 
 
 ## A family that just took every shop of a trade gets the ring's perk; one that lost one loses it.
@@ -1754,6 +1925,33 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 				r = {"ok": false, "msg": "Izzy isn't here."}
 		"nation":
 			r = _nation(family, args)
+		"favor":
+			var fb := Game.biz_by_id(int(args[0]))
+			if fb.is_empty() or me.lot != int(fb["lot"]):
+				r = {"ok": false, "msg": "You have to be in his shop."}
+			else:
+				r = Favors.accept(Game, peer, int(args[0]))
+				if r["ok"]:
+					_start_job(peer)
+		"favor_deliver":
+			var job: Dictionary = p.get("job", {})
+			var tb := Game.biz_by_id(int(args[0]))
+			if job.get("kind", "") == "parcel" and int(job.get("target_biz", -1)) == int(args[0]) and not tb.is_empty() and me.lot == int(tb["lot"]):
+				_end_job(peer, Favors.complete(Game, peer))
+		"favor_talk":
+			var job2: Dictionary = p.get("job", {})
+			var d := actor(String(args[0]))
+			if job2.get("kind", "") == "debt" and d and d.position.distance_to(me.position) < 3.0 * W.M:
+				var men := 0
+				for ac in actors.values():
+					if (ac as Actor).kind == "crew" and (ac as Actor).family == family and (ac as Actor).position.distance_to(me.position) < 6.0 * W.M:
+						men += 1
+				if men > 0 or int(Game.fam(family)["rep"]) >= 30 or randf() < 0.3:
+					d.person.action("yes")
+					_end_job(peer, Favors.complete(Game, peer))
+				else:
+					d.person.action("no")
+					r = {"ok": false, "msg": "\"Or what?\" He laughs at you. Maybe he needs a slap."}
 		"tutorial":
 			p["tut"] = int(args[0])
 			if args.size() > 1 and String(args[1]) == "gift" and not bool(p.get("tut_gift", false)):
@@ -2172,6 +2370,9 @@ func _on_event(ev_name: String, args: Array) -> void:
 			var mine := int(Game.player(Net.my_id()).get("family", -2))
 			if fam == -1 or fam == mine:
 				hud.toast(String(args[1]), String(args[2]))
+		"job_done":
+			audio.ui("coins_pay", -6.0)
+			happened.emit("favor_done", {})
 		"shake_deal":
 			var mine2 := int(Game.player(Net.my_id()).get("family", -2))
 			if int(args[1]) == mine2:

@@ -65,6 +65,16 @@ static func _actor(focus: Dictionary) -> Dictionary:
 		"dealer": return _dealer(a)
 		"unionboss": return _union(a)
 		"smuggler": return _smuggler(a)
+		"debtor":
+			var job: Dictionary = _me().get("job", {})
+			var mine: bool = job.get("kind", "") == "debt" and (job.get("keys", []) as Array).has(a.key)
+			return {"name": "The man who owes money", "portrait": _portrait(a), "mood": "smug",
+				"line": "\"What do you want? I don't owe nobody nothing.\"",
+				"info": ["He owes %s $%d." % [Game.biz_by_id(int(job.get("biz", -1))).get("owner_name", "somebody"), int(job.get("reward", 0)) * 2]] if mine else [],
+				"options": ([{"text": "\"Pay what you owe. Now.\"", "sub": "works better with your men around", "icon": "fist", "action": _req("favor_talk", [a.key])}] if mine else []) + [_leave()]}
+		"thug":
+			return {"name": "A %s thug" % Game.fam(a.family).get("name", ""), "portrait": _portrait(a), "mood": "angry",
+				"line": "\"Beat it, before you get hurt.\"", "info": ["Knock him down or run him off."], "options": [_leave()]}
 		"consigliere":
 			var tut: Node = world.get_node_or_null("Tutorial")
 			if tut and tut.has_method("mentor_conversation"):
@@ -169,6 +179,20 @@ static func shopkeeper(b: Dictionary, a: Actor) -> Dictionary:
 			"enabled": int(f["clean"]) >= price2, "action": _act("buy", b["id"])})
 		if prot >= 0 and int(b["envelope"]) > 0:
 			opts.append({"text": "Take the %s family's envelope" % Game.fam(prot)["name"], "sub": _money(int(b["envelope"])), "icon": "money", "action": _act("collect", b["id"])})
+	# a favor to ask, or the parcel you're bringing him
+	var job: Dictionary = p.get("job", {})
+	if job.get("kind", "") == "parcel" and int(job.get("target_biz", -1)) == int(b["id"]):
+		opts.push_front({"text": "Hand over the parcel", "sub": "the favor for %s" % Game.biz_by_id(int(job["biz"])).get("owner_name", ""), "icon": "deal",
+			"action": _req("favor_deliver", [b["id"]])})
+	if b.has("favor"):
+		var ft := Favors.text(b["favor"], b)
+		var fb_id: int = b["id"]
+		opts.push_front({"text": "\"You look worried. What's wrong?\"", "sub": "he needs a favor · $%d" % int(b["favor"]["reward"]), "icon": "talk",
+			"keep_open": true, "action": func() -> void:
+				world.hud.converse({"name": String(b["owner_name"]), "role": String(b["name"]), "portrait": _portrait(a), "mood": "scared",
+					"line": ft.get("ask", ""), "info": ["Do it and he'll be grateful: %s" % ("he'll pay you every month." if int(b["protector"]) < 0 else ("he'll pay you more." if int(b["protector"]) == me else "he'll listen to your offer."))],
+					"options": [{"text": "\"I'll take care of it.\"", "sub": "$%d" % int(b["favor"]["reward"]), "icon": "deal", "action": _req("favor", [fb_id])},
+						{"text": "\"Not my problem.\"", "icon": "leave", "action": Callable()}]})})
 	# a witness against you
 	for e in f.get("evidence", []):
 		if e["kind"] == "witness" and int(e.get("biz", -1)) == int(b["id"]):

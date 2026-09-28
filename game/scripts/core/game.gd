@@ -503,7 +503,8 @@ func _tick_businesses() -> void:
 				if collector.is_empty() and not f["ai"]:
 					b["envelope"] = mini(b["envelope"] + pay, pay * 3)
 				else:
-					var net := int(pay * (1.0 - COLLECTOR_CUT))
+					var cut := 0.0 if String(collector.get("trait", "")) == "earner" else COLLECTOR_CUT
+					var net := int(pay * (1.0 - cut))
 					f["dirty"] += net
 					f["income"]["protection"] += net
 		if b["owned_by"] >= 0 and not closed:
@@ -625,6 +626,8 @@ func _tick_booze() -> void:
 			continue
 		Syndicate.take_stock(nation, "nyc", fid, n)
 		var risk := 0.06 + float(f["heat"]) / 300.0
+		if String(c.get("trait", "")) == "driver":
+			risk *= 0.5
 		if captains.get("Waterfront", -1) == fid:
 			risk *= 0.5
 		var paid := cops.filter(func(k: Dictionary) -> bool: return k["payroll"] == fid).size()

@@ -36,6 +36,9 @@ func _ready() -> void:
 	if "--tuttest" in OS.get_cmdline_user_args():
 		_tuttest.call_deferred()
 		return
+	if "--favortest" in OS.get_cmdline_user_args():
+		_favortest.call_deferred()
+		return
 	Game.clock = 0.2
 	_steps = [
 		[0.3, func() -> void:
@@ -408,6 +411,56 @@ func _tuttest() -> void:
 	var ok: bool = String(t.STEPS[mini(t.step, t.STEPS.size() - 1)][0]) == "done"
 	print("  step ", t.step, " tut=", Game.player(1).get("tut", -1), " gift=", Game.player(1).get("tut_gift", false))
 	print("TUTTEST %s" % ("OK" if ok else "FAIL"))
+	get_tree().quit()
+
+
+# ------------------------------------------------------------------ favors: one of each kind
+
+func _favortest() -> void:
+	await _wait(0.6)
+	var me: Actor = world.local_actor
+	var done := {}
+	for round in 6:
+		for b in Game.biz:
+			if not b.has("favor") or done.has(String(b["favor"]["kind"])):
+				continue
+			var kind := String(b["favor"]["kind"])
+			me.place(world.talk_spot(int(b["id"])))
+			await _wait(0.4)
+			Net.to_host("favor", [b["id"]])
+			await _wait(0.4)
+			var job: Dictionary = Game.player(1).get("job", {})
+			print("  took favor ", kind, " at ", b["name"], ": ", Favors.text(job, b).get("title", "?"))
+			match kind:
+				"thugs":
+					for key in job.get("keys", []):
+						var t: Actor = world.actor(String(key))
+						if t:
+							t.hurt(200.0, me)
+				"debt":
+					Game.fam(0)["rep"] = 40
+					var d: Actor = world.actor(String(job["keys"][0]))
+					me.place(d.position + Vector2(0.8, 0) * W.M)
+					await _wait(0.3)
+					Net.to_host("favor_talk", [d.key])
+				"parcel":
+					me.place(world.talk_spot(int(job["target_biz"])))
+					await _wait(0.4)
+					Net.to_host("favor_deliver", [job["target_biz"]])
+			await _wait(1.2)
+			var after: Dictionary = Game.player(1).get("job", {})
+			done[kind] = after.is_empty()
+			print("  favor ", kind, " done: ", after.is_empty(), " wallet=", Game.player(1)["wallet"])
+			break
+		if done.size() >= 3:
+			break
+		Favors.refresh(Game)
+		for b in Game.biz:
+			if b.has("favor") and done.has(String(b["favor"]["kind"])):
+				b.erase("favor")
+		Favors.refresh(Game)
+	var ok := done.size() == 3 and done.values().all(func(v) -> bool: return v)
+	print("FAVORTEST %s %s" % ["OK" if ok else "FAIL", str(done)])
 	get_tree().quit()
 
 

@@ -193,7 +193,9 @@ func hurt(dmg: float, from: Actor, lethal: bool = false) -> void:
 			knock_down(12.0 if lethal else 9.0)
 	elif kind in ["ped", "shop", "newsboy"]:
 		scare(from.position if from else position, 8.0)
-	elif kind in ["crew", "cop", "recruit", "aiboss", "docker", "unionboss"] and from and from != self and attack_target == null:
+	elif kind == "debtor":
+		scare(from.position if from else position, 4.0)
+	elif kind in ["crew", "cop", "recruit", "aiboss", "docker", "unionboss", "thug"] and from and from != self and attack_target == null:
 		attack_target = from
 	if kind == "shop" and from:
 		world.shopkeeper_hurt(self, from, hp <= 0.0)
@@ -249,6 +251,8 @@ func think(delta: float) -> void:
 		"cop": _think_cop(delta)
 		"crew": _think_crew(delta)
 		"shop": _think_shop(delta)
+		"thug": _think_thug(delta)
+		"debtor": _think_debtor(delta)
 		"recruit", "aiboss", "unionboss", "dealer": _think_stand(delta)
 		"docker": _think_docker(delta)
 		_: velocity = Vector2.ZERO
@@ -260,6 +264,12 @@ func _fight(_delta: float) -> void:
 	if d > 25.0 * W.M:
 		attack_target = null
 		velocity = Vector2.ZERO
+		return
+	if kind == "crew" and d > 2.5 * W.M and d < 12.0 * W.M and cooldown <= 0.0 and randf() < 0.5 \
+			and String(Game.crew_by_id(ref_id).get("trait", "")) == "shooter":
+		cooldown = randf_range(1.4, 2.2)
+		velocity = Vector2.ZERO
+		world.crew_shoot(self, attack_target)
 		return
 	if d > 1.05 * W.M:
 		_steer_to(attack_target.position, RUN)
@@ -427,6 +437,26 @@ func _think_docker(delta: float) -> void:
 			route_i = (route_i + 1) % route.size()
 		_stuck_t = 0.0
 		_stuck_at = position
+
+
+## A rival's thug leaning on a shop for a favor: loiters by the door, fights anyone who comes close.
+func _think_thug(delta: float) -> void:
+	for a in world.actors.values():
+		var ac := a as Actor
+		if ac.kind in ["boss", "crew"] and ac.family != family and not ac.is_down() and not ac.hidden_in_car \
+				and ac.position.distance_to(position) < 2.2 * W.M:
+			attack_target = ac
+			return
+	_think_stand(delta)
+
+
+## A man who owes money: stands around; runs when hit.
+func _think_debtor(delta: float) -> void:
+	if scared_t > 0.0:
+		scared_t -= delta
+		_run_from(scared_from)
+		return
+	_think_stand(delta)
 
 
 func _think_stand(_delta: float) -> void:

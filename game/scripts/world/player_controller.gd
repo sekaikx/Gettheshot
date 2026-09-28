@@ -345,6 +345,10 @@ func _actor_label(ac: Actor) -> String:
 			return "Buy a paper"
 		"consigliere":
 			return "Talk to Uncle Carmine"
+		"debtor":
+			return "Talk to the man who owes money"
+		"thug":
+			return "Talk to the thug"
 		"docker":
 			return "Talk to the longshoreman"
 		"ped":
