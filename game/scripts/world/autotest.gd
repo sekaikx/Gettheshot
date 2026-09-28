@@ -288,6 +288,9 @@ func _finish() -> void:
 	for nw in Game.news.slice(0, 8):
 		print("  news: ", nw["text"])
 	_checks["union_paid"] = int(n["cities"]["nyc"]["docks"]) == 0
+	var adv := Advisor.next(world)
+	_checks["advisor"] = not adv.is_empty()
+	print("  advisor: ", adv.get("title", "(nothing)"), " · ", adv.get("detail", ""))
 	_checks["street_names"] = world.plan.street_name_at(0.0, 30.0) == "Mulberry St." and world.plan.street_name_at(100.0, 144.0) == "Grand St."
 	var bad := _checks.keys().filter(func(k) -> bool: return not _checks[k])
 	print("  checks: ", _checks)

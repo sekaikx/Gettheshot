@@ -61,6 +61,7 @@ var _ring_t := 3.0
 var _job_t := 0.5
 var _obj_t := 0.0
 var _my_obj := false
+var _adv_t := 0.0
 var _marks: Node2D
 var floats: FloatText
 var _rings_done := {}     # family id -> {ring id: true}
@@ -1286,10 +1287,21 @@ func _show_job() -> void:
 	var p := Game.player(Net.my_id())
 	var job: Dictionary = p.get("job", {})
 	if job.is_empty():
-		if _my_obj:
-			hud.clear_objective()
-			_my_obj = false
+		# no favor going: the advisor's best next move
+		_adv_t -= 0.5
+		if _adv_t <= 0.0:
+			_adv_t = 3.0
+			var adv := Advisor.next(self)
+			if adv.is_empty():
+				if _my_obj:
+					hud.clear_objective()
+					_my_obj = false
+			else:
+				adv["title"] = "Next: " + String(adv["title"])
+				hud.set_objective(adv)
+				_my_obj = true
 		return
+	_adv_t = 0.0
 	var b := Game.biz_by_id(int(job["biz"]))
 	var t := Favors.text(job, b)
 	var target := Vector2.INF
