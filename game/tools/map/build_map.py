@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bake Famiglia's country map: a 1920s atlas plate of the eastern United States and Canada.
 
-    python3 game/tools/map/build_map.py            # writes game/assets/map/country_map.png (+ _small)
+    python3 game/tools/map/build_map.py            # writes game/assets/map/country_map.jpg (the game's plate)
     python3 game/tools/map/build_map.py --preview  # half-size, quick look (writes to /tmp unless --out)
     python3 game/tools/map/build_map.py --debug    # also writes country_map_debug.png with the game's
                                                     # cities and sources as dots (projection check)
@@ -1523,26 +1523,28 @@ def main():
     ap.add_argument("--check", type=str, default=None, help="compare a check_projection.tscn render with the debug png")
     args = ap.parse_args()
     if args.check:
-        dbg = Path(args.out) if args.out else OUT_DIR / "country_map_debug.png"
+        dbg = Path(args.out) if args.out else OUT_DIR / "country_map_debug.png"   # --debug writes it next to the plate; don't commit it
         sys.exit(0 if check(Path(args.check), dbg) else 1)
     if args.res is None:
         args.res = 0.5 if args.preview else 1.0
     out = Path(args.out) if args.out else (Path("/tmp/country_map_preview.png") if args.preview
-                                           else OUT_DIR / "country_map.png")
+                                           else OUT_DIR / "country_map.jpg")
     img, lines = build(args)
     out.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out, optimize=True)
+    if out.suffix.lower() in (".jpg", ".jpeg"):
+        # the game ships the plate as a JPEG: paper and ink compress well, 10 MB -> 2 MB
+        img.convert("RGB").save(out, quality=90, optimize=True, progressive=True)
+    else:
+        img.save(out, optimize=True)
     log(f"wrote {out} {img.size}")
     if not args.preview and args.res == 1.0 and not args.out:
-        small = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
-        small.save(OUT_DIR / "country_map_small.png", optimize=True)
         lines["meta"] = {
             "image_size": [mp.IMAGE_W, mp.IMAGE_H], "scale_px_per_unit": mp.SCALE, "center": [mp.CX, mp.CY],
             "projection": "Lambert Conformal Conic, sphere, std parallels 33/45, origin 39N 83W",
             "window": [mp.WIN_LON_MIN, mp.WIN_LON_MAX, mp.WIN_LAT_MIN, mp.WIN_LAT_MAX],
         }
         (OUT_DIR / "map_lines.json").write_text(json.dumps(lines, indent=1), encoding="utf-8")
-        log("wrote country_map_small.png and map_lines.json")
+        log("wrote map_lines.json")
     if args.debug:
         dbg = debug_overlay(img)
         dpath = out.with_name(out.stem + "_debug.png")

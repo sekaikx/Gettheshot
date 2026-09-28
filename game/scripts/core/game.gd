@@ -100,10 +100,16 @@ func new_campaign(config: Dictionary, humans: Array) -> void:
 	for h in humans:
 		if int(h.get("join", -1)) < 0:
 			human_families.append(h)
+	# AI families take the names and colours the players didn't
+	var used_names := human_families.map(func(h: Dictionary) -> String: return String(h.get("family_name", "")))
+	var used_colors := human_families.map(func(h: Dictionary) -> String: return String(h.get("color", "")))
+	var free_names := Names.FAMILY_NAMES.filter(func(n: String) -> bool: return not used_names.has(n))
+	var free_colors := Names.FAMILY_COLORS.filter(func(c: String) -> bool: return not used_colors.has(c))
 	for k in count:
 		var human: Dictionary = human_families[k] if k < human_families.size() else {}
-		var fname: String = human.get("family_name", Names.FAMILY_NAMES[k % Names.FAMILY_NAMES.size()])
-		var color: String = human.get("color", Names.FAMILY_COLORS[k % Names.FAMILY_COLORS.size()])
+		var ai_k := k - human_families.size()
+		var fname: String = human.get("family_name", free_names[ai_k % free_names.size()] if ai_k >= 0 and not free_names.is_empty() else Names.FAMILY_NAMES[k % Names.FAMILY_NAMES.size()])
+		var color: String = human.get("color", free_colors[ai_k % free_colors.size()] if ai_k >= 0 and not free_colors.is_empty() else Names.FAMILY_COLORS[k % Names.FAMILY_COLORS.size()])
 		_add_family(fname, color, human.is_empty(), hqs[k % hqs.size()])
 	var slot := 0
 	for h in humans:
