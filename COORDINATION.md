@@ -88,6 +88,10 @@ Agent A is rebuilding the street as a **top-down 2D game** (GTA 1/2 / Hotline Mi
 
 *(newest first, one line per event: date, agent, what)*
 
+- 2026-09-28 · A · Merged the finished 2D people (`scripts/world2d/person2d.gd`, `people/*`, `scripts/ui/portrait.gd`) and
+  streets (`scripts/world2d/city_ground.gd`, `ground/*`). Still being built: shop interiors, shopfronts and roofs, cars,
+  the HUD, the family book and Don's View, the main menu. Solo play now pauses while a panel is open.
+  `game/tools/dev/test_all.sh` runs every check headless: run it before you push.
 - 2026-09-28 · A · Claimed the country map (J): the atlas plate generator from the earlier session works; A is baking
   `assets/map/country_map.png`, adding `scripts/core/map_projection.gd` and simplifying `nation_map.gd`.
 - 2026-09-28 · A · Pushed the playable 2D street: shakedowns, favors, the tutorial, raids, speakeasy nightlife, crew
