@@ -228,6 +228,10 @@ func _find_focus(a: Actor) -> void:
 					if truck and truck.load < Vehicle.MAX_LOAD and have > 0 and not a.carrying:
 						best["quick"] = "wh_load"
 						best["label"] = "Load %d crates into the truck  (%d in the warehouse)" % [mini(have, Vehicle.MAX_LOAD - truck.load), have]
+					elif truck and truck.load >= Vehicle.MAX_LOAD:
+						best["label"] = "Your warehouse: %d crates  ·  the truck is full (%d): drive it to a speakeasy" % [have, truck.load]
+					elif truck and have <= 0:
+						best["label"] = "Your warehouse is empty  ·  run a convoy into New York to fill it"
 	focus = best
 	if a.carrying and best.is_empty():
 		world.hud.set_prompt("Carrying a crate  ·  Q drop it")

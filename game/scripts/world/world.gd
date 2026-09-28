@@ -59,6 +59,7 @@ func _ready() -> void:
 	city.update_owners()
 	_boat()
 	_shape_up_board()
+	_quay_cargo()
 	cam = CameraRig.new()
 	add_child(cam)
 	audio = preload("res://scripts/world/ambience.gd").new()
@@ -336,6 +337,93 @@ func _shape_up_board() -> void:
 	l.modulate = Color("e9dfc7")
 	l.position = Vector3(0, 1.86, 0.07)
 	root.add_child(l)
+
+
+## Scenery for the working quay: a cargo derrick on every pier (mast, boom, a sling of crates on
+## the hook) and the piles the longshoremen carry to (burlap sacks, barrels, crates on pallets).
+func _quay_cargo() -> void:
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color("4a3524")
+	wood.roughness = 0.95
+	var iron := StandardMaterial3D.new()
+	iron.albedo_color = Color("2a2622")
+	iron.metallic = 0.6
+	iron.roughness = 0.5
+	var burlap := StandardMaterial3D.new()
+	burlap.albedo_color = Color("9c8660")
+	burlap.roughness = 1.0
+	var barrel := StandardMaterial3D.new()
+	barrel.albedo_color = Color("6b4a2c")
+	barrel.roughness = 0.8
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1921
+	var wx := plan.water_x
+	for pier in plan.piers:
+		var zc := (float(pier["z0"]) + float(pier["z1"])) * 0.5
+		# the derrick stands on the pier's north edge, boom swung out over the water
+		var root := Node3D.new()
+		root.position = Vector3(wx + CityPlan.PIER_LEN * 0.58, 0.2, float(pier["z0"]) + 0.8)
+		root.rotation.y = rng.randf_range(-0.5, 0.2)
+		add_child(root)
+		_part(root, Vector3(0.34, 9.0, 0.34), Vector3(0, 4.5, 0), Vector3.ZERO, wood)
+		_part(root, Vector3(0.8, 0.5, 0.8), Vector3(0, 0.25, 0), Vector3.ZERO, iron)
+		# two back-stays
+		_part(root, Vector3(0.12, 8.6, 0.12), Vector3(1.6, 4.3, 1.2), Vector3(-0.2, 0, 0.26), wood)
+		_part(root, Vector3(0.12, 8.6, 0.12), Vector3(-1.6, 4.3, 1.2), Vector3(-0.2, 0, -0.26), wood)
+		# the boom: pivots at the mast foot, leans out north-west over the slip
+		var boom := Node3D.new()
+		boom.position = Vector3(0, 1.2, 0)
+		boom.rotation = Vector3(-0.85, 0.0, 0.0)
+		root.add_child(boom)
+		_part(boom, Vector3(0.22, 0.22, 8.5), Vector3(0, 0, -4.25), Vector3.ZERO, wood)
+		var tip := Vector3(0, 1.2, 0) + Basis.from_euler(boom.rotation) * Vector3(0, 0, -8.5)
+		var hang := 2.6
+		_part(root, Vector3(0.04, hang, 0.04), tip + Vector3(0, -hang * 0.5, 0), Vector3.ZERO, iron)
+		for k in 4:
+			var c := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			bm.size = Vector3(0.7, 0.48, 0.6)
+			c.mesh = bm
+			c.material_override = Crate.material()
+			c.position = tip + Vector3(-0.36 + (k % 2) * 0.72, -hang - 0.3 - (k / 2) * 0.5, 0)
+			root.add_child(c)
+		# the piles on the quay either side of the pier's foot
+		for side in [-1.0, 1.0]:
+			var at := Vector3(wx - 8.8, 0, zc + side * 4.8)
+			_part(self, Vector3(2.0, 0.14, 1.6), at + Vector3(0, 0.07, 0), Vector3.ZERO, wood)
+			if side < 0:
+				for k in 9:
+					var sack := MeshInstance3D.new()
+					var sm := CapsuleMesh.new()
+					sm.radius = 0.28
+					sm.height = 0.95
+					sack.mesh = sm
+					sack.material_override = burlap
+					sack.position = at + Vector3(-0.6 + (k % 3) * 0.6, 0.38 + (k / 3) * 0.42, rng.randf_range(-0.4, 0.4))
+					sack.rotation = Vector3(0, rng.randf_range(-0.2, 0.2), PI * 0.5)
+					add_child(sack)
+			else:
+				for k in 6:
+					var bar := MeshInstance3D.new()
+					var cm := CylinderMesh.new()
+					cm.top_radius = 0.3
+					cm.bottom_radius = 0.3
+					cm.height = 0.85
+					bar.mesh = cm
+					bar.material_override = barrel
+					bar.position = at + Vector3(-0.66 + (k % 3) * 0.66, 0.57 + (k / 3) * 0.86, -0.32 + (k % 2) * 0.64)
+					add_child(bar)
+
+
+func _part(parent: Node3D, size: Vector3, pos: Vector3, rot: Vector3, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.position = pos
+	mi.rotation = rot
+	mi.material_override = mat
+	parent.add_child(mi)
 
 
 ## Crates stacked by the door of each warehouse on the quay: one per five in its owner's stock.

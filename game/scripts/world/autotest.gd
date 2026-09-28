@@ -79,11 +79,12 @@ func _ready() -> void:
 			_checks["union_dialog"] = world.hud._modal == "dialog"],
 		[16.6, func() -> void: _shot("union")],
 		[16.8, func() -> void:
+			Game.fam(0)["dirty"] += 3000
 			world.hud._choose(0)       # put the local on the payroll
 			# the longshoremen at work on the middle pier
 			var pier: Dictionary = world.plan.piers[1]
-			world.local_actor.place(Vector3(world.plan.water_x - 5.0, 0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 6.0), PI * 0.5)
-			world.cam.dist_goal = 26.0
+			world.local_actor.place(Vector3(world.plan.water_x + 3.0, 0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 1.0), PI * 0.5)
+			world.cam.dist_goal = 30.0
 			world.cam.snap()],
 		[19.0, func() -> void:
 			var carrying := 0
@@ -166,6 +167,9 @@ func _supply_setup() -> void:
 
 ## After the months: the truck parked at the warehouse door, E loads it from the stock.
 func _load_truck() -> void:
+	if world.hud._modal == "arrest":
+		Net.to_host("arrest", ["bribe"])       # the cop from the contraband step takes his envelope
+	world.hud.close_dialog()
 	var wh := Game.biz_by_id(_wh_id)
 	var have := Syndicate.stock(Game.nation, "nyc", 0)
 	print("  nyc warehouse before loading: ", have, " crates")
@@ -254,6 +258,8 @@ func _process(delta: float) -> void:
 	while not _steps.is_empty() and _t >= _steps[0][0]:
 		var s: Array = _steps.pop_front()
 		(s[1] as Callable).call()
+		if _pending != "":
+			break          # a slow frame must not run the next step before the shot is taken
 
 
 # ------------------------------------------------------------------ balance simulation
@@ -270,6 +276,8 @@ func _start_sim() -> void:
 		if a:
 			a.order = {}
 		Game.resolve_ai_order(order))
+	# ...and like a human player, a small monthly convoy from Rum Row onto the quay
+	Syndicate.set_convoy(Game, 0, "rum_row_nyc", 20)
 	print("SIM start ", Game.date_text(), " families=", Game.families.size())
 
 
@@ -307,6 +315,13 @@ func _sim_month(m: int) -> void:
 		parts.append("%s d=%d c=%d shops=%d men=%d heat=%d net=%d %s %s fr=%d" % [f["name"], int(f["dirty"]), int(f["clean"]), Game.shops_of(f["id"]).size(), Game.crew_of(f["id"]).size(),
 			int(f["heat"]), Syndicate._net_dirty(f), ",".join(conv), " ".join(sites), fr])
 	print("SIM %s | %s" % [Game.date_text(m), " | ".join(parts)])
+	var wh_price := 999999
+	for b in Game.biz:
+		if b["kind"] == "warehouse":
+			wh_price = mini(wh_price, int(b["value"]))
+	if not _checks.has("afford") and int(Game.fam(0)["clean"]) >= wh_price:
+		_checks["afford"] = m - _sim_start
+		print("SIM player could buy a quay warehouse ($%d) after %d months" % [wh_price, m - _sim_start])
 	if m - _sim_start >= _sim:
 		print("SIM END")
 		get_tree().quit()
