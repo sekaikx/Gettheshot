@@ -181,7 +181,8 @@ func _make_businesses() -> void:
 			"protector": -1, "rate": int(e[0]), "owned_by": -1, "value": int(e[1]),
 			"legit": int(e[2]), "launder": int(e[3]), "fear": rng.randi_range(0, 30),
 			"defiance": rng.randi_range(10, 70), "envelope": 0, "speak": false, "stock": 0,
-			"demand": 0, "closed_until": -1, "unpaid": 0, "hq_of": -1})
+			"demand": 0, "closed_until": -1, "unpaid": 0, "hq_of": -1, "broken": [],
+			"weak": Rackets.weak_for(biz.size(), int(cfg["seed"]))})
 
 
 func _add_family(fname: String, color: String, ai: bool, hq: Dictionary) -> Dictionary:
@@ -232,7 +233,7 @@ func _refresh_recruits() -> void:
 			var eth: String = Names.pick(_rng, ["it", "it", "ir", "je"])
 			recruits.append({"id": next_id, "name": Names.hood(_rng, eth), "at": b["id"],
 				"price": _rng.randi_range(150, 350), "wage": _rng.randi_range(80, 160),
-				"tough": _rng.randi_range(40, 95), "look": _rng.randi()})
+				"tough": _rng.randi_range(40, 95), "look": _rng.randi(), "trait": Rackets.trait_for(next_id * 31 + int(cfg["seed"]))})
 			next_id += 1
 
 
@@ -243,7 +244,8 @@ func _add_crew(family: int, rank: String, from_recruit: Dictionary = {}) -> Dict
 		"wage": int(from_recruit.get("wage", 120 if rank == "associate" else 200)),
 		"tough": int(from_recruit.get("tough", _rng.randi_range(45, 85))),
 		"task": "follow", "target": -1, "leader": _family_leader(family), "state": "free",
-		"jail_until": -1, "look": int(from_recruit.get("look", _rng.randi())), "months": 0}
+		"jail_until": -1, "look": int(from_recruit.get("look", _rng.randi())), "months": 0,
+		"trait": String(from_recruit.get("trait", Rackets.trait_for(next_id * 31 + int(cfg["seed"]))))}
 	if f["ai"]:
 		c["task"] = "guard"
 		c["target"] = f["hq"]
@@ -1535,6 +1537,17 @@ func apply_state(s: Dictionary) -> void:
 	for b in biz:
 		if not b.has("address") and plan != null:
 			b["address"] = plan.address_at(float(b["door"][0]), float(b["door"][1]))
+		# fields added by the 2D rebuild: older saves don't have them
+		if not b.has("broken"):
+			b["broken"] = []
+		if not b.has("weak"):
+			b["weak"] = Rackets.weak_for(int(b["id"]), int(cfg["seed"]))
+	for c in crew:
+		if not c.has("trait"):
+			c["trait"] = Rackets.trait_for(int(c["id"]) * 31 + int(cfg["seed"]))
+	for r in recruits:
+		if not r.has("trait"):
+			r["trait"] = Rackets.trait_for(int(r["id"]) * 31 + int(cfg["seed"]))
 	state_changed.emit()
 
 
