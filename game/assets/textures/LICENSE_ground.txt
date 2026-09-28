@@ -1,0 +1,9 @@
+Textures from Poly Haven (https://polyhaven.com), CC0 1.0 (public domain).
+asphalt: https://polyhaven.com/a/asphalt_02
+pavement: https://polyhaven.com/a/concrete_pavement
+grass: https://polyhaven.com/a/leafy_grass
+forest: https://polyhaven.com/a/forest_ground_04
+sand: https://polyhaven.com/a/coast_sand_01
+dry_ground: https://polyhaven.com/a/dry_ground_rocks
+cliff: https://polyhaven.com/a/cliff_side
+gravel: https://polyhaven.com/a/gravel_road
