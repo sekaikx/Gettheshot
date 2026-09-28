@@ -595,7 +595,7 @@ func _tick_families() -> void:
 		if f["heat"] >= 100.0:
 			_federal_raid(f)
 		elif f["heat"] >= 70.0:
-			_notice(f["id"], "The Bureau is building a case against the %s family. Lie low." % f["name"], "bad")
+			_notice(f["id"], "Your heat is high: the Bureau is building a case. Lie low, or make the evidence go away (Tab, Heat).", "bad")
 
 
 ## The family's warehouse on the West St. quay (a business it bought), or {}.
@@ -671,7 +671,7 @@ func _federal_raid(f: Dictionary) -> void:
 	_recalc_heat(f)
 	f["rep"] = maxi(0, f["rep"] - 5)
 	_log("FEDS RAID %s FAMILY: $%d cash and %d crates seized." % [f["name"].to_upper(), lost, seized])
-	_notice(f["id"], "Federal raid! Lost $%d from the stash and %d crates." % [lost, seized], "bad")
+	_notice(f["id"], "Federal raid! They took $%d from your Stash and %d crates." % [lost, seized], "bad")
 
 
 func _tick_crew() -> void:
@@ -896,7 +896,7 @@ func act_buy(family: int, biz_id: int) -> Dictionary:
 		return _r(false, "Not for sale.")
 	var price := int(b["value"] * (1.0 if b["protector"] == family else 1.25))
 	if f["clean"] < price:
-		return _r(false, "You need $%d in clean money. Dirty cash would bring the Treasury down on you." % price)
+		return _r(false, "You need $%d in the Bank. Pay with Stash money and the Treasury comes asking where it came from." % price)
 	f["clean"] -= price
 	var prev: int = b["protector"]
 	b["owned_by"] = family
@@ -910,8 +910,8 @@ func act_buy(family: int, biz_id: int) -> Dictionary:
 		var nyc: Dictionary = nation["cities"]["nyc"]
 		if not nyc["wh"].has(str(family)):
 			nyc["wh"][str(family)] = 0
-		return _r(true, "%s on %s is your warehouse now. Convoys landing in New York fill it; truck the crates to your speakeasies, or put a man on the booze run." % [b["name"], b.get("address", "West St.")])
-	return _r(true, "You own %s. It launders $%d a month." % [b["name"], b["launder"]])
+		return _r(true, "%s is your warehouse now. Boats and convoys landing in New York fill it: load the truck here, or put a man on the booze run." % b["name"])
+	return _r(true, "You own %s. Every month it turns $%d of your Stash into Bank money." % [b["name"], b["launder"]])
 
 
 func act_open_speakeasy(peer: int, biz_id: int) -> Dictionary:
@@ -924,12 +924,12 @@ func act_open_speakeasy(peer: int, biz_id: int) -> Dictionary:
 	var f := fam(int(p["family"]))
 	var pay := _pay_dirty(p, f, SPEAKEASY_COST)
 	if not pay:
-		return _r(false, "Fitting out the back room costs $%d in cash." % SPEAKEASY_COST)
+		return _r(false, "A speakeasy costs $%d cash." % SPEAKEASY_COST)
 	b["speak"] = true
 	b["demand"] = {"Little Italy": 16, "Lower East Side": 20, "Garment District": 22,
 		"Hell's Kitchen": 18, "Waterfront": 14}.get(b["district"], 16)
 	_dirty = true
-	return _r(true, "The back room of %s is open for business. Bring it booze." % b["name"])
+	return _r(true, "The speakeasy in the back of %s is open. Now bring it booze." % b["name"])
 
 
 ## Pay from the wallet first, then from the stash (the family's accountant handles it).
@@ -970,12 +970,12 @@ func act_payroll_cop(peer: int, cop_id: int) -> Dictionary:
 	if c["payroll"] == family:
 		return _r(false, "He's already yours.")
 	if p["wallet"] < 100:
-		return _r(false, "You need $100 on you to make the offer.")
+		return _r(false, "You need $100 in your wallet.")
 	p["wallet"] -= 100
 	if c["honesty"] > 0.85:
 		add_evidence(family, "cop", "%s reported a bribe attempt" % c["name"], 12.0, {"cop": cop_id})
 		_dirty = true
-		return _r(false, "\"Are you trying to bribe an officer?\" He takes your name. (+heat)")
+		return _r(false, "\"Are you trying to bribe an officer?\" He takes your name. That's heat.")
 	c["payroll"] = family
 	# a bought cop loses his notebook
 	var fe: Dictionary = fam(family)
@@ -1002,7 +1002,7 @@ func act_captain(peer: int, district: String) -> Dictionary:
 	if prev >= 0:
 		_notice(prev, "The precinct captain for %s took a better offer." % district, "bad")
 	_dirty = true
-	return _r(true, "The captain for %s is yours. His patrolmen will be slow to answer calls about your people." % district)
+	return _r(true, "The captain for %s is yours. His cops look the other way." % district)
 
 
 func act_buy_crates(peer: int, n: int) -> Dictionary:
@@ -1011,7 +1011,7 @@ func act_buy_crates(peer: int, n: int) -> Dictionary:
 		return _r(false, "")
 	n = mini(n, boat["crates"])
 	if n <= 0:
-		return _r(false, "The boat's empty. Next one comes at night next month.")
+		return _r(false, "The boat's empty. The next one comes next month, at night.")
 	var cost := n * CRATE_COST
 	if p["wallet"] < cost:
 		n = int(p["wallet"]) / CRATE_COST
@@ -1044,12 +1044,12 @@ func act_bank(peer: int, deposit: bool) -> Dictionary:
 		f["dirty"] += amt
 		p["wallet"] = 0
 		_dirty = true
-		return _r(true, "Stashed $%d under the floorboards." % amt)
+		return _r(true, "$%d into the safe." % amt)
 	var take := mini(500, int(f["dirty"]))
 	f["dirty"] -= take
 	p["wallet"] += take
 	_dirty = true
-	return _r(true, "Took $%d from the stash." % take)
+	return _r(true, "You take $%d from the safe." % take)
 
 
 func act_bribe(peer: int) -> Dictionary:
@@ -1208,7 +1208,7 @@ func act_burn_books(peer: int) -> Dictionary:
 	if books.is_empty():
 		return _r(false, "The books are clean. Your accountant is proud.")
 	if f["clean"] < 300:
-		return _r(false, "The accountant needs $300 clean to rebuild the books without the dirty pages.")
+		return _r(false, "Clean books cost $300 from the Bank.")
 	f["clean"] -= 300
 	for e in books:
 		_drop_evidence(family, e["id"])
