@@ -1,0 +1,9 @@
+Famiglia UI kit textures (paper, card, ledger, leather, telegram, Art Deco frames, rubber-stamp
+buttons, index tabs, wax seal, ink stamps, halftone photos, typewriter key caps, linocut icons,
+engraved portrait medallions, calendar, thermometer).
+
+All of it is generated procedurally by game/tools/ui/make_ui_art.py (Python + Pillow + numpy,
+seeded) for this game. No third-party images are used. The stamp and key legends are set in
+Playfair Display and Courier Prime (SIL OFL 1.1, see assets/fonts/OFL_*.txt).
+
+Dedicated to the public domain under CC0 1.0 by the project owner.
