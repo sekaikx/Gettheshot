@@ -7,6 +7,8 @@ extends Node3D
 
 const PEDS := 34
 const TRAFFIC := 7
+const DOCKERS := 5          # longshoremen carrying crates off the piers (+2 waiting at the shape-up)
+const STACK_MAX := 64       # crate meshes by a warehouse door (one per 5 crates)
 const SNAP_HZ := 10.0
 const POSE_HZ := 15.0
 
@@ -39,6 +41,8 @@ var _corpses := {}
 var _weather_month := -1
 var _contra_t := 0.0
 var _spotted := {}
+var _stacks := {}        # warehouse biz id -> {node, shown, label}
+var _crate_mesh: BoxMesh
 
 
 func _ready() -> void:
@@ -54,6 +58,8 @@ func _ready() -> void:
 	city.build(plan)
 	city.update_owners()
 	_boat()
+	_shape_up_board()
+	_quay_cargo()
 	cam = CameraRig.new()
 	add_child(cam)
 	audio = preload("res://scripts/world/ambience.gd").new()
@@ -243,6 +249,273 @@ func _on_month(m: int) -> void:
 		Game.save_campaign()
 
 
+# ------------------------------------------------------------------ the waterfront: the union, the longshoremen, the stock
+
+func quay_warehouses() -> Array:
+	var out := Game.biz.filter(func(b: Dictionary) -> bool: return b["kind"] == "warehouse")
+	out.sort_custom(func(a, b) -> bool: return float(a["door"][1]) < float(b["door"][1]))
+	return out
+
+
+## Where the hiring boss stands: by the corner of the first warehouse on the quay, facing West St.
+func union_spot() -> Array:
+	var whs := quay_warehouses()
+	if whs.is_empty():
+		var q: Array = plan.quay_rect
+		return [Vector3(float(q[0]) + 2.0, 0, float(q[1]) + 20.0), -PI * 0.5]
+	var b: Dictionary = whs[0]
+	var basis := Basis(Vector3.UP, float(b["yaw"]))
+	return [_door(b) + basis * Vector3(-7.6, 0, 0.5), float(b["yaw"])]
+
+
+func _spawn_waterfront() -> void:
+	_spawn_union()
+	for k in DOCKERS + 2:
+		_spawn_docker(k)
+
+
+func _spawn_union() -> void:
+	var spot := union_spot()
+	var u := _make_actor("u1")
+	u.sim = true
+	u.place(spot[0], spot[1])
+
+
+## Longshoremen 0..DOCKERS-1 carry crates between a pier and a pile on the quay; the last two wait
+## at the shape-up by the hiring boss, hoping to be picked.
+func _spawn_docker(k: int) -> void:
+	var d := _make_actor("d%d" % k)
+	if d == null:
+		return
+	d.sim = true
+	if k >= DOCKERS:
+		var spot := union_spot()
+		var basis := Basis(Vector3.UP, float(spot[1]))
+		var j := k - DOCKERS
+		d.place(spot[0] + basis * Vector3(1.3 + j * 0.9, 0, 1.4 + j * 0.5), float(spot[1]) + PI + 0.4 - j * 0.8)
+		return
+	var pier: Dictionary = plan.piers[k % plan.piers.size()]
+	var zc := (float(pier["z0"]) + float(pier["z1"])) * 0.5
+	var lane := -1.4 if k % 2 == 0 else 1.4
+	var wx := plan.water_x
+	var a := Vector3(wx + 9.0 + (k % 2) * 6.0, 0, zc + lane)
+	var b := Vector3(wx - 2.5, 0, zc + lane * 0.6)
+	var c := Vector3(wx - 6.5 - (k % 3), 0, zc + lane * 3.4)
+	d.place(a.lerp(c, float(k) / DOCKERS), 0.0)
+	d.route = [a, b, c, b]
+	d.route_i = 1 if k % 2 == 0 else 3
+
+
+## The chalkboard at the shape-up (everyone builds it: it's scenery).
+func _shape_up_board() -> void:
+	var spot := union_spot()
+	var basis := Basis(Vector3.UP, float(spot[1]))
+	var at: Vector3 = spot[0] + basis * Vector3(-1.3, 0, -1.1)
+	var root := Node3D.new()
+	root.position = at
+	root.rotation.y = float(spot[1])
+	add_child(root)
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color("3a2a1c")
+	var paint := StandardMaterial3D.new()
+	paint.albedo_color = Color("2f4a38")
+	paint.roughness = 0.9
+	for part in [[Vector3(0.1, 2.3, 0.1), Vector3(-0.72, 1.15, 0), wood], [Vector3(0.1, 2.3, 0.1), Vector3(0.72, 1.15, 0), wood],
+			[Vector3(1.7, 0.95, 0.06), Vector3(0, 1.85, 0.03), paint]]:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = part[0]
+		mi.mesh = bm
+		mi.position = part[1]
+		mi.material_override = part[2]
+		root.add_child(mi)
+	var l := Label3D.new()
+	l.text = "LONGSHOREMEN'S\nLOCAL %s\nSHAPE-UP 7 A.M." % Game.UNION_LOCAL
+	l.font_size = 40
+	l.pixel_size = 0.0045
+	l.outline_size = 0
+	l.modulate = Color("e9dfc7")
+	l.position = Vector3(0, 1.86, 0.07)
+	root.add_child(l)
+
+
+## Scenery for the working quay: a cargo derrick on every pier (mast, boom, a sling of crates on
+## the hook) and the piles the longshoremen carry to (burlap sacks, barrels, crates on pallets).
+func _quay_cargo() -> void:
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color("4a3524")
+	wood.roughness = 0.95
+	var iron := StandardMaterial3D.new()
+	iron.albedo_color = Color("2a2622")
+	iron.metallic = 0.6
+	iron.roughness = 0.5
+	var burlap := StandardMaterial3D.new()
+	burlap.albedo_color = Color("9c8660")
+	burlap.roughness = 1.0
+	var barrel := StandardMaterial3D.new()
+	barrel.albedo_color = Color("6b4a2c")
+	barrel.roughness = 0.8
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1921
+	var wx := plan.water_x
+	for pier in plan.piers:
+		var zc := (float(pier["z0"]) + float(pier["z1"])) * 0.5
+		# the derrick stands on the pier's north edge, boom swung out over the water
+		var root := Node3D.new()
+		root.position = Vector3(wx + CityPlan.PIER_LEN * 0.58, 0.2, float(pier["z0"]) + 0.8)
+		root.rotation.y = rng.randf_range(-0.5, 0.2)
+		add_child(root)
+		_part(root, Vector3(0.34, 9.0, 0.34), Vector3(0, 4.5, 0), Vector3.ZERO, wood)
+		_part(root, Vector3(0.8, 0.5, 0.8), Vector3(0, 0.25, 0), Vector3.ZERO, iron)
+		# two back-stays
+		_part(root, Vector3(0.12, 8.6, 0.12), Vector3(1.6, 4.3, 1.2), Vector3(-0.2, 0, 0.26), wood)
+		_part(root, Vector3(0.12, 8.6, 0.12), Vector3(-1.6, 4.3, 1.2), Vector3(-0.2, 0, -0.26), wood)
+		# the boom: pivots at the mast foot, leans out north-west over the slip
+		var boom := Node3D.new()
+		boom.position = Vector3(0, 1.2, 0)
+		boom.rotation = Vector3(-0.85, 0.0, 0.0)
+		root.add_child(boom)
+		_part(boom, Vector3(0.22, 0.22, 8.5), Vector3(0, 0, -4.25), Vector3.ZERO, wood)
+		var tip := Vector3(0, 1.2, 0) + Basis.from_euler(boom.rotation) * Vector3(0, 0, -8.5)
+		var hang := 2.6
+		_part(root, Vector3(0.04, hang, 0.04), tip + Vector3(0, -hang * 0.5, 0), Vector3.ZERO, iron)
+		for k in 4:
+			var c := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			bm.size = Vector3(0.7, 0.48, 0.6)
+			c.mesh = bm
+			c.material_override = Crate.material()
+			c.position = tip + Vector3(-0.36 + (k % 2) * 0.72, -hang - 0.3 - (k / 2) * 0.5, 0)
+			root.add_child(c)
+		# the piles on the quay either side of the pier's foot
+		for side in [-1.0, 1.0]:
+			var at := Vector3(wx - 8.8, 0, zc + side * 4.8)
+			_part(self, Vector3(2.0, 0.14, 1.6), at + Vector3(0, 0.07, 0), Vector3.ZERO, wood)
+			if side < 0:
+				for k in 9:
+					var sack := MeshInstance3D.new()
+					var sm := CapsuleMesh.new()
+					sm.radius = 0.28
+					sm.height = 0.95
+					sack.mesh = sm
+					sack.material_override = burlap
+					sack.position = at + Vector3(-0.6 + (k % 3) * 0.6, 0.38 + (k / 3) * 0.42, rng.randf_range(-0.4, 0.4))
+					sack.rotation = Vector3(0, rng.randf_range(-0.2, 0.2), PI * 0.5)
+					add_child(sack)
+			else:
+				for k in 6:
+					var bar := MeshInstance3D.new()
+					var cm := CylinderMesh.new()
+					cm.top_radius = 0.3
+					cm.bottom_radius = 0.3
+					cm.height = 0.85
+					bar.mesh = cm
+					bar.material_override = barrel
+					bar.position = at + Vector3(-0.66 + (k % 3) * 0.66, 0.57 + (k / 3) * 0.86, -0.32 + (k % 2) * 0.64)
+					add_child(bar)
+
+
+func _part(parent: Node3D, size: Vector3, pos: Vector3, rot: Vector3, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.position = pos
+	mi.rotation = rot
+	mi.material_override = mat
+	parent.add_child(mi)
+
+
+## Crates stacked by the door of each warehouse on the quay: one per five in its owner's stock.
+func _update_stacks() -> void:
+	if _crate_mesh == null:
+		_crate_mesh = BoxMesh.new()
+		_crate_mesh.size = Vector3(0.72, 0.5, 0.62)
+	var me := int(Game.player(Net.my_id()).get("family", -1))
+	var seen_owner := {}
+	for b in quay_warehouses():
+		var owner := int(b["owned_by"])
+		var n := 0
+		if owner >= 0 and not seen_owner.has(owner):
+			seen_owner[owner] = true
+			n = Syndicate.stock(Game.nation, "nyc", owner)
+		var want := mini(ceili(n / 5.0), STACK_MAX)
+		var st: Dictionary = _stacks.get(b["id"], {})
+		if st.is_empty():
+			st = _make_stack(b)
+			_stacks[b["id"]] = st
+		if int(st["shown"]) != want:
+			var crates: Array = st["crates"]
+			for k in crates.size():
+				(crates[k] as MeshInstance3D).visible = k < want
+			st["shown"] = want
+		var lab: Label3D = st["label"]
+		lab.visible = owner >= 0 and owner == me
+		if lab.visible:
+			lab.text = "%s warehouse · %d crates" % [Game.fam(owner).get("name", ""), n]
+			lab.modulate = Color(Game.fam(owner).get("color", "#e9dfc7")).lightened(0.35)
+
+
+func _make_stack(b: Dictionary) -> Dictionary:
+	var root := Node3D.new()
+	root.position = _door(b)
+	root.rotation.y = float(b["yaw"])
+	add_child(root)
+	var pallet_mat := StandardMaterial3D.new()
+	pallet_mat.albedo_color = Color("5a4630")
+	pallet_mat.roughness = 1.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(b["id"]) * 31 + 7
+	var crates := []
+	# four pallets against the front wall, two either side of the door; each takes 2 x 2 x 4 crates
+	for g in 4:
+		var side := -1.0 if g % 2 == 0 else 1.0
+		var gx := side * (2.9 + (g / 2) * 1.75)
+		var pal := MeshInstance3D.new()
+		var pm := BoxMesh.new()
+		pm.size = Vector3(1.6, 0.14, 1.4)
+		pal.mesh = pm
+		pal.material_override = pallet_mat
+		pal.position = Vector3(gx, 0.07, -1.0)
+		root.add_child(pal)
+		for lvl in 4:
+			for k in 4:
+				var c := MeshInstance3D.new()
+				c.mesh = _crate_mesh
+				c.material_override = Crate.material()
+				c.position = Vector3(gx - 0.39 + (k % 2) * 0.78 + rng.randf_range(-0.03, 0.03), 0.39 + lvl * 0.51,
+					-1.34 + (k / 2) * 0.68 + rng.randf_range(-0.03, 0.03))
+				c.rotation.y = rng.randf_range(-0.07, 0.07)
+				c.visible = false
+				root.add_child(c)
+				crates.append(c)
+	var lab := Label3D.new()
+	lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lab.font_size = 44
+	lab.outline_size = 10
+	lab.pixel_size = 0.006
+	lab.position = Vector3(0, 3.6, -0.8)
+	lab.no_depth_test = true
+	lab.visible = false
+	root.add_child(lab)
+	return {"node": root, "crates": crates, "shown": -1, "label": lab}
+
+
+## The family's truck parked near a door (not being driven), or null.
+func parked_truck(family: int, at: Vector3, radius: float = 9.0) -> Vehicle:
+	var best: Vehicle = null
+	var bd := radius
+	for v in vehicles.values():
+		var ve := v as Vehicle
+		if ve.family != family or ve.driver != 0 or not ve.key.begins_with("t"):
+			continue
+		var d := Vector2(ve.position.x - at.x, ve.position.z - at.z).length()
+		if d < bd:
+			bd = d
+			best = ve
+	return best
+
+
 # ------------------------------------------------------------------ spawning
 
 func actor(key: String) -> Actor:
@@ -293,6 +566,12 @@ func _make_actor(key: String) -> Actor:
 			kind = "smuggler"
 		"g":
 			kind = "dealer"
+		"u":
+			kind = "unionboss"
+			look = 4471
+		"d":
+			kind = "docker"
+			look = id * 6151 + 29
 		_:
 			return null
 	if family >= 0 and not Game.fam(family).is_empty():
@@ -300,8 +579,10 @@ func _make_actor(key: String) -> Actor:
 	a.family = family
 	a.ref_id = id
 	var pk := kind
-	if kind in ["smuggler", "dealer"]:
+	if kind in ["smuggler", "dealer", "docker"]:
 		pk = "recruit"
+	elif kind == "unionboss":
+		pk = "crew"
 	a.setup(self, key, pk, look, color)
 	a.kind = kind
 	add_child(a)
@@ -333,6 +614,7 @@ func _host_spawn() -> void:
 	var smug := _make_actor("z1")
 	smug.sim = true
 	smug.place(Vector3(tip[0] + 1.0, 0, tip[1]), PI * 0.5)
+	_spawn_waterfront()
 	for f in Game.families:
 		var hq := Game.biz_by_id(int(f["hq"]))
 		var door := _door(hq)
@@ -340,6 +622,7 @@ func _host_spawn() -> void:
 		var street := door + out * 5.5
 		var t := Vehicle.new()
 		t.setup(self, "t%d" % f["id"], "truck", Color(f["color"]))
+		t.family = f["id"]
 		add_child(t)
 		t.sim = true
 		t.place(street + out.cross(Vector3.UP) * 3.0, float(hq["yaw"]) + PI * 0.5)
@@ -576,6 +859,8 @@ func _on_snapshot(data: PackedByteArray) -> void:
 				var kinds := ["sedan", "sedan", "van", "taxi", "delivery", "sedan", "police"]
 				kd = kinds[int(k.substr(1)) % kinds.size()]
 			ve.setup(self, k, kd, col)
+			if k.begins_with("t"):
+				ve.family = int(k.substr(1))
 			add_child(ve)
 			vehicles[k] = ve
 		if ve == local_vehicle:
@@ -771,7 +1056,7 @@ func crime(perp: Actor, severity: float, at: Vector3, what: String, victim_famil
 		if ac == perp or ac.is_down():
 			continue
 		var d := ac.position.distance_to(at)
-		if ac.kind == "ped" and d < radius:
+		if ac.kind in ["ped", "docker"] and d < radius:
 			civ += 1
 			ac.scare(at, 6.0)
 	for b in Game.biz:
@@ -805,9 +1090,14 @@ func crime(perp: Actor, severity: float, at: Vector3, what: String, victim_famil
 	elif perp.kind == "crew":
 		who = String(Game.crew_by_id(perp.ref_id).get("name", ""))
 	var h := Game.report_crime(perp.family, severity, civ, cop_saw, plan.district_at(at.x, at.z), what, wbiz, cop_id, who)
+	var street := plan.street_name_at(at.x, at.z)
+	if what == "shots fired" and not Game.news_this_month("SHOTS FIRED"):
+		Game._log("SHOTS FIRED ON %s: %d people dive for cover, police hunt a man in a dark overcoat." % [street.to_upper(), civ])
+	elif what == "cop killing":
+		Game._log("PATROLMAN SLAIN ON %s. The Commissioner vows to clean out the gangs." % street.to_upper())
 	if perp.kind == "boss":
 		var peer := int(perp.key.substr(1))
-		var msg := "%s: %d witness%s%s. Heat +%d." % [what.capitalize(), civ, "" if civ == 1 else "es",
+		var msg := "%s on %s: %d witness%s%s. Heat +%d." % [what.capitalize(), street, civ, "" if civ == 1 else "es",
 			", and a cop saw it" if cop_saw else "", int(round(h))]
 		Net.to_peer(peer, "reply", [msg, false])
 
@@ -886,7 +1176,7 @@ func on_killed(a: Actor, from: Actor) -> void:
 	fx_all("die", [a.key])
 	match a.kind:
 		"crew":
-			Game.crew_killed(a.ref_id, from.family if from else -1)
+			Game.crew_killed(a.ref_id, from.family if from else -1, plan.street_name_at(a.position.x, a.position.z))
 		"cop":
 			if from:
 				crime(from, 70.0, a.position, "cop killing", -1, 50.0)
@@ -895,9 +1185,10 @@ func on_killed(a: Actor, from: Actor) -> void:
 					if ac.kind == "cop" and not ac.is_down():
 						ac.chase = from
 						ac.chase_t = 45.0
-		"ped":
+		"ped", "docker", "unionboss":
 			if from:
 				Game.report_crime(from.family, 25.0, 3, false, plan.district_at(a.position.x, a.position.z))
+				Game._log("A MAN SHOT DEAD ON %s. Neighbours say they heard nothing." % plan.street_name_at(a.position.x, a.position.z).to_upper())
 	_corpses[a.key] = Time.get_ticks_msec() / 1000.0 + 25.0
 
 
@@ -916,6 +1207,10 @@ func _cleanup_corpses() -> void:
 				if n:
 					n.sim = true
 					n.place(plan.node_pos(randi() % plan.nodes.size()))
+			elif k == "u1":
+				_spawn_union()     # the local sends a new hiring boss
+			elif k.begins_with("d"):
+				_spawn_docker(int(k.substr(1)))
 
 
 func drop_item(kind: String, at: Vector3, amount: int) -> void:
@@ -1124,6 +1419,14 @@ func _nation(family: int, args: Array) -> Dictionary:
 		"convoy": return Syndicate.set_convoy(Game, family, String(args[1]), int(args[2]))
 		"ambush": return Syndicate.set_ambush(Game, family, String(args[1]), int(args[2]))
 		"hit": return Syndicate.order_hit(Game, family, String(args[1]), int(args[2]))
+		"warehouse": return Syndicate.buy_warehouse(Game, family, String(args[1]))
+		"plant": return Syndicate.buy_plant(Game, family, String(args[1]))
+		"union":
+			if String(args[1]) == "nyc":
+				return {"ok": false, "msg": "The New York local is %s's to give. See him on the West St. quay, in person." % Game.UNION_BOSS}
+			return Syndicate.pay_union(Game, family, String(args[1]))
+		"yard": return Syndicate.bribe_yard(Game, family, String(args[1]))
+		"freight": return Syndicate.set_freight(Game, family, String(args[1]), String(args[2]), String(args[3]), int(args[4]))
 		"recall":
 			var c: Dictionary = Game.nation["cities"][String(args[1])]
 			var men := int(c["men"].get(str(family), 0))
@@ -1180,9 +1483,13 @@ func _act(peer: int, me: Actor, family: int, what: String, target: int, extra: V
 	var b := Game.biz_by_id(target)
 	var near_biz := not b.is_empty() and _door(b).distance_to(me.position) < 4.0
 	match what:
-		"pitch", "lean", "collect", "buy", "speakeasy", "deliver", "bank_in", "bank_out", "captain":
+		"pitch", "lean", "collect", "buy", "speakeasy", "deliver", "bank_in", "bank_out", "captain", "wh_load", "wh_store", "wh_steal":
 			if not near_biz:
 				return {"ok": false, "msg": "You need to be at the door."}
+		"union_pay", "union_drop":
+			var u := actor("u1")
+			if u == null or u.is_down() or u.position.distance_to(me.position) > 4.5:
+				return {"ok": false, "msg": "%s isn't here." % Game.UNION_BOSS}
 	match what:
 		"pitch":
 			var muscle := 0
@@ -1219,6 +1526,15 @@ func _act(peer: int, me: Actor, family: int, what: String, target: int, extra: V
 			if n == 0:
 				return {"ok": false, "msg": "Bring crates: carry one in, or park the truck at the door."}
 			return Game.act_deliver(peer, target, n)
+		"wh_load", "wh_store", "wh_steal":
+			return _warehouse_act(peer, me, family, what, b)
+		"union_pay":
+			var r := Syndicate.pay_union(Game, family, "nyc")
+			if r["ok"]:
+				fx_all("cheer", ["u1"])
+			return r
+		"union_drop":
+			return Syndicate.sabotage(Game, family, "nyc", target)
 		"bank_in":
 			return Game.act_bank(peer, true)
 		"bank_out":
@@ -1245,6 +1561,61 @@ func _act(peer: int, me: Actor, family: int, what: String, target: int, extra: V
 				for k in n:
 					drop_item("crate", z.position + Vector3(-2.0 - (k % 3) * 0.8, 0, -1.2 + (k / 3) * 0.8), 1)
 			return r
+	return {"ok": false, "msg": ""}
+
+
+## E at a warehouse door on the quay: load your parked truck from your stock, put the truck's
+## crates into the warehouse, or help yourself to a rival's crate.
+func _warehouse_act(peer: int, me: Actor, family: int, what: String, b: Dictionary) -> Dictionary:
+	if b["kind"] != "warehouse":
+		return {"ok": false, "msg": ""}
+	var owner := int(b["owned_by"])
+	var door := _door(b)
+	match what:
+		"wh_load", "wh_store":
+			if owner != family:
+				return {"ok": false, "msg": "This isn't your warehouse."}
+			var truck := parked_truck(family, door, 9.0)
+			if what == "wh_load":
+				if truck == null:
+					return {"ok": false, "msg": "Park the family truck at the door first (within a few yards)."}
+				var room := Vehicle.MAX_LOAD - truck.load
+				if room <= 0:
+					return {"ok": false, "msg": "The truck is full: %d crates. Drive them to a speakeasy." % truck.load}
+				var got := Syndicate.take_stock(Game.nation, "nyc", family, room)
+				if got <= 0:
+					return {"ok": false, "msg": "The warehouse is empty. Convoys landing in New York fill it (J, the country)."}
+				truck.set_load(truck.load + got)
+				Game.mark_dirty()
+				fx_all("cheer", [me.key])
+				return {"ok": true, "msg": "The boys load %d crates into the truck. %d left in %s." % [got, Syndicate.stock(Game.nation, "nyc", family), b["name"]]}
+			var n := 0
+			if me.carrying:
+				me.set_carry(false)
+				Net.to_peer(peer, "carry", [false])
+				n += Syndicate.put_stock(Game.nation, "nyc", family, 1)
+			if truck and truck.load > 0:
+				var put := Syndicate.put_stock(Game.nation, "nyc", family, truck.load)
+				truck.set_load(truck.load - put)
+				n += put
+			if n == 0:
+				return {"ok": false, "msg": "Nothing to put away: carry a crate in, or park a loaded truck at the door."}
+			Game.mark_dirty()
+			return {"ok": true, "msg": "%d crates stacked in %s (%d inside)." % [n, b["name"], Syndicate.stock(Game.nation, "nyc", family)]}
+		"wh_steal":
+			if owner < 0 or owner == family:
+				return {"ok": false, "msg": ""}
+			if me.carrying:
+				return {"ok": false, "msg": "Your hands are full."}
+			if Syndicate.take_stock(Game.nation, "nyc", owner, 1) <= 0:
+				return {"ok": false, "msg": "Nothing by the door worth taking."}
+			me.set_carry(true)
+			Net.to_peer(peer, "carry", [true])
+			crime(me, 6.0, me.position, "theft", owner)
+			Game.aggression(family, owner, 8)
+			Game.notice.emit(owner, "Somebody walked off with a crate from your warehouse on West St. The %s family." % Game.fam(family)["name"], "warn")
+			Game.mark_dirty()
+			return {"ok": true, "msg": "You lift a crate off the %s family's pallet. Their watchman saw your face." % Game.fam(owner)["name"]}
 	return {"ok": false, "msg": ""}
 
 
@@ -1391,6 +1762,7 @@ func _on_game_notice(family: int, text: String, kind: String) -> void:
 
 func _on_state_changed() -> void:
 	city.update_owners()
+	_update_stacks()
 	if hud:
 		hud.refresh()
 	if not Net.is_host():

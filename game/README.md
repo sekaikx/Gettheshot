@@ -24,12 +24,12 @@ Campaign length: *1929 to 1933* (the Crash and Repeal, about 2.5 hours at the de
 | Key | |
 |---|---|
 | WASD | walk (Shift sprint, Alt stroll) |
-| E | talk / use: shop doors, cops, recruits, rival bosses, your men, crates, the truck, the river |
+| E | talk / use: shop doors, cops, recruits, rival bosses, the union boss, your men, crates, the truck, your warehouse door, the river |
 | F | punch · **G** pistol (needs a gun and ammo, and it's loud) · **R** send your men at the person you face |
 | V | get in / out of the truck (W/S drive, A/D steer, Space brake) · **Q** drop a crate |
 | Z / C, scroll, right-drag | turn and zoom the camera |
-| Tab | the family: crew orders, businesses, **THE CASE** (evidence), sit-downs, the books |
-| J | the country: cities, routes, capos |
+| Tab | the family: crew orders, businesses, **THE CASE** (evidence), **SUPPLY** (sites, stock, freight), sit-downs, the books |
+| J | the country: cities, routes, capos, docks, warehouses, breweries, rail freight |
 | M | the city map · **N** the newspaper · **H** help · Esc menu |
 
 ## What's in it
@@ -63,14 +63,51 @@ Campaign length: *1929 to 1933* (the Crash and Repeal, about 2.5 hours at the de
   - Reach a rat in custody.
 
 **The country (J)**
-- Nine cities: Chicago, Detroit, Atlantic City, Philadelphia, Boston, Cleveland, Kansas City,
-  New Orleans, plus New York itself. Each has a local outfit and a ring showing who holds how
-  much of it. Send men, guns and a capo; buy the local police; order hits on rival capos.
-  Holding a city pays every month.
-- Ten smuggling routes from Montreal, Windsor, Rum Row and Havana. Run convoys (New York crates
-  fill your cellars, elsewhere they sell wholesale), buy the customs men and sheriffs so the
-  route is yours (rivals pay a toll or get turned back), or put men on the road to hijack
-  rivals' convoys. Prohibition agents seize some convoys.
+- Fourteen cities at their real latitude and longitude: New York, Chicago, Detroit, Philadelphia,
+  Atlantic City, Boston, Cleveland, Buffalo, Pittsburgh, Baltimore, Kansas City, St. Louis,
+  New Orleans and Miami. Each has a local outfit and a ring showing who holds how much of it.
+  Send men, guns and a capo; buy the local police; order hits on rival capos. Holding a city
+  pays every month.
+- Seven liquor sources (Montreal, Windsor, the Niagara frontier, Saint-Pierre & Miquelon,
+  Rum Row, Nassau, Havana) and thirteen smuggling routes drawn along real water and roads
+  (Lake Champlain, the Detroit River, the Chesapeake, the Gulf, up the Mississippi...). Run
+  convoys, buy the customs men and sheriffs so the route is yours (rivals pay a toll or get
+  turned back), or put men on the road to hijack rivals' convoys. Prohibition agents seize some
+  convoys. Nine freight rail lines (New York Central, Pennsylvania, Illinois Central...) with
+  their stops.
+
+**Supply: docks, warehouses, breweries, rail** (J → a city, or Tab → SUPPLY)
+- **Docks** (every port, river or lake city, named: the West Street piers & Red Hook, the
+  Calumet River docks, Fells Point...): put the dockworkers' union local on the payroll (dirty $
+  up front, $150 a month, $200 in New York). Boats landing at your docks carry half again as much
+  with half the seizure risk; rivals' boats are turned back 30% of the time, or pay a toll if you
+  have a truce. The longshoremen can also drop a rival's next shipment in the river.
+- **Warehouse** (clean $): crates landing in that city go into it and sell over the following
+  months at full wholesale price, up to your share of the city's thirst (more influence, more
+  buyers). Holds 400 crates. No warehouse = the crates are dumped on arrival at half price.
+- **Brewery / distillery** (breweries in Chicago, Philadelphia, St. Louis, Detroit, New York,
+  Baltimore; stills in Cleveland, Pittsburgh, Kansas City, New Orleans; clean $ for the
+  "near beer" licence): 30 (still: 20) crates a month into your warehouse there at $6 a crate.
+  It thickens the evidence file every month and can be raided (padlocked, half the stock poured
+  out); owning the city's police makes a raid rarer.
+- **Rail yard** (New York, Chicago, St. Louis, Pittsburgh, Buffalo, Baltimore, Kansas City,
+  New Orleans): bribe the yardmaster and your freight on every line through that yard moves safely.
+- **Freight orders**: N crates a month on a rail line between two of your warehouses, $1 a
+  crate per 200 miles; a chance the cars are opened (none through your own yard, more for every
+  rival's yard on the line).
+- **New York in person**: the West Street quay is a working supply dock. Freighters at the
+  piers, longshoremen carrying crates, and the union's hiring boss standing by the warehouses
+  (E: put the local on the payroll, or pay to have a rival's next shipment "dropped in the
+  river"). Buy one of the two quay warehouses and it is your New York warehouse: convoys landing
+  in New York fill it and a stack of crates by its door grows and shrinks with the stock (one
+  crate per 5). Park the truck within 9 m and press E at the door to load 10 crates, or give a
+  man the crew order **run the booze** (N crates a month to your speakeasies, with a chance the
+  dry agents stop the truck). Without a quay warehouse, New York crates go straight into the
+  speakeasy cellars and the rest are dumped.
+- AI families buy warehouses where they land convoys, take breweries and docks when they can
+  afford them, and ship freight between their warehouses.
+- The streets have Lower Manhattan names (Mulberry St., Grand St., West St....) and the
+  paper and notices say where things happened.
 
 **Rivals and diplomacy**
 - AI families expand, retaliate, buy fronts, open speakeasies, run routes, send men to other
@@ -95,7 +132,7 @@ wired in yet: Keep Rolling's `steamworks.gd` + GodotSteam slot into `Net` the sa
 | File | |
 |---|---|
 | `scripts/core/game.gd` | autoload `Game`: the campaign, economy, law, evidence, guns, deals, AI families, save/load |
-| `scripts/core/syndicate.gd` | the country: cities, routes, convoys, ambushes, capos, hits |
+| `scripts/core/syndicate.gd` | the country: cities, routes, rail lines (real lat/lon), convoys, ambushes, capos, hits, supply sites and freight |
 | `scripts/net/net.gd` | autoload `Net`: solo / host / join, lobby, requests, state and snapshots |
 | `scripts/world/world.gd` | the street: spawning, host simulation, crimes and witnesses, cops, requests |
 | `scripts/world/city_plan.gd`, `city_builder.gd` | the city as data (seeded), then built as meshes |
@@ -104,8 +141,11 @@ wired in yet: Keep Rolling's `steamworks.gd` + GodotSteam slot into `Net` the sa
 | `scripts/ui/*` | HUD and dialogs, family ledger, city map, country map, main menu |
 
 **Tests**: `godot res://scenes/main.tscn -- --autotest --shot=/tmp/f` plays solo and exercises the
-systems (protection, vandalism, a shooting, convoys, an ambush, a route, a hit, months passing),
-saving screenshots. Networking: `-- --autohost --players=2 --mptest` in one instance and
+systems (protection, vandalism, a shooting, convoys, an ambush, a route, a hit, the quay
+warehouse filling from a convoy and loading the truck, a Chicago warehouse and brewery, a freight
+order, the booze run, the union boss, months passing), saving screenshots.
+`-- --autotest --sim=36` just lets 36 months pass quickly and prints every family's money and
+sites each month (balance check). Networking: `-- --autohost --players=2 --mptest` in one instance and
 `-- --autojoin=127.0.0.1 --mptest` in another.
 
 ## Assets and licences

@@ -31,6 +31,8 @@ const CAPTAIN_WAGE := 350
 const CAPTAIN_FEE := 500
 const JAIL_SUPPORT := 50
 const COLLECTOR_CUT := 0.1
+const UNION_BOSS := "Red Mulrooney"      # the hiring boss on the West St. quay
+const UNION_LOCAL := "915"
 
 const SHOP_ECON := {
 	# kind: [protection rate, value (clean $), legit profit, laundering capacity]
@@ -39,7 +41,7 @@ const SHOP_ECON := {
 	"pawnshop": [140, 3200, 110, 800], "laundry": [100, 2600, 70, 900], "restaurant": [160, 4200, 140, 900],
 	"cafe": [90, 2000, 60, 450], "candy": [60, 1300, 40, 300], "hardware": [100, 2500, 80, 500],
 	"drugstore": [120, 3000, 100, 600], "cigar": [80, 1800, 60, 500], "fish": [110, 2400, 90, 500],
-	"warehouse": [220, 6000, 150, 700], "poolhall": [130, 3000, 90, 600], "club": [0, 3500, 40, 400],
+	"warehouse": [150, 1800, 90, 500], "poolhall": [130, 3000, 90, 600], "club": [0, 3500, 40, 400],
 }
 
 var cfg := {"seed": 1923, "families": 4, "month_seconds": 150.0, "start_month": 0,
@@ -169,7 +171,12 @@ func _make_businesses() -> void:
 		var name := "14th Precinct" if kind == "precinct" else Names.shop(rng, kind, owner)
 		if kind == "club":
 			name = "%s Social Club" % Names.pick(rng, ["Ravenite", "Palma Boys", "Bergin", "Hester St.", "Mulberry", "Knights of"]).replace("Knights of", "Knights of Columbus")
+		if kind == "warehouse":
+			name = "%s %s" % [Names.pick(rng, ["Hudson", "North River", "Gansevoort", "Pier Nine", "Bowling Green", "Harborside"]),
+				Names.pick(rng, ["Storage Co.", "Cold Storage", "Bonded Stores", "Freight & Storage"])]
+			owner = "the %s Line" % Names.pick(rng, ["Hesperus", "Coastwise Mercantile", "Gull Island", "Pilot Rock", "Tidewater"])
 		biz.append({"id": biz.size(), "lot": lot["id"], "name": name, "kind": kind,
+			"address": plan.address_at(float(lot["door"][0]), float(lot["door"][1])),
 			"district": lot["district"], "door": lot["door"], "yaw": lot["yaw"], "owner_name": owner,
 			"protector": -1, "rate": int(e[0]), "owned_by": -1, "value": int(e[1]),
 			"legit": int(e[2]), "launder": int(e[3]), "fear": rng.randi_range(0, 30),
@@ -333,6 +340,28 @@ func laundering_capacity(family: int) -> int:
 	return cap
 
 
+## Dirty cash the family keeps back from laundering: a month of wages and envelopes, plus a cushion.
+func payroll_reserve(family: int) -> int:
+	var r := 400
+	for c in crew_of(family):
+		r += int(c["wage"])
+	for cop in cops:
+		if cop["payroll"] == family:
+			r += COP_WAGE
+	for d in captains:
+		if captains[d] == family:
+			r += CAPTAIN_WAGE
+	if not nation.is_empty():
+		for c in Syndicate.CITIES:
+			var cs: Dictionary = nation["cities"].get(c["id"], {})
+			if cs.is_empty():
+				continue
+			r += int(cs["men"].get(str(family), 0)) * 90
+			if int(cs["docks"]) == family:
+				r += Syndicate.union_wage(c["id"])
+	return r
+
+
 func legacy(family: int) -> int:
 	var f := fam(family)
 	var v := float(f["clean"]) + float(f["dirty"]) * 0.5
@@ -348,6 +377,18 @@ func legacy(family: int) -> int:
 		for r in nation["routes"]:
 			if int(nation["routes"][r]["owner"]) == family:
 				v += 1500.0
+		for c in Syndicate.CITIES:
+			var cs: Dictionary = nation["cities"].get(c["id"], {})
+			if cs.is_empty():
+				continue
+			if cs["wh"].has(str(family)):
+				v += (Syndicate.warehouse_price(c["id"]) * 0.6 if c["id"] != "nyc" else 0.0) + int(cs["wh"][str(family)]) * 20.0
+			if int(cs["plant"]) == family:
+				v += Syndicate.plant_price(c["id"]) * 0.6
+			if int(cs["docks"]) == family:
+				v += 1000.0
+			if int(cs["yard"]) == family:
+				v += 500.0
 	for p in players.values():
 		if int(p["family"]) == family:
 			v += float(p["wallet"]) * 0.5
@@ -407,11 +448,12 @@ func _advance_month() -> void:
 		_headline("PROHIBITION ENDS! Beer is legal again. Bootleggers ruined overnight.", true)
 	for f in families:
 		f["income"] = {"protection": 0, "speakeasy": 0, "legit": 0, "laundered": 0, "wages": 0,
-			"payroll": 0, "support": 0}
+			"payroll": 0, "support": 0, "wholesale": 0, "convoys": 0, "supply": 0}
 	_tick_businesses()
 	_tick_families()
 	_tick_crew()
 	Syndicate.tick(self)
+	_tick_booze()
 	_tick_evidence()
 	for f in families:
 		if f["ai"] and f["alive"]:
@@ -489,9 +531,10 @@ func _tick_families() -> void:
 	for f in families:
 		if not f["alive"]:
 			continue
-		# laundering through fronts
+		# laundering through fronts; the accountant keeps back enough cash for this month's payroll
 		if f["launder_on"]:
-			var amt := mini(int(f["dirty"]), laundering_capacity(f["id"]))
+			var keep := payroll_reserve(f["id"]) + (1200 if f["ai"] else 0)   # AI families keep working capital for convoys
+			var amt := clampi(int(f["dirty"]) - keep, 0, laundering_capacity(f["id"]))
 			if amt > 0:
 				f["dirty"] -= amt
 				f["clean"] += int(amt * (1.0 - LAUNDER_FEE))
@@ -545,6 +588,56 @@ func _tick_families() -> void:
 			_notice(f["id"], "The Bureau is building a case against the %s family. Lie low." % f["name"], "bad")
 
 
+## The family's warehouse on the West St. quay (a business it bought), or {}.
+func nyc_warehouse(family: int) -> Dictionary:
+	for b in biz:
+		if b["kind"] == "warehouse" and int(b["owned_by"]) == family:
+			return b
+	return {}
+
+
+## Men on the booze run truck crates from the quay warehouse to the family's speakeasies.
+func _tick_booze() -> void:
+	for c in crew:
+		if c["state"] != "free" or c["task"] != "booze":
+			continue
+		var fid: int = c["family"]
+		var f := fam(fid)
+		var have := Syndicate.stock(nation, "nyc", fid)
+		var speaks := owned_by(fid).filter(func(b: Dictionary) -> bool: return b["speak"] and int(b["closed_until"]) < month)
+		if speaks.is_empty() or have <= 0 or not Syndicate.has_wh(nation, "nyc", fid):
+			Syndicate._report(nation, fid, "Booze run: %s sat in the truck (%s)" % [c["name"], "no speakeasies" if speaks.is_empty() else "the warehouse is empty"])
+			continue
+		var room := 0
+		for b in speaks:
+			room += maxi(0, Syndicate.SPEAK_CAP - int(b["stock"]))
+		var n := mini(mini(int(c.get("booze", 20)), have), room)
+		if n <= 0:
+			continue
+		Syndicate.take_stock(nation, "nyc", fid, n)
+		var risk := 0.06 + float(f["heat"]) / 300.0
+		if captains.get("Waterfront", -1) == fid:
+			risk *= 0.5
+		var paid := cops.filter(func(k: Dictionary) -> bool: return k["payroll"] == fid).size()
+		risk *= maxf(0.4, 1.0 - paid * 0.12)
+		var b0: Dictionary = speaks[_rng.randi_range(0, speaks.size() - 1)]
+		var street := plan.street_name_at(float(b0["door"][0]), float(b0["door"][1]))
+		if _rng.randf() < risk:
+			add_evidence(fid, "cop", "A patrolman stopped a loaded %s family truck on %s" % [f["name"], street], 6.0)
+			_notice(fid, "Dry agents stopped your booze run on %s: %d crates seized." % [street, n], "bad")
+			Syndicate._report(nation, fid, "Booze run stopped on %s: %d crates seized" % [street, n])
+			if _rng.randf() < 0.25:
+				_jail_crew(c, _rng.randi_range(2, 5))
+			continue
+		var left := n
+		for b in speaks:
+			var mv := mini(left, maxi(0, Syndicate.SPEAK_CAP - int(b["stock"])))
+			b["stock"] = int(b["stock"]) + mv
+			left -= mv
+		Syndicate._report(nation, fid, "Booze run: %s trucked %d crates from the quay to %s" % [c["name"], n,
+			speaks[0]["name"] if speaks.size() == 1 else "%d speakeasies" % speaks.size()])
+
+
 func _federal_raid(f: Dictionary) -> void:
 	var lost := int(f["dirty"] * 0.5)
 	f["dirty"] -= lost
@@ -554,6 +647,8 @@ func _federal_raid(f: Dictionary) -> void:
 			seized += b["stock"]
 			b["stock"] = 0
 			b["closed_until"] = month + 1
+	# the warehouse on the quay gets turned over too
+	seized += Syndicate.take_stock(nation, "nyc", f["id"], Syndicate.stock(nation, "nyc", f["id"]) * 2 / 3)
 	var men := crew_of(f["id"])
 	if not men.is_empty():
 		var c: Dictionary = men[_rng.randi_range(0, men.size() - 1)]
@@ -663,13 +758,16 @@ func crew_arrested(crew_id: int) -> void:
 		_dirty = true
 
 
-func crew_killed(crew_id: int, by_family: int) -> void:
+func crew_killed(crew_id: int, by_family: int, street: String = "") -> void:
 	var c := crew_by_id(crew_id)
 	if c.is_empty() or c["state"] != "free":
 		return
 	c["state"] = "dead"
 	var victim: int = c["family"]
-	_log("GANGLAND KILLING: %s found dead on the sidewalk." % c["name"])
+	if street != "":
+		_log("GANGLAND KILLING ON %s: %s found dead on the sidewalk." % [street.to_upper(), c["name"]])
+	else:
+		_log("GANGLAND KILLING: %s found dead on the sidewalk." % c["name"])
 	_notice(victim, "%s was killed." % c["name"], "bad")
 	if by_family >= 0 and by_family != victim:
 		aggression(by_family, victim, 30)
@@ -796,6 +894,11 @@ func act_buy(family: int, biz_id: int) -> Dictionary:
 		aggression(family, prev, 8)
 	_log("The %s family quietly buys %s." % [f["name"], b["name"]])
 	_dirty = true
+	if b["kind"] == "warehouse":
+		var nyc: Dictionary = nation["cities"]["nyc"]
+		if not nyc["wh"].has(str(family)):
+			nyc["wh"][str(family)] = 0
+		return _r(true, "%s on %s is your warehouse now. Convoys landing in New York fill it; truck the crates to your speakeasies, or put a man on the booze run." % [b["name"], b.get("address", "West St.")])
 	return _r(true, "You own %s. It launders $%d a month." % [b["name"], b["launder"]])
 
 
@@ -956,10 +1059,18 @@ func act_crew_task(peer: int, crew_id: int, task: String, target: int) -> Dictio
 	var c := crew_by_id(crew_id)
 	if p.is_empty() or c.is_empty() or c["family"] != int(p["family"]) or c["state"] != "free":
 		return _r(false, "")
+	if task == "booze":
+		var wh := nyc_warehouse(int(p["family"]))
+		if wh.is_empty():
+			return _r(false, "First you need a warehouse on the West St. quay.")
+		c["booze"] = clampi(target if target > 0 else 20, 5, 60)
+		target = wh["id"]
 	c["task"] = task
 	c["target"] = target
 	c["leader"] = str(peer)
 	_dirty = true
+	if task == "booze":
+		return _r(true, "%s takes the truck keys: %d crates a month from the warehouse to your speakeasies." % [c["name"], int(c["booze"])])
 	var what: String = {"follow": "is with you", "guard": "is guarding", "collect": "is collecting in",
 		"idle": "is taking it easy at the club"}.get(task, task)
 	var where := ""
@@ -992,7 +1103,7 @@ func add_evidence(family: int, kind: String, text: String, weight: float, extra:
 	next_id += 1
 	# the same witness or the same gun just gets heavier
 	for o in f["evidence"]:
-		if o["kind"] == kind and kind in ["weapon", "street", "witness", "cop"] and o["text"] == text:
+		if o["kind"] == kind and kind in ["weapon", "street", "witness", "cop", "file"] and o["text"] == text:
 			o["w"] = float(o["w"]) + weight
 			_recalc_heat(f)
 			return
@@ -1248,13 +1359,24 @@ func _ai_consider(me: Dictionary, other: int, terms: Dictionary) -> bool:
 func _ai_month(f: Dictionary) -> void:
 	var id: int = f["id"]
 	var men := crew_of(id)
-	if men.size() < 2 + month / 10 and f["dirty"] > 700:
+	var want_men := mini(8, 2 + (month - int(cfg["start_month"])) / 5)
+	if men.size() < want_men and f["dirty"] > 900 and (men.size() < 2 or Syndicate._net_dirty(f) > 200):
 		f["dirty"] -= 250
 		_add_crew(id, "associate")
-	# booze: abstract runs from the docks for its speakeasies
+	# booze: from its warehouse on the quay if it has one, else abstract runs from the docks
 	for b in owned_by(id):
-		if b["speak"] and b["stock"] < 10 and f["dirty"] > 400:
-			var n := mini(16, int(f["dirty"] / CRATE_COST / 2))
+		if b["speak"] and b["stock"] < 10 and Syndicate.stock(nation, "nyc", id) > 0:
+			var got := Syndicate.take_stock(nation, "nyc", id, Syndicate.SPEAK_CAP - int(b["stock"]))
+			if _rng.randf() < 0.05 + f["heat"] / 300.0:
+				add_evidence(f["id"], "cop", "A loaded %s family truck stopped on West St." % f["name"], 5.0)
+			else:
+				b["stock"] += got
+	# the night boat only has so much: past that, the speakeasies need a real supply line
+	var boat_left := 14
+	for b in owned_by(id):
+		if b["speak"] and b["stock"] < 10 and f["dirty"] > 400 and boat_left > 0:
+			var n := mini(mini(16, boat_left), int(f["dirty"] / CRATE_COST / 2))
+			boat_left -= n
 			f["dirty"] -= n * CRATE_COST
 			if _rng.randf() < f["heat"] / 250.0:
 				add_evidence(f["id"], "ledger", "A seized truck traced to the %s family" % f["name"], 6.0)
@@ -1373,6 +1495,11 @@ func _log(text: String) -> void:
 	_month_log.append(text)
 
 
+## Already a story like this in this month's paper?
+func news_this_month(prefix: String) -> bool:
+	return _month_log.any(func(t: String) -> bool: return t.begins_with(prefix))
+
+
 func _headline(text: String, big: bool = false) -> void:
 	news.push_front({"month": month, "text": text, "big": big})
 	if news.size() > 40:
@@ -1404,7 +1531,10 @@ func apply_state(s: Dictionary) -> void:
 	deals = s["deals"]; relations = s["relations"]; captains = s["captains"]; news = s["news"]
 	boat = s["boat"]; econ = s["econ"]; speak_mult = s["speak_mult"]; next_id = s["next_id"]
 	over = s["over"]; running = s["running"]
-	nation = s.get("nation", Syndicate.fresh())
+	nation = Syndicate.upgrade(s.get("nation", Syndicate.fresh()))
+	for b in biz:
+		if not b.has("address") and plan != null:
+			b["address"] = plan.address_at(float(b["door"][0]), float(b["door"][1]))
 	state_changed.emit()
 
 
