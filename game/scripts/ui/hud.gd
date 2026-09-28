@@ -96,7 +96,6 @@ func _ready() -> void:
 	_controls = _add(ControlsStrip.new(), _base)
 	_mentor = _add(MentorCard.new(), _base)
 	_place = _add(PlaceBanner.new(), _base)
-	_talk = _add(TalkBox.new(), _root)
 	_book = preload("res://scripts/ui/family_book.gd").new()
 	_book.set("hud", self)
 	_book.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -113,6 +112,8 @@ func _ready() -> void:
 	_nation.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_nation.visible = false
 	_root.add_child(_nation)
+	# the talk box sits above the hosted panels, so a panel can ask something too
+	_talk = _add(TalkBox.new(), _root)
 	_paper = _add(Newspaper.new(), _root)
 	_paper.visible = false
 	_help = _add(HelpCards.new(), _root)
@@ -316,6 +317,10 @@ func close_conversation() -> void:
 	_talk.close()
 	if _modal in ["talk", "arrest"]:
 		_modal = ""
+		# a panel that asked the question is still open underneath
+		for pair in [[_book, "family"], [_map, "map"], [_nation, "nation"]]:
+			if (pair[0] as Control).visible:
+				_modal = String(pair[1])
 
 
 func set_meter(id: String, world_pos: Vector2, value: float, mark: float = -1.0, label: String = "", color: Color = Pal.UI_RED) -> void:
@@ -448,6 +453,7 @@ func toggle_help() -> void:
 			_help_from_menu = false
 			_open_menu()
 		else:
+			_set_paused(false)
 			_controls.remind()
 		return
 	if _modal == "menu":
@@ -456,6 +462,8 @@ func toggle_help() -> void:
 		_modal = ""
 	if _modal != "":
 		return
+	if not _help_from_menu:
+		_set_paused(not Net.is_online())
 	_help.open()
 	_modal = "help"
 
@@ -598,7 +606,8 @@ func _process(delta: float) -> void:
 	var full := _modal in FULL_MODALS
 	_base.visible = not full
 	_marks.visible = not full
-	_mentor.hold = talking
+	_mentor.hold = talking or _paused
+	_paper.hold = _modal != "" and _modal != "paper"
 	_controls.hold = talking
 	_minimap.hold = talking
 	_marks.hidden_prompt = _modal != "" or in_jail()

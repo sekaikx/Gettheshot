@@ -6,7 +6,6 @@ extends Control
 const UI := preload("res://scripts/ui/hud/hud_ui.gd")
 const W_PANEL := 430.0
 const H_PANEL := 164.0
-const HEAT_WORDS := ["Clean", "Noticed", "Watched", "Wanted", "Hot", "RAID"]
 
 var _fam := {}
 var _wallet := 0
@@ -72,14 +71,16 @@ func _float_delta(d: int, slot: int) -> void:
 	_floaters.append({"text": ("+$" if d > 0 else "−$") + W.money(absi(d)), "color": UI.GREEN if d > 0 else UI.RED, "t": 0.0, "slot": slot})
 
 
+## Lit segments of the badge: one per 20 Heat (a trace under 3 doesn't count).
 static func _segments(heat: float) -> int:
-	return clampi(ceili(heat / 20.0 - 0.001), 0, 5)
+	return 0 if heat < 3.0 else clampi(ceili(heat / 20.0 - 0.001), 0, 5)
 
 
+## One word per step, so the word and the badge always agree. At 100 the feds raid.
 static func heat_word(heat: float) -> String:
 	if heat >= 100.0:
-		return HEAT_WORDS[5]
-	return HEAT_WORDS[clampi(int(heat / 20.0), 0, 4)] if heat >= 5.0 else HEAT_WORDS[0]
+		return "RAID"
+	return ["Clean", "Noticed", "Watched", "Wanted", "Hot", "Raid soon"][_segments(heat)]
 
 
 func _process(delta: float) -> void:

@@ -78,9 +78,14 @@ func _draw() -> void:
 	var br0 := plan.bounds
 	var inside_r := _clip(Rect2(c + (br0.position - center_m) * sc, br0.size * sc), mr)
 	if inside_r.size.x < mr.size.x - 1.0 or inside_r.size.y < mr.size.y - 1.0:
+		# diagonal hatching, each line clipped to the map square
 		var hx := mr.position.x - fmod(center_m.x * sc, 12.0)
-		while hx < mr.end.x + mr.size.y:
-			draw_line(Vector2(hx, mr.position.y), Vector2(hx - mr.size.y, mr.end.y), UI.with_a(Color("2a282c"), a), 1.0)
+		var hh := mr.size.y
+		while hx < mr.end.x + hh:
+			var t0 := maxf(0.0, hx - mr.end.x)
+			var t1 := minf(hh, hx - mr.position.x)
+			if t1 > t0:
+				draw_line(Vector2(hx - t0, mr.position.y + t0), Vector2(hx - t1, mr.position.y + t1), UI.with_a(Color("2a282c"), a), 1.0)
 			hx += 12.0
 	if inside_r.size.x > 0.0:
 		Draw.rect(self, inside_r, UI.with_a(Color("34363b").lerp(Color("1c2030"), night * 0.5), a))

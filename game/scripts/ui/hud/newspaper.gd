@@ -22,6 +22,7 @@ var _pic := "skyline"
 var _sheet := Rect2()
 var _mini := Rect2()
 var mini_bottom := 600.0
+var hold := false             # something else is open: the folded copy waits
 
 
 func _ready() -> void:
@@ -88,7 +89,7 @@ func mini_showing() -> bool:
 func _has_point(p: Vector2) -> bool:
 	if full:
 		return true
-	return mini_showing() and _mini.has_point(p)
+	return mini_showing() and not hold and _mini.has_point(p)
 
 
 func _gui_input(e: InputEvent) -> void:
@@ -105,7 +106,8 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	if not full:
-		_mini_t += delta
+		if not hold:
+			_mini_t += delta
 		if _mini_t >= MINI_LIFE:
 			visible = false
 			return
@@ -145,7 +147,7 @@ static func _split(s: String) -> PackedStringArray:
 func _draw() -> void:
 	if full:
 		_draw_full()
-	elif mini_showing():
+	elif mini_showing() and not hold:
 		_draw_mini()
 
 

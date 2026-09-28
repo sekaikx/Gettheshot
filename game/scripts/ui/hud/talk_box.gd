@@ -231,7 +231,7 @@ func _layout() -> void:
 	var heights: Array = []
 	for o in _opts:
 		var od2: Dictionary = o
-		var text := String(od2.get("text", ""))
+		var text := smart_quotes(String(od2.get("text", "")))
 		var sub := String(od2.get("sub", ""))
 		var tl := UI.wrap(semi, text, OPT_FS, avail, 2)
 		var below := sub != "" and (tl.size() > 1 or UI.tw(semi, text, OPT_FS) + UI.tw(sans, sub, SUB_FS) + 24.0 > avail)
