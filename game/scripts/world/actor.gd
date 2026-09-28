@@ -45,7 +45,7 @@ var order: Dictionary = {}
 var last_attacker: Actor = null
 var last_attacked_t := 0.0
 var talk_t := 0.0
-var route: Array = []    # longshoremen: a loop of points (pier, quay edge, the pile, quay edge)
+var route: Array = []    # longshoremen: a loop of points; pick up at [0], set down at the middle one
 var route_i := 0
 var _stuck_t := 0.0
 var _stuck_at := Vector3.ZERO
@@ -369,7 +369,7 @@ func _think_docker(delta: float) -> void:
 		if route_i % route.size() == 0 and not carrying:
 			set_carry(true)                 # off the boat
 			wait_t = randf_range(1.2, 2.6)
-		elif route_i % route.size() == 2 and carrying:
+		elif route_i % route.size() == int(route.size() / 2.0) and carrying:
 			set_carry(false)                # onto the pile
 			wait_t = randf_range(0.8, 2.0)
 			talk_t = wait_t if randf() < 0.3 else 0.0

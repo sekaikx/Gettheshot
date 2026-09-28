@@ -7,7 +7,8 @@ extends Control
 ## run booze, buy a route, ambush a route, ship crates by rail.
 ##
 ## Everything is placed by latitude/longitude through Syndicate.project() (MapProjection when the
-## baked map exists). The coastline below is a rough outline to draw on until then.
+## baked map exists). The baked plate (assets/map/country_map_small.png) is drawn under the live
+## overlays; the coastline below is a rough fallback outline for when it's missing.
 
 const INK := Color("efe6d2")
 const MUTE := Color("9b907c")
@@ -83,10 +84,18 @@ var _center := Vector2(0.5, 0.5)   # map UV at the middle of the frame
 var _drag := false
 var _t := 0.0
 var _cache := {}          # path key -> PackedVector2Array in UV
+var _plate: Texture2D     # the baked atlas plate (assets/map), or null: then the rough outline below
+
+
+func _plate_tex() -> Texture2D:
+	if _plate == null and ResourceLoader.exists(MapProjection.TEXTURE_SMALL_PATH):
+		_plate = load(MapProjection.TEXTURE_SMALL_PATH) as Texture2D
+	return _plate
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	var p := PanelContainer.new()
 	p.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 	p.offset_left = -440
@@ -163,39 +172,29 @@ func _draw() -> void:
 	_layout()
 	var bg := Color("15120f")
 	draw_rect(Rect2(Vector2.ZERO, size), bg)
-	draw_rect(_frame, WATER)
 	var font := get_theme_default_font()
-	var land := _pts("coast", COAST)
-	draw_colored_polygon(land, LAND)
-	draw_polyline(land, LAND_EDGE, 1.5)
-	for k in ISLANDS.size():
-		var isl := _pts("isl%d" % k, ISLANDS[k])
-		draw_colored_polygon(isl, LAND)
-		draw_polyline(isl + PackedVector2Array([isl[0]]), LAND_EDGE, 1.2)
-	for k in LAKES.size():
-		var lake := _pts("lake%d" % k, LAKES[k])
-		draw_colored_polygon(lake, WATER)
-		draw_polyline(lake + PackedVector2Array([lake[0]]), LAND_EDGE, 1.0)
-	for k in RIVERS.size():
-		draw_polyline(_pts("riv%d" % k, RIVERS[k]), RIVER, 2.5 if k == 0 else 1.6, true)
-	_dashed_poly(_pts("border", BORDER), Color(0.62, 0.56, 0.46, 0.45), 1.2, 7.0)
+	var plate := _plate_tex()
+	if plate != null:
+		# rails, the 12-mile limit and the mother-ship lanes are baked into the plate
+		draw_texture_rect(plate, _area, false)
+	else:
+		_draw_outline(font)
 	var nation: Dictionary = Game.nation
-	for lab in [["CANADA", 48.2, -84.0], ["UNITED STATES", 37.5, -86.0], ["ATLANTIC OCEAN", 33.5, -70.5], ["GULF OF MEXICO", 25.8, -91.0], ["CUBA", 22.2, -80.5]]:
-		var at := _area.position + Syndicate.project(lab[1], lab[2]) * _area.size
-		draw_string(font, at, lab[0], HORIZONTAL_ALIGNMENT_CENTER, -1, 15, Color(1, 1, 1, 0.22))
 	if nation.is_empty():
 		_mask(bg, font)
 		return
 	var me := int(Game.player(Net.my_id()).get("family", -1))
 	# mother-ship lanes
-	for k in Syndicate.LANES.size():
+	for k in (0 if plate != null else Syndicate.LANES.size()):
 		_dashed_poly(_pts("lane%d" % k, Syndicate.LANES[k]["path"]), Color(0.75, 0.68, 0.5, 0.35), 1.0, 3.0)
 	# freight rail lines: a line with cross-ties
 	for r in Syndicate.RAILS:
 		var pl := _pts(r["id"], r["path"])
 		var sel: bool = _sel.get("id", "") == r["id"]
-		draw_polyline(pl, RAIL.lightened(0.3) if sel else RAIL, 3.0 if sel else 1.6, true)
-		_ties(pl, RAIL, 9.0)
+		if plate == null or sel:
+			var rc := (Color("8b1e1a") if plate != null else RAIL.lightened(0.3)) if sel else RAIL
+			draw_polyline(pl, rc, 3.0 if sel else 1.6, true)
+			_ties(pl, rc, 9.0)
 		for o in nation["freight"]:
 			if int(o["fam"]) == me and o["line"] == r["id"]:
 				for k in 2:
@@ -206,7 +205,7 @@ func _draw() -> void:
 		var r: Dictionary = nation["routes"][d["id"]]
 		var pl := _pts(d["id"], d["path"])
 		var owner: int = r["owner"]
-		var col := _fam_color(owner) if owner >= 0 else Color(0.75, 0.68, 0.52, 0.7)
+		var col := _fam_color(owner) if owner >= 0 else (Color(0.3, 0.2, 0.1, 0.8) if plate != null else Color(0.75, 0.68, 0.52, 0.7))
 		var w := 4.0 if _sel.get("id", "") == d["id"] else 2.4
 		if owner >= 0:
 			draw_polyline(pl, col, w, true)
@@ -283,6 +282,28 @@ func _draw() -> void:
 	_mask(bg, font)
 	# legend
 	_legend(font)
+
+
+## The rough outline drawn when the baked plate is missing.
+func _draw_outline(font: Font) -> void:
+	draw_rect(_frame, WATER)
+	var land := _pts("coast", COAST)
+	draw_colored_polygon(land, LAND)
+	draw_polyline(land, LAND_EDGE, 1.5)
+	for k in ISLANDS.size():
+		var isl := _pts("isl%d" % k, ISLANDS[k])
+		draw_colored_polygon(isl, LAND)
+		draw_polyline(isl + PackedVector2Array([isl[0]]), LAND_EDGE, 1.2)
+	for k in LAKES.size():
+		var lake := _pts("lake%d" % k, LAKES[k])
+		draw_colored_polygon(lake, WATER)
+		draw_polyline(lake + PackedVector2Array([lake[0]]), LAND_EDGE, 1.0)
+	for k in RIVERS.size():
+		draw_polyline(_pts("riv%d" % k, RIVERS[k]), RIVER, 2.5 if k == 0 else 1.6, true)
+	_dashed_poly(_pts("border", BORDER), Color(0.62, 0.56, 0.46, 0.45), 1.2, 7.0)
+	for lab in [["CANADA", 48.2, -84.0], ["UNITED STATES", 37.5, -86.0], ["ATLANTIC OCEAN", 33.5, -70.5], ["GULF OF MEXICO", 25.8, -91.0], ["CUBA", 22.2, -80.5]]:
+		var at := _area.position + Syndicate.project(lab[1], lab[2]) * _area.size
+		draw_string(font, at, lab[0], HORIZONTAL_ALIGNMENT_CENTER, -1, 15, Color(1, 1, 1, 0.22))
 
 
 ## Everything outside the frame is covered (the map spills when zoomed), then the title.

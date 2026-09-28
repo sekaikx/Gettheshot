@@ -265,6 +265,10 @@ func quay_warehouses() -> Array:
 
 ## Where the hiring boss stands: by the corner of the first warehouse on the quay, facing West St.
 func union_spot() -> Array:
+	if city != null and city.dock_spots.has("union_boss"):
+		# in front of the hiring hall the street art built on the quay, facing West St.
+		var at: Vector3 = city.dock_spots["union_boss"]
+		return [Vector3(at.x, 0, at.z), -PI * 0.5]
 	var whs := quay_warehouses()
 	if whs.is_empty():
 		var q: Array = plan.quay_rect
@@ -299,6 +303,22 @@ func _spawn_docker(k: int) -> void:
 		var basis := Basis(Vector3.UP, float(spot[1]))
 		var j := k - DOCKERS
 		d.place(spot[0] + basis * Vector3(1.3 + j * 0.9, 0, 1.4 + j * 0.5), float(spot[1]) + PI + 0.4 - j * 0.8)
+		return
+	var dkey := "dock_worker_%d" % k
+	if city != null and city.dock_paths.has(dkey):
+		# the street art's loop: gangway, pier root, along the quay, the warehouse stack; and back
+		var pts: Array = []
+		for v in city.dock_paths[dkey]:
+			pts.append(Vector3(v.x, 0, v.z))
+		d.route = [pts[0], pts[1], pts[2], pts[3], pts[2], pts[1]]
+		# staggered along the loop so the quay is busy from the start; laden on the way in
+		var leg: int = [0, 1, 2, 4, 5, 3][k % 6]
+		var here: Vector3 = d.route[leg]
+		var nxt: Vector3 = d.route[(leg + 1) % d.route.size()]
+		d.place(here.lerp(nxt, 0.3 + 0.1 * (k % 3)), 0.0)
+		d.route_i = (leg + 1) % d.route.size()
+		if leg < 3:
+			d.set_carry(true)
 		return
 	var pier: Dictionary = plan.piers[k % plan.piers.size()]
 	var zc := (float(pier["z0"]) + float(pier["z1"])) * 0.5
@@ -584,11 +604,8 @@ func _make_actor(key: String) -> Actor:
 		color = Color(Game.fam(family)["color"])
 	a.family = family
 	a.ref_id = id
-	var pk := kind
-	if kind in ["smuggler", "dealer", "docker"]:
-		pk = "recruit"
-	elif kind == "unionboss":
-		pk = "crew"
+	# the actor kind -> Person's look ("smuggler" and "dealer" are Person kinds too)
+	var pk: String = {"docker": "dock", "unionboss": "union"}.get(kind, kind)
 	a.setup(self, key, pk, look, color)
 	a.kind = kind
 	add_child(a)

@@ -83,7 +83,12 @@ func _ready() -> void:
 			world.hud._choose(0)       # put the local on the payroll
 			# the longshoremen at work on the middle pier
 			var pier: Dictionary = world.plan.piers[1]
-			world.local_actor.place(Vector3(world.plan.water_x + 3.0, 0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 1.0), PI * 0.5)
+			var look_at := Vector3(world.plan.water_x + 3.0, 0, (float(pier["z0"]) + float(pier["z1"])) * 0.5 + 1.0)
+			if world.city.dock_paths.has("dock_worker_0"):
+				# where the longshoremen walk: the root of the pier with the first freighter
+				var dp: PackedVector3Array = world.city.dock_paths["dock_worker_0"]
+				look_at = Vector3(dp[1].x + 4.0, 0, dp[1].z + 3.0)
+			world.local_actor.place(look_at, PI * 0.5)
 			world.cam.dist_goal = 30.0
 			world.cam.snap()],
 		[19.0, func() -> void:
