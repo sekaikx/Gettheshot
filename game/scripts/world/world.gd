@@ -131,6 +131,7 @@ func _ready() -> void:
 	Game.ai_order.connect(_on_ai_order)
 	Game.month_passed.connect(_on_month)
 	Game.campaign_over.connect(func() -> void: Net.to_all("over", []))
+	Game.raided.connect(_on_raid)
 	if Net.is_host():
 		_host_spawn()
 	_ensure_local_boss()
@@ -814,6 +815,9 @@ func _make_actor(key: String) -> Actor:
 		"j":
 			kind = "ped"
 			look = id * 211 + 5
+		"f":
+			kind = "fed"
+			look = id * 97 + 3
 		"s":
 			var b := Game.biz_by_id(id)
 			if b.is_empty():
@@ -849,6 +853,8 @@ func _make_actor(key: String) -> Actor:
 		a.kind = "thug"
 	elif prefix == "j":
 		a.kind = "debtor"
+	elif prefix == "f":
+		a.kind = "fed"
 	elif kind in ["woman", "kid"]:
 		a.kind = "ped"
 	add_child(a)
@@ -1057,6 +1063,7 @@ func _process(delta: float) -> void:
 		_obj_t = 0.5
 		_show_job()
 		_marks.queue_redraw()
+		_nightlife()
 
 
 ## Fade the roof of the building the local player is in; tell them where they are.
@@ -1146,6 +1153,35 @@ func _host_tick(delta: float) -> void:
 						var drv := actor("p%d" % veh.driver)
 						if drv:
 							crime(drv, 10.0, ac.position, "hit and run", ac.family)
+
+
+## Host: the feds hit a family. G-men pull up outside its club and its speakeasies and go in.
+func _on_raid(family: int) -> void:
+	if not Net.is_host():
+		return
+	var places := [Game.biz_by_id(int(Game.fam(family)["hq"]))]
+	for b in Game.owned_by(family):
+		if b["speak"]:
+			places.append(b)
+	var n := 0
+	for b in places.slice(0, 3):
+		var f := W.front_dir(float(b["yaw"]))
+		for k in 3:
+			var key := "f%d" % (randi_range(1, 99999))
+			var g := _make_actor(key)
+			if g == null:
+				continue
+			g.sim = true
+			g.place(W.door(b) + f * (3.0 + k * 0.8) * W.M + f.orthogonal() * (k - 1) * 1.2 * W.M, (-f).angle())
+			g.home = talk_spot(int(b["id"])) + f.orthogonal() * (k - 1) * 0.9 * W.M
+			g.home_yaw = (-f).angle()
+			n += 1
+			get_tree().create_timer(70.0).timeout.connect(func() -> void:
+				if is_instance_valid(g) and not g.dead:
+					actors.erase(g.key)
+					g.queue_free())
+	fx_all("whistle", [])
+	Net.to_all("raid", [family])
 
 
 ## Host: every other family finished? The last one standing runs New York.
@@ -1258,6 +1294,53 @@ func _show_job() -> void:
 				target = W.door(b)
 	hud.set_objective({"title": String(t.get("title", "A favor")), "detail": String(t.get("detail", "")) + "  ·  $%d" % int(job["reward"]), "target": target})
 	_my_obj = true
+
+
+## Speakeasies at night: patrons at the tables, a man on the piano, the bartender. Only drawn on
+## this machine (the same everywhere: it's scenery), and only for the joints near you.
+func _nightlife() -> void:
+	var open := night_level() > 0.45
+	var near := cam.focus_point()
+	for b in Game.biz:
+		var key := int(b["id"])
+		var want: bool = open and bool(b["speak"]) and int(b["closed_until"]) < Game.month and W.door(b).distance_to(near) < 40.0 * W.M
+		var have: Node2D = _decor.get(key)
+		if want and have == null:
+			var lay := layout_of_biz(key)
+			if lay.is_empty():
+				continue
+			var root := Node2D.new()
+			root.z_index = W.Z_PEOPLE - 1
+			add_child(root)
+			_decor[key] = root
+			var back: Rect2 = lay["back"]
+			var spots: Array = lay["spots"].get("patrons", [])
+			var rr := W.rng(key * 53 + 11)
+			if spots.is_empty():
+				for k in 5:
+					spots.append(back.position + Vector2(rr.randf_range(0.2, 0.8) * back.size.x, rr.randf_range(0.25, 0.8) * back.size.y))
+			for k in spots.size():
+				var p := Person2D.new()
+				p.setup("patron", key * 100 + k, W.FAMILY_NONE)
+				p.position = spots[k]
+				p.rotation = rr.randf() * TAU
+				p.set_motion(Person2D.Anim.SIT if k % 3 != 0 else Person2D.Anim.TALK, 0.0)
+				root.add_child(p)
+			var bar: Vector2 = lay["spots"].get("bar", back.position + Vector2(back.size.x * 0.15, back.size.y * 0.5))
+			var bt := Person2D.new()
+			bt.setup("bartender", key * 7 + 1, W.FAMILY_NONE)
+			bt.position = bar
+			root.add_child(bt)
+		elif not want and have != null:
+			have.queue_free()
+			_decor.erase(key)
+	# music when you're in one
+	var in_speak := false
+	if inside_lot >= 0 and open:
+		var bb := biz_at_lot(inside_lot)
+		in_speak = not bb.is_empty() and bool(bb["speak"])
+	if audio.has_method("speakeasy"):
+		audio.call("speakeasy", in_speak)
 
 
 ## "!" over the door of every shop with a favor to ask.
@@ -2394,6 +2477,11 @@ func _on_event(ev_name: String, args: Array) -> void:
 			var mine := int(Game.player(Net.my_id()).get("family", -2))
 			if fam == -1 or fam == mine:
 				hud.toast(String(args[1]), String(args[2]))
+		"raid":
+			var mine3 := int(Game.player(Net.my_id()).get("family", -2))
+			if int(args[0]) == mine3:
+				cam.shake(0.5)
+				audio.ui("whistle", -2.0)
 		"job_done":
 			audio.ui("coins_pay", -6.0)
 			happened.emit("favor_done", {})

@@ -196,7 +196,7 @@ func hurt(dmg: float, from: Actor, lethal: bool = false) -> void:
 		scare(from.position if from else position, 8.0)
 	elif kind == "debtor":
 		scare(from.position if from else position, 4.0)
-	elif kind in ["crew", "cop", "recruit", "aiboss", "docker", "unionboss", "thug"] and from and from != self and attack_target == null:
+	elif kind in ["crew", "cop", "recruit", "aiboss", "docker", "unionboss", "thug", "fed"] and from and from != self and attack_target == null:
 		attack_target = from
 	if kind == "shop" and from:
 		world.shopkeeper_hurt(self, from, hp <= 0.0)
@@ -254,7 +254,7 @@ func think(delta: float) -> void:
 		"shop": _think_shop(delta)
 		"thug": _think_thug(delta)
 		"debtor": _think_debtor(delta)
-		"recruit", "aiboss", "unionboss", "dealer": _think_stand(delta)
+		"recruit", "aiboss", "unionboss", "dealer", "fed": _think_stand(delta)
 		"docker": _think_docker(delta)
 		_: velocity = Vector2.ZERO
 

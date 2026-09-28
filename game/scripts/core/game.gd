@@ -14,6 +14,7 @@ signal notice(family: int, text: String, kind: String)   # family -1 = everyone
 signal crew_spawn_request(crew_id: int)
 signal ai_order(order: Dictionary)
 signal campaign_over
+signal raided(family: int)      # the feds hit a family: the World shows it on the street
 
 const START_YEAR := 1923
 const MONTHS := ["January", "February", "March", "April", "May", "June", "July", "August",
@@ -672,6 +673,7 @@ func _federal_raid(f: Dictionary) -> void:
 	f["rep"] = maxi(0, f["rep"] - 5)
 	_log("FEDS RAID %s FAMILY: $%d cash and %d crates seized." % [f["name"].to_upper(), lost, seized])
 	_notice(f["id"], "Federal raid! They took $%d from your Stash and %d crates." % [lost, seized], "bad")
+	raided.emit(int(f["id"]))
 
 
 func _tick_crew() -> void:
