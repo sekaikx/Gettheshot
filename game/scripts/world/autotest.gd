@@ -416,6 +416,18 @@ func _favortest() -> void:
 	await _wait(0.6)
 	var me: Actor = world.local_actor
 	var done := {}
+	# one shop asks for each kind of favor
+	var rng := W.rng(77)
+	for b in Game.biz:
+		b.erase("favor")
+	var k := 0
+	for b in Game.biz:
+		if b["kind"] in ["club", "precinct", "warehouse", "poolhall"] or int(b["owned_by"]) >= 0:
+			continue
+		Favors.make(Game, b, ["thugs", "debt", "parcel"][k], rng)
+		k += 1
+		if k >= 3:
+			break
 	for round in 6:
 		for b in Game.biz:
 			if not b.has("favor") or done.has(String(b["favor"]["kind"])):
@@ -450,11 +462,6 @@ func _favortest() -> void:
 			break
 		if done.size() >= 3:
 			break
-		Favors.refresh(Game)
-		for b in Game.biz:
-			if b.has("favor") and done.has(String(b["favor"]["kind"])):
-				b.erase("favor")
-		Favors.refresh(Game)
 	var ok := done.size() == 3 and done.values().all(func(v) -> bool: return v)
 	print("FAVORTEST %s %s" % ["OK" if ok else "FAIL", str(done)])
 	get_tree().quit()

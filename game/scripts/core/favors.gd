@@ -50,19 +50,24 @@ static func refresh(game: Node) -> void:
 		tries += 1
 		var b: Dictionary = cands[rng.randi_range(0, cands.size() - 1)]
 		cands.erase(b)
-		var kind: String = ["thugs", "debt", "parcel"][rng.randi_range(0, 2)]
-		var f := {"kind": kind, "reward": rng.randi_range(8, 16) * 10, "until": int(game.month) + 1, "target_biz": -1, "rival": -1}
-		var others: Array = game.biz.filter(func(o: Dictionary) -> bool: return o["id"] != b["id"] and o["kind"] not in ["club", "precinct", "warehouse"])
-		f["target_biz"] = int(others[rng.randi_range(0, others.size() - 1)]["id"])
-		if kind == "thugs":
-			var rivals: Array = game.families.filter(func(o: Dictionary) -> bool: return bool(o["alive"]) and bool(o["ai"]))
-			if rivals.is_empty():
-				continue
-			f["rival"] = int(rivals[rng.randi_range(0, rivals.size() - 1)]["id"])
-			f["target_biz"] = int(b["id"])
-		b["favor"] = f
-		offers += 1
+		if make(game, b, ["thugs", "debt", "parcel"][rng.randi_range(0, 2)], rng):
+			offers += 1
 	game.mark_dirty()
+
+
+## Put a favor of `kind` on shop `b`. False if it can't be done (no rival family for thugs).
+static func make(game: Node, b: Dictionary, kind: String, rng: RandomNumberGenerator) -> bool:
+	var f := {"kind": kind, "reward": rng.randi_range(8, 16) * 10, "until": int(game.month) + 1, "target_biz": -1, "rival": -1}
+	var others: Array = game.biz.filter(func(o: Dictionary) -> bool: return o["id"] != b["id"] and o["kind"] not in ["club", "precinct", "warehouse"])
+	f["target_biz"] = int(others[rng.randi_range(0, others.size() - 1)]["id"])
+	if kind == "thugs":
+		var rivals: Array = game.families.filter(func(o: Dictionary) -> bool: return bool(o["alive"]) and bool(o["ai"]))
+		if rivals.is_empty():
+			return false
+		f["rival"] = int(rivals[rng.randi_range(0, rivals.size() - 1)]["id"])
+		f["target_biz"] = int(b["id"])
+	b["favor"] = f
+	return true
 
 
 ## Host: a player takes the job. Returns {ok, msg, spawn: [...]} (the World spawns the people).
