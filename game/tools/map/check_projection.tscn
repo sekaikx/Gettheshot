@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tools/map/check_projection.gd" id="1"]
+
+[node name="CheckProjection" type="Node"]
+script = ExtResource("1")
