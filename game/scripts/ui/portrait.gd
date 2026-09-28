@@ -59,8 +59,6 @@ class Painter extends RefCounted:
 		if pts.size() < 3:
 			return
 		var q := mp(pts)
-		if OS.get_environment("PORTRAIT_DEBUG") == "1" and Geometry2D.triangulate_polygon(q).is_empty():
-			print("BAD poly ", pts.size(), " ", pts[0], " ", pts[pts.size() / 2], " col ", col)
 		ci.draw_colored_polygon(q, col)
 		_edge(q, edge if edge.a > 0.0 else col)
 
@@ -69,8 +67,6 @@ class Painter extends RefCounted:
 		if pts.size() < 3:
 			return
 		var q := mp(pts)
-		if OS.get_environment("PORTRAIT_DEBUG") == "1" and Geometry2D.triangulate_polygon(q).is_empty():
-			print("BAD shade ", pts.size(), " ", pts[0], " ", pts[pts.size() / 2], " base ", base)
 		var cols := PackedColorArray()
 		cols.resize(pts.size())
 		for i in pts.size():
@@ -195,9 +191,9 @@ static func _face_geo(lk: Dictionary, kid: bool, female: bool) -> Dictionary:
 	var fw: float = lk["face_w"]
 	var bw: float = lk["w"]
 	var rx := 14.6 + 1.1 * fw + clampf((bw - 1.0) * 10.0, -1.0, 2.2)
-	var jaw := 0.74 + 0.07 * fw + clampf((bw - 1.0) * 0.5, -0.04, 0.1)
+	var jaw := 0.74 + 0.07 * fw + 0.06 * float(lk["jaw"]) + clampf((bw - 1.0) * 0.5, -0.04, 0.1)
 	var up := 18.0
-	var low := 19.6
+	var low := 19.6 + 1.2 * float(lk["long"])
 	var cy := 43.0
 	if female:
 		rx -= 1.4
@@ -210,8 +206,11 @@ static func _face_geo(lk: Dictionary, kid: bool, female: bool) -> Dictionary:
 		up = 18.4
 	if lk["kind"] in ["aiboss", "unionboss"]:
 		jaw += 0.08
+	var ln := float(lk["long"]) * 0.5
 	return {"c": Vector2(50.0, cy), "rx": rx, "up": up, "low": low, "jaw": jaw, "eye_y": cy + 1.2,
-		"brow_y": cy - 4.4, "nose_y": cy + 8.4, "mouth_y": cy + 13.8, "chin": cy + low, "kid": kid, "female": female}
+		"brow_y": cy - 4.4, "nose_y": cy + 8.4 + ln + 0.7 * float(lk["nose_l"]), "mouth_y": cy + 13.8 + ln * 1.6, "chin": cy + low,
+		"kid": kid, "female": female, "eye_gap": 6.9 + 0.6 * float(lk["eye_gap"]), "eye_k": 1.0 + 0.12 * float(lk["eye_size"]),
+		"mouth_k": 1.0 + 0.14 * float(lk["mouth_w"]), "brow_k": 1.0 + 0.25 * float(lk["brow_w"]), "lips": float(lk["lips"])}
 
 
 static func _face_pts(f: Dictionary) -> PackedVector2Array:
@@ -292,6 +291,13 @@ static func _backdrop(p: Painter, rect: Rect2, lk: Dictionary) -> void:
 				p.rect(Rect2(x, 44.0 - h, 4.0, h), Color(Color("5a3a1e").lerp(Color("2e4a3a"), Draw.hash01(i, 1, 9)), 0.55))
 				p.rect(Rect2(x + 1.2, 44.0 - h - 3.0, 1.6, 3.0), Color(Color("5a3a1e"), 0.55))
 			p.rect(Rect2(0, 44, 100, 2.0), Color(wall.darkened(0.5), 0.8))
+	# brush strokes: the wall is painted, not printed
+	for i in 26:
+		var q := Vector2(Draw.hash01(i, 3, 17) * 100.0, Draw.hash01(i, 4, 17) * 100.0)
+		var a := PI * 0.5 + (Draw.hash01(i, 5, 17) - 0.5) * 0.6
+		var ln := 9.0 + Draw.hash01(i, 6, 17) * 14.0
+		var tone := wall.lightened(0.16) if i % 2 == 0 else wall.darkened(0.2)
+		p.line(q, q + Vector2(cos(a), sin(a)) * ln, Color(tone, 0.08), 2.5 + Draw.hash01(i, 7, 17) * 3.0)
 	# the lamp: a warm pool of light from the upper left, a halo behind the head
 	p.glow(full, Vector2(16.0, 10.0), Vector2(96.0, 88.0), Color(glow, 0.6))
 	p.glow(full, Vector2(10.0, 4.0), Vector2(26.0, 22.0), Color(WARM, 0.3), 6)
@@ -346,6 +352,12 @@ static func _body(p: Painter, lk: Dictionary, f: Dictionary) -> void:
 		_flapper(p, lk, base)
 		return
 	p.shade(sh, base, _lit(base, 0.24), _dk(base, 0.5), c, 40.0)
+	var top := PackedVector2Array()
+	for q in sh:
+		if q.x < 49.0 and q.y < 90.0:
+			top.append(q + Vector2(0.6, 0.7))
+	if top.size() >= 2:
+		p.pline(top, Color(_lit(base, 0.45), 0.45), 0.9)
 	# folds in the cloth where the arm meets the chest
 	for sgn: float in [-1.0, 1.0]:
 		p.line(Vector2(50.0 + sgn * 31.0, 86.0), Vector2(50.0 + sgn * 33.0, 100.0), Color(_dk(base, 0.4), 0.55), 1.2)
@@ -364,7 +376,7 @@ static func _body(p: Painter, lk: Dictionary, f: Dictionary) -> void:
 			_jacket_front(p, lk, base, false, false, 1.25)
 			var fur: Color = lk["fur"]
 			if fur.a > 0.0:
-				_fur(p, fur, 64.0, 16.0)
+				_fur(p, fur, true)
 		"tunic":
 			_tunic(p, lk, base)
 		"trench":
@@ -498,7 +510,7 @@ static func _bow(p: Painter, c: Vector2, col: Color, s: float) -> void:
 	p.ellipse(c, Vector2(1.6, 1.8) * s, col.lightened(0.1))
 
 
-static func _tunic(p: Painter, lk: Dictionary, base: Color) -> void:
+static func _tunic(p: Painter, _lk: Dictionary, base: Color) -> void:
 	# the standing collar is drawn with the neck; here: buttons, the shield, a belt
 	p.line(Vector2(50.0, 70.0), Vector2(50.0, 100.0), _dk(base, 0.5), 0.9)
 	for j in 4:
@@ -572,7 +584,7 @@ static func _dress_front(p: Painter, lk: Dictionary, base: Color, coat: bool) ->
 		p.circle(Vector2(52.5, 92.0), 1.6, _dk(base, 0.5))
 		var fur: Color = lk["fur"]
 		if fur.a > 0.0:
-			_fur(p, fur, 66.0, 15.0)
+			_fur(p, fur, false)
 	else:
 		p.line(Vector2(41.5, 65.0), Vector2(50.0, 80.0), _dk(base, 0.4), 1.0)
 		p.line(Vector2(58.5, 65.0), Vector2(50.0, 80.0), _dk(base, 0.4), 1.0)
@@ -607,33 +619,41 @@ static func _pearl_string(p: Painter, y0: float, rx: float, drop: float) -> void
 		p.circle(q + Vector2(-0.3, -0.3), 0.6, Color("fbf8f0"))
 
 
-static func _fur(p: Painter, fur: Color, y: float, half: float) -> void:
-	# a thick fluffy stole round the neck and over the shoulders, tufted at the edges
-	var outer := PackedVector2Array()
-	var n := 26
-	for i in n + 1:
-		var t := float(i) / n
-		var x := 50.0 + lerpf(-half - 16.0, half + 16.0, t)
-		var dx := (x - 50.0) / (half + 16.0)
-		var yy := y + 6.0 + dx * dx * 12.0 + (1.3 if i % 2 == 0 else -0.4)
-		outer.append(Vector2(x, yy))
-	for i in n + 1:
-		var t := 1.0 - float(i) / n
-		var x := 50.0 + lerpf(-half - 9.0, half + 9.0, t)
-		var dx := (x - 50.0) / (half + 9.0)
-		var yy := y - 3.0 + dx * dx * 9.0 - (1.0 if i % 2 == 0 else 0.0)
-		outer.append(Vector2(x, yy))
-	p.shade(outer, fur, _lit(fur, 0.3), _dk(fur, 0.55), Vector2(50.0, y + 2.0), 18.0, _dk(fur, 0.6))
-	if not p.small:
-		for i in 22:
-			var t := float(i) / 21.0
-			var x := 50.0 + lerpf(-half - 12.0, half + 12.0, t)
-			var dx := (x - 50.0) / (half + 12.0)
-			var yy := y + 1.5 + dx * dx * 10.0
-			p.line(Vector2(x, yy - 2.0), Vector2(x + 0.8, yy + 2.6), Color(_lit(fur, 0.35), 0.55), 0.6)
+## A fur collar: a shawl of fur round the neck and down the front (the don's overcoat runs to the
+## bottom of the frame; a lady's coat collar stops on the chest).
+static func _fur(p: Painter, fur: Color, long: bool) -> void:
+	var bottom := 101.0 if long else 84.0
+	for sgn: float in [-1.0, 1.0]:
+		var pts := PackedVector2Array()
+		# the outer edge, tufted: from the back of the neck over the shoulder and down
+		var outer := [Vector2(7.0, 60.5), Vector2(15.0, 62.0), Vector2(22.0, 65.5), Vector2(25.0, 71.0), Vector2(23.5, 79.0),
+			Vector2(19.5, 88.0), Vector2(16.5, bottom)]
+		var inner := [Vector2(5.0, bottom), Vector2(6.0, 86.0), Vector2(8.0, 76.0), Vector2(9.0, 68.0), Vector2(6.5, 63.5)]
+		if not long:
+			outer = [Vector2(7.0, 60.5), Vector2(15.0, 62.0), Vector2(21.0, 65.0), Vector2(23.0, 70.5), Vector2(20.0, 78.0), Vector2(13.0, bottom)]
+			inner = [Vector2(4.0, bottom - 2.0), Vector2(7.0, 74.0), Vector2(8.5, 67.5), Vector2(6.5, 63.5)]
+		for k in outer.size():
+			var q: Vector2 = outer[k]
+			pts.append(Vector2(50.0 + sgn * q.x, q.y))
+			if k < outer.size() - 1:
+				var nq: Vector2 = outer[k + 1]
+				var mid := q.lerp(nq, 0.5)
+				var out := (nq - q).orthogonal().normalized() * (-1.6)
+				pts.append(Vector2(50.0 + sgn * (mid.x + out.x), mid.y + out.y))
+		for q: Vector2 in inner:
+			pts.append(Vector2(50.0 + sgn * q.x, q.y))
+		if sgn > 0.0:
+			pts.reverse()
+		p.shade(pts, fur, _lit(fur, 0.32), _dk(fur, 0.55), Vector2(50.0 + sgn * 14.0, 72.0), 16.0, _dk(fur, 0.65))
+		if not p.small:
+			for k in 9:
+				var t := float(k) / 8.0
+				var q := Vector2(lerpf(12.0, 18.0, sin(t * PI)), lerpf(63.0, bottom - 3.0, t))
+				p.line(Vector2(50.0 + sgn * q.x, q.y), Vector2(50.0 + sgn * (q.x + 2.0), q.y + 2.4), Color(_lit(fur, 0.4), 0.45), 0.8)
+				p.line(Vector2(50.0 + sgn * (q.x - 3.0), q.y + 1.2), Vector2(50.0 + sgn * (q.x - 1.4), q.y + 3.2), Color(_dk(fur, 0.4), 0.5), 0.7)
 
 
-static func _apron(p: Painter, apron: String, lk: Dictionary) -> void:
+static func _apron(p: Painter, apron: String, _lk: Dictionary) -> void:
 	var col := PersonLook.WHITE
 	match apron:
 		"leather": col = PersonLook.LEATHER
@@ -668,7 +688,7 @@ static func _neck(p: Painter, lk: Dictionary, f: Dictionary) -> void:
 	p.fan(Vector2(50.0, float(f["chin"]) + 1.0), Vector2(w + 2.0, 4.5), Color(0.1, 0.05, 0.04, 0.4), Color(0.1, 0.05, 0.04, 0.0))
 
 
-static func _collar(p: Painter, lk: Dictionary, f: Dictionary) -> void:
+static func _collar(p: Painter, lk: Dictionary, _f: Dictionary) -> void:
 	var coat: String = lk["coat"]
 	var shirt: Color = lk["shirt"]
 	var base: Color = lk["coat_col"]
@@ -723,6 +743,13 @@ static func _face(p: Painter, lk: Dictionary, f: Dictionary, mood: String) -> vo
 	if age == 2:
 		lit = lit.lerp(Color(0.9, 0.85, 0.8), 0.15)
 	p.shade(pts, skin, lit, dark, c + Vector2(0, 4), 22.0, skin.darkened(0.42))
+	# lamplight along the lit edge of the face
+	var rim := PackedVector2Array()
+	for q in pts:
+		if q.x < c.x - rx * 0.55 and q.y > c.y - 12.0 and q.y < c.y + 12.0:
+			rim.append(c + (q - c) * 0.965)
+	if rim.size() >= 2:
+		p.pline(rim, Color(WARM, 0.32), 0.9)
 	# soft modelling: the lit cheek, the shaded side, cheekbones, the chin
 	p.fan(c + Vector2(-6.0, -2.0), Vector2(9.0, 10.0), Color(skin.lightened(0.22), 0.35), Color(skin, 0.0))
 	p.fan(c + Vector2(rx - 3.0, 6.0), Vector2(7.0, 14.0), Color(skin.darkened(0.45), 0.38), Color(skin, 0.0))
@@ -784,20 +811,21 @@ static func _eyes(p: Painter, lk: Dictionary, f: Dictionary, mood: String) -> vo
 	var female: bool = f["female"]
 	var open: float = ms["open"]
 	var eye_col: Color = lk["eye"]
-	var ew := 3.3 if not kid else 3.6
-	var eh := 1.9 * open if not kid else 2.3 * open
+	var ek: float = f["eye_k"]
+	var ew := (3.0 if not kid else 3.5) * ek
+	var eh := (1.55 * open if not kid else 2.1 * open) * ek
 	var line := Color(0.12, 0.07, 0.06)
 	for sgn: float in [-1.0, 1.0]:
-		var ec := Vector2(c.x + sgn * 6.9, ey)
+		var ec := Vector2(c.x + sgn * float(f["eye_gap"]), ey)
 		# the socket shadow under the brow
-		p.fan(ec + Vector2(0.0, -0.8), Vector2(5.8, 3.8), Color(skin.darkened(0.45), 0.4), Color(skin, 0.0))
+		p.fan(ec + Vector2(0.0, -0.8), Vector2(6.0, 4.0), Color(skin.darkened(0.5), 0.5), Color(skin, 0.0))
 		if p.small:
 			p.ellipse(ec, Vector2(ew * 0.8, maxf(eh * 0.75, 0.9)), Color(0.14, 0.09, 0.07))
 			p.circle(ec + Vector2(-0.6, -0.4), 0.55, Color(1, 1, 1, 0.8))
 			continue
 		var white := p.ellipse_pts(ec, Vector2(ew, eh), 0.0, 20)
 		p.poly(white, Color("e9e1d2"), Color(0.4, 0.3, 0.26, 0.6))
-		var ir := minf(1.55 if not kid else 1.75, eh * 0.95 + 0.2)
+		var ir := minf((1.45 if not kid else 1.7) * ek, eh * 0.98 + 0.25)
 		p.circle(ec + Vector2(0.2, 0.15), ir, eye_col)
 		p.circle(ec + Vector2(0.2, 0.15), ir * 0.5, Color(0.05, 0.03, 0.03))
 		p.circle(ec + Vector2(-0.35, -0.45), ir * 0.32, Color(1, 1, 1, 0.9))
@@ -829,12 +857,13 @@ static func _brows(p: Painter, lk: Dictionary, f: Dictionary, mood: String) -> v
 	if lk["hair_style"] == "red":
 		col = hair.darkened(0.1)
 	var by: float = f["brow_y"] + float(lk["brow_h"]) * 0.5 + float(ms["lift"])
-	var thick := 1.6 if not f["female"] else 0.95
+	var thick := (1.6 if not f["female"] else 0.95) * float(f["brow_k"])
 	if lk["age"] == 2:
 		thick += 0.3
 	for sgn: float in [-1.0, 1.0]:
-		var inner := Vector2(c.x + sgn * 2.8, by + float(ms["in"]))
-		var outer := Vector2(c.x + sgn * 10.8, by + 0.6 + float(ms["out"]))
+		var gap: float = f["eye_gap"]
+		var inner := Vector2(c.x + sgn * (gap - 4.1), by + float(ms["in"]))
+		var outer := Vector2(c.x + sgn * (gap + 3.9), by + 0.6 + float(ms["out"]))
 		if mood == "smug":
 			if sgn < 0.0:
 				inner.y -= 1.2
@@ -877,9 +906,9 @@ static func _mouth(p: Painter, lk: Dictionary, f: Dictionary, mood: String) -> v
 	var shape: String = ms["mouth"]
 	var lip: Color = lk["lipstick"]
 	var line := skin.darkened(0.55)
-	var hw := 4.8 if not f["kid"] else 3.8
+	var hw := (4.8 if not f["kid"] else 3.8) * float(f["mouth_k"])
 	if f["female"]:
-		hw = 4.2
+		hw = 4.2 * float(f["mouth_k"])
 	var mus: String = lk["mustache"]
 	match shape:
 		"smile":
@@ -923,8 +952,20 @@ static func _mouth(p: Painter, lk: Dictionary, f: Dictionary, mood: String) -> v
 	var mc := hair.darkened(0.15)
 	match mus:
 		"full":
-			var mp := PackedVector2Array([Vector2(c.x - 5.6, my - 0.2), Vector2(c.x - 3.8, my - 3.0), Vector2(c.x, my - 2.6), Vector2(c.x + 3.8, my - 3.0), Vector2(c.x + 5.6, my - 0.2), Vector2(c.x, my - 1.0)])
+			var mp := PackedVector2Array()
+			for i in 13:
+				var t := float(i) / 12.0
+				var x := lerpf(-5.8, 5.8, t)
+				mp.append(Vector2(c.x + x, my - 2.9 + absf(x) * 0.12 + (0.55 if absf(x) < 0.8 else 0.0)))
+			for i in 13:
+				var t := 1.0 - float(i) / 12.0
+				var x := lerpf(-5.8, 5.8, t)
+				mp.append(Vector2(c.x + x, my - 0.4 + pow(absf(x) / 5.8, 2.0) * 0.9 - (0.5 if absf(x) < 1.0 else 0.0)))
 			p.shade(mp, mc, mc.lightened(0.2), mc.darkened(0.3), Vector2(c.x, my - 1.5), 5.0)
+			if not p.small:
+				for i in 7:
+					var x := c.x - 4.8 + i * 1.6
+					p.line(Vector2(x, my - 2.4), Vector2(x + (x - c.x) * 0.12, my - 0.6), Color(mc.lightened(0.25), 0.45), 0.4)
 		"pencil":
 			p.line(Vector2(c.x - 4.4, my - 1.6), Vector2(c.x - 0.8, my - 2.1), mc, 0.8)
 			p.line(Vector2(c.x + 0.8, my - 2.1), Vector2(c.x + 4.4, my - 1.6), mc, 0.8)
@@ -993,16 +1034,14 @@ static func _hair_front(p: Painter, lk: Dictionary, f: Dictionary) -> void:
 			p.shade(dome, sk, sk.lightened(0.22), sk.darkened(0.3), c + Vector2(0, -8), 16.0)
 			p.fan(c + Vector2(-5.0, -14.0), Vector2(5.0, 2.8), Color(1, 0.96, 0.9, 0.35), Color(1, 1, 1, 0.0), -0.3)
 			# a soft grey fringe above the ears
-			var skull := PackedVector2Array()
-			for i in 44:
-				var a := TAU * i / 44.0
-				skull.append(c + Vector2(0, 0.5) + Vector2(cos(a) * (rx + 2.4), sin(a) * 20.0) * (1.0 + 0.045 * sin(a * 11.0)))
 			for sgn: float in [-1.0, 1.0]:
-				var side := PackedVector2Array([Vector2(c.x + sgn * (rx - 4.5), c.y - 7.0), Vector2(c.x + sgn * (rx + 6.0), c.y - 12.5),
-					Vector2(c.x + sgn * (rx + 6.0), c.y + 3.0), Vector2(c.x + sgn * (rx - 2.0), c.y + 3.0)])
+				var tuft := PackedVector2Array([Vector2(c.x + sgn * (rx - 3.4), c.y - 9.5), Vector2(c.x + sgn * (rx - 0.5), c.y - 10.2),
+					Vector2(c.x + sgn * (rx + 1.6), c.y - 8.0), Vector2(c.x + sgn * (rx + 2.3), c.y - 4.5), Vector2(c.x + sgn * (rx + 1.9), c.y - 1.0),
+					Vector2(c.x + sgn * (rx + 0.6), c.y + 1.8), Vector2(c.x + sgn * (rx - 0.6), c.y + 0.4), Vector2(c.x + sgn * (rx - 1.2), c.y - 3.5),
+					Vector2(c.x + sgn * (rx - 2.2), c.y - 7.0)])
 				if sgn > 0.0:
-					side.reverse()
-				p.shade_all(p.clip(skull, side), hair, _lit(hair, 0.3), _dk(hair, 0.4), c + Vector2(sgn * rx, -4.0), 10.0)
+					tuft.reverse()
+				p.shade(tuft, hair, _lit(hair, 0.35), _dk(hair, 0.35), c + Vector2(sgn * rx, -5.0), 6.0, Color(_dk(hair, 0.3), 0.6))
 			if not p.small:
 				for sgn: float in [-1.0, 1.0]:
 					for j in 3:
@@ -1327,7 +1366,7 @@ static func _face_props(p: Painter, lk: Dictionary, f: Dictionary, mood: String)
 	if lk["glasses"]:
 		var rim := Color("b8a060") if lk["age"] == 2 else Color("2a2622")
 		for sgn: float in [-1.0, 1.0]:
-			var ec := Vector2(c.x + sgn * 6.9, ey)
+			var ec := Vector2(c.x + sgn * float(f["eye_gap"]), ey)
 			p.arc(ec, 4.4, 0.0, TAU, rim, 0.7, 20)
 			p.arc(ec, 3.6, PI + 0.5, PI + 1.4, Color(1, 1, 1, 0.45), 0.6, 8)
 			p.line(ec + Vector2(sgn * 4.4, -0.8), Vector2(c.x + sgn * (float(f["rx"]) + 0.5), ey - 1.5), rim, 0.6)

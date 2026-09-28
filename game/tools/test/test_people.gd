@@ -87,6 +87,8 @@ func _ready() -> void:
 			"portraits_small": await _shot_portraits_small()
 			"close": await _shot_close()
 			"portraits_big": await _shot_portraits_big()
+			"perf": await _perf()
+			"bench": await _bench()
 	get_tree().quit()
 
 
@@ -95,11 +97,12 @@ func _fam(k: String) -> Color:
 
 
 func _person(parent: Node, k: String, lk: int, pos: Vector2, rot: float = 0.0, ex: Dictionary = {}) -> Person2D:
+	# set up before it enters the tree, the way an Actor may do it
 	var p := Person2D.new()
-	parent.add_child(p)
-	p.setup(k, lk, _fam(k), ex)
 	p.position = pos
 	p.rotation = rot
+	p.setup(k, lk, _fam(k), ex)
+	parent.add_child(p)
 	return p
 
 
@@ -124,12 +127,12 @@ func _group(origin: Vector2, rect: Rect2, street: bool = false) -> Node2D:
 	return g
 
 
-func _snap(center: Vector2, zoom: float, name: String) -> void:
+func _snap(center: Vector2, zoom: float, shot: String) -> void:
 	cam.position = center
 	cam.zoom = Vector2(zoom, zoom)
 	for i in 6:
 		await get_tree().process_frame
-	var path := out_dir.path_join(name + ".png")
+	var path := out_dir.path_join(shot + ".png")
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(path)
 	print("saved ", path)
@@ -137,10 +140,11 @@ func _snap(center: Vector2, zoom: float, name: String) -> void:
 	if OS.get_environment("CROPS") == "1":
 		var sz := img.get_size()
 		for q in 4:
-			var r := Rect2i(Vector2i((q % 2) * sz.x / 2, (q / 2) * sz.y / 2), sz / 2)
+			var half := Vector2i(sz.x >> 1, sz.y >> 1)
+			var r := Rect2i(Vector2i((q % 2) * half.x, (q >> 1) * half.y), half)
 			var part := img.get_region(r)
 			part.resize(sz.x, sz.y, Image.INTERPOLATE_NEAREST)
-			part.save_png(out_dir.path_join("%s_q%d.png" % [name, q]))
+			part.save_png(out_dir.path_join("%s_q%d.png" % [shot, q]))
 
 
 func _clear(g: Node) -> void:
@@ -149,7 +153,7 @@ func _clear(g: Node) -> void:
 
 
 ## Every kind x 3 looks, idle. At zoom 1.0 the three looks face different ways (light check).
-func _shot_kinds(zoom: float, name: String, turned: bool = false) -> void:
+func _shot_kinds(zoom: float, shot: String, turned: bool = false) -> void:
 	var origin := Vector2(0, 0)
 	var view := Vector2(1600, 900) / zoom
 	var g := _group(origin, Rect2(-view * 0.5 - Vector2(40, 40), view + Vector2(80, 80)))
@@ -157,7 +161,7 @@ func _shot_kinds(zoom: float, name: String, turned: bool = false) -> void:
 	var cell := Vector2(view.x / cols, view.y / 3.2)
 	for i in KINDS.size():
 		var cx := (i % cols) - (cols - 1) * 0.5
-		var cy := float(i / cols) - 1.0
+		var cy := floorf(i / float(cols)) - 1.0
 		var c := Vector2(cx * cell.x, cy * cell.y)
 		for n in 3:
 			var rot := 0.0
@@ -165,7 +169,7 @@ func _shot_kinds(zoom: float, name: String, turned: bool = false) -> void:
 				rot = [0.0, PI * 0.5, -PI * 0.75][n]
 			_person(g, KINDS[i], 1000 + n * 7919 + i * 31, c + Vector2((n - 1) * 44.0, -6.0), rot, {"trade": TRADES[(i + n) % TRADES.size()]})
 		_tag(g, KINDS[i], c + Vector2(0, 42), 12 if zoom < 1.3 else 10)
-	await _snap(origin, zoom, name)
+	await _snap(origin, zoom, shot)
 	await _clear(g)
 
 
@@ -175,7 +179,7 @@ func _shot_shops() -> void:
 	var cols := 5
 	for i in TRADES.size():
 		var cx := (i % cols) - (cols - 1) * 0.5
-		var cy := float(i / cols) - 1.0
+		var cy := floorf(i / float(cols)) - 1.0
 		var c := Vector2(cx * 200.0, cy * 175.0)
 		for n in 2:
 			_person(g, "shop", 500 + n * 104729 + i * 17, c + Vector2((n - 0.5) * 50.0, -10.0), [0.0, PI * 0.5][n], {"trade": TRADES[i]})
@@ -243,7 +247,7 @@ func _shot_actions() -> void:
 	for i in acts.size():
 		var a: Array = acts[i]
 		var cx := (i % cols) - (cols - 1) * 0.5
-		var cy := float(i / cols) - 1.0
+		var cy := floorf(i / float(cols)) - 1.0
 		var c := Vector2(cx * 145.0, cy * 175.0)
 		var p := _person(g, "crew" if i % 2 == 0 else "recruit", 40 + i, c + Vector2(-14.0, -6.0), 0.0)
 		p.set_weapon(a[1])
@@ -258,7 +262,7 @@ func _shot_actions() -> void:
 
 
 ## A crowd on a sidewalk and street: mixed kinds, walking in all directions.
-func _shot_crowd(zoom: float, name: String, dark: bool) -> void:
+func _shot_crowd(zoom: float, shot: String, dark: bool) -> void:
 	var origin := Vector2(0, 16000)
 	var view := Vector2(1600, 900) / zoom
 	var g := _group(origin, Rect2(-view * 0.5 - Vector2(40, 40), view + Vector2(80, 80)), true)
@@ -282,7 +286,7 @@ func _shot_crowd(zoom: float, name: String, dark: bool) -> void:
 			p.pose_at(Person2D.Anim.IDLE)
 	if dark:
 		night.color = Color(0.3, 0.33, 0.52)
-	await _snap(origin, zoom, name)
+	await _snap(origin, zoom, shot)
 	night.color = Color.WHITE
 	await _clear(g)
 
@@ -297,7 +301,7 @@ func _shot_portraits() -> void:
 	var sz := 160.0
 	for i in KINDS.size():
 		var col := i % 9
-		var row := i / 9
+		var row := int(i / 9.0)
 		var r := Rect2(Vector2(22 + col * 175, 20 + row * 200), Vector2(sz, sz))
 		sheet.items.append({"rect": r, "kind": KINDS[i], "look": 1000 + i * 31, "color": _fam(KINDS[i]),
 			"extra": {"trade": "bakery"}, "mood": "", "label": KINDS[i]})
@@ -329,11 +333,11 @@ func _shot_portraits_small() -> void:
 	# every kind x 3 looks at 64 px, then shopkeepers of every trade at 96 px
 	for i in KINDS.size():
 		for n in 3:
-			var r := Rect2(Vector2(20 + (i % 9) * 176 + n * 56, 20 + (i / 9) * 100), Vector2(52, 52))
+			var r := Rect2(Vector2(20 + (i % 9) * 176 + n * 56, 20 + int(i / 9.0) * 100), Vector2(52, 52))
 			sheet.items.append({"rect": r, "kind": KINDS[i], "look": 1000 + i * 31 + n * 7919, "color": _fam(KINDS[i]),
 				"extra": {"trade": TRADES[(i + n) % TRADES.size()]}, "mood": "", "label": KINDS[i] if n == 1 else ""})
 	for i in TRADES.size():
-		var r := Rect2(Vector2(20 + (i % 8) * 196, 240 + (i / 8) * 130), Vector2(96, 96))
+		var r := Rect2(Vector2(20 + (i % 8) * 196, 240 + int(i / 8.0) * 130), Vector2(96, 96))
 		sheet.items.append({"rect": r, "kind": "shop", "look": 500 + i * 17, "color": W.FAMILY_NONE,
 			"extra": {"trade": TRADES[i]}, "mood": "", "label": TRADES[i]})
 	for i in 10:
@@ -366,9 +370,13 @@ func _shot_close() -> void:
 	if env != "":
 		ks = Array(env.split(","))
 	for i in ks.size():
-		var p := _person(g, ks[i], 1000 + i * 31, Vector2(-140.0 + (i % 4) * 93.0, -40.0 + (i / 4) * 80.0), 0.0, {"trade": "butcher"})
-		p.pose_at(Person2D.Anim.WALK if i % 2 == 1 else Person2D.Anim.IDLE, "", 0.0, 9.0, PI * 0.5)
-	await _snap(origin + Vector2(0, 0), 4.0, "close_z4")
+		var p := _person(g, ks[i], 1000 + i * 31, Vector2(-140.0 + (i % 4) * 93.0, -40.0 + floorf(i / 4.0) * 80.0), 0.0, {"trade": "butcher"})
+		var anim := OS.get_environment("CLOSE_ANIM")
+		if anim != "":
+			p.pose_at(Person2D.Anim.keys().find(anim), OS.get_environment("CLOSE_ACT"), float(OS.get_environment("CLOSE_T")) if OS.get_environment("CLOSE_T") != "" else 0.0)
+		else:
+			p.pose_at(Person2D.Anim.WALK if i % 2 == 1 else Person2D.Anim.IDLE, "", 0.0, 9.0 if i % 2 == 1 else 0.0, PI * 0.5)
+	await _snap(origin + Vector2(0, 0), 2.6, "close")
 	await _clear(g)
 
 
@@ -394,3 +402,93 @@ func _shot_portraits_big() -> void:
 	await _snap(cam.position, 1.0, "portraits_big")
 	layer.queue_free()
 	await get_tree().process_frame
+
+
+## Frame time with 80 people walking, turning and acting (not frozen), against an empty frame.
+func _perf() -> void:
+	var g := _group(Vector2(0, 30000), Rect2(-900, -500, 1800, 1000))
+	cam.position = Vector2(0, 30000)
+	cam.zoom = Vector2.ONE
+	for i in 30:
+		await get_tree().process_frame
+	var t0 := Time.get_ticks_usec()
+	for i in 60:
+		await get_tree().process_frame
+	var empty := (Time.get_ticks_usec() - t0) / 60.0
+	var people: Array = []
+	var r := W.rng(5)
+	for i in 80:
+		var p := _person(g, KINDS[i % KINDS.size()], r.randi(), Vector2(r.randf_range(-750, 750), r.randf_range(-400, 400)), r.randf_range(-PI, PI))
+		people.append(p)
+	for i in 30:
+		await get_tree().process_frame
+	t0 = Time.get_ticks_usec()
+	for f in 120:
+		for k in people.size():
+			var p: Person2D = people[k]
+			if k % 3 == 0:
+				p.set_motion(Person2D.Anim.WALK, 1.4)
+				p.rotation += 0.01
+			elif k % 3 == 1:
+				p.set_motion(Person2D.Anim.IDLE, 0.0)
+			else:
+				p.set_motion(Person2D.Anim.RUN, 4.0)
+			if f % 40 == k % 40:
+				p.action(["punch", "shoot", "talk", "hit"][k % 4])
+		await get_tree().process_frame
+	var busy := (Time.get_ticks_usec() - t0) / 120.0
+	print("PERF empty frame %.2f ms, 80 people %.2f ms (+%.2f ms)" % [empty / 1000.0, busy / 1000.0, (busy - empty) / 1000.0])
+	await _clear(g)
+
+
+class Bench extends Node2D:
+	func _draw() -> void:
+		var n := 2000
+		var pts := Draw.ellipse_points(Vector2.ZERO, Vector2(5, 3), 0.0, 16)
+		var idx := PackedInt32Array()
+		for i in 14:
+			idx.append_array([0, i + 1, i + 2])
+		var cols := PackedColorArray()
+		cols.resize(16)
+		cols.fill(Color.RED)
+		var img := Image.create(64, 64, true, Image.FORMAT_RGBA8)
+		for y in 64:
+			for x in 64:
+				var d := Vector2(x + 0.5 - 32.0, y + 0.5 - 32.0).length()
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(31.0 - d, 0.0, 1.0)))
+		img.generate_mipmaps()
+		var tex := ImageTexture.create_from_image(img)
+		var tests := {
+			"texture_rect disc": func() -> void: draw_texture_rect(tex, Rect2(Vector2(7, 7), Vector2(6, 6)), false, Color.RED),
+			"xform+texture ellipse": func() -> void:
+				draw_set_transform_matrix(Transform2D(0.3, Vector2(2, 2)))
+				draw_texture_rect(tex, Rect2(Vector2(-5, -3), Vector2(10, 6)), false, Color.RED),
+			"draw_circle aa": func() -> void: draw_circle(Vector2(10, 10), 3.0, Color.RED, true, -1.0, true),
+			"draw_circle": func() -> void: draw_circle(Vector2(10, 10), 3.0, Color.RED),
+			"draw_line aa w6": func() -> void: draw_line(Vector2(0, 0), Vector2(10, 3), Color.RED, 6.0, true),
+			"draw_line w6": func() -> void: draw_line(Vector2(0, 0), Vector2(10, 3), Color.RED, 6.0),
+			"colored_polygon16": func() -> void: draw_colored_polygon(pts, Color.RED),
+			"triangle_array16": func() -> void: RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), idx, pts, cols),
+			"polyline aa 17": func() -> void: draw_polyline(pts, Color.RED, 1.0, true),
+			"Draw.capsule": func() -> void: Draw.capsule(self, Vector2(0, 0), Vector2(10, 3), 3.0, Color.RED),
+			"Draw.ellipse": func() -> void: Draw.ellipse(self, Vector2(0, 0), Vector2(5, 3), Color.RED),
+			"set_transform": func() -> void: draw_set_transform_matrix(Transform2D(0.3, Vector2(2, 2))),
+		}
+		for k in tests:
+			var f: Callable = tests[k]
+			var t0 := Time.get_ticks_usec()
+			for i in n:
+				f.call()
+			print("BENCH %-20s %.2f us" % [k, float(Time.get_ticks_usec() - t0) / n])
+		var t1 := Time.get_ticks_usec()
+		for i in n:
+			pass
+		print("BENCH %-20s %.2f us" % ["empty call loop", float(Time.get_ticks_usec() - t1) / n])
+
+
+func _bench() -> void:
+	var b := Bench.new()
+	add_child(b)
+	for i in 3:
+		await get_tree().process_frame
+	b.queue_free()

@@ -81,6 +81,10 @@ static func _build(kind: String, look: int, fam: Color, extra: Dictionary, summe
 	var freck := fr.randf() < 0.18
 	var eye_col: Color = _pick(fr, [Color("3a2618"), Color("4a3422"), Color("2a1e14"), Color("4a5a6a"), Color("5a6a4a")])
 	var build_roll := fr.randf()
+	# finer features for the portrait (rolled last, so the earlier ones never change)
+	var feat := {"eye_gap": fr.randf_range(-1.0, 1.0), "eye_size": fr.randf_range(-1.0, 1.0),
+		"mouth_w": fr.randf_range(-1.0, 1.0), "jaw": fr.randf_range(-1.0, 1.0), "brow_w": fr.randf_range(-1.0, 1.0),
+		"long": fr.randf_range(-1.0, 1.0), "nose_l": fr.randf_range(-1.0, 1.0), "lips": fr.randf_range(-1.0, 1.0)}
 	# clothes: seed and kind
 	var r := W.rng(look * 40503 + kind.hash() * 7 + 13)
 	var has_fam := fam.a > 0.01
@@ -98,6 +102,7 @@ static func _build(kind: String, look: int, fam: Color, extra: Dictionary, summe
 		"props": [], "fur": NONE, "family": fam, "trade": String(extra.get("trade", "")),
 		"lipstick": NONE, "earrings": false, "pearls": false, "feather": NONE,
 	}
+	d.merge(feat)
 	# build
 	if build_roll < 0.22:
 		d["w"] = 0.9; d["d"] = 0.92
@@ -123,10 +128,10 @@ static func _build(kind: String, look: int, fam: Color, extra: Dictionary, summe
 			d["band"] = fam if has_fam else Color("1a1816")
 			d["tie_col"] = fam.darkened(0.2) if has_fam else Color("5a2a26")
 			d["shirt"] = WHITE
-			if r.randf() < 0.55:
-				d["scarf"] = WHITE
-			else:
-				d["flower"] = Color("c83a3a") if r.randf() < 0.6 else WHITE
+			# the white silk scarf marks the boss; some wear a carnation too
+			d["scarf"] = WHITE
+			if r.randf() < 0.45:
+				d["flower"] = Color("c83a3a") if r.randf() < 0.7 else WHITE
 			d["w"] = maxf(float(d["w"]), 1.0)
 			d["shoes"] = Color("141210")
 			d["stubble"] = false
@@ -181,7 +186,7 @@ static func _build(kind: String, look: int, fam: Color, extra: Dictionary, summe
 			d["stubble"] = false
 		"fed":
 			d["coat"] = "trench"
-			d["coat_col"] = _pick(r, [KHAKI, KHAKI.darkened(0.12), Color("8a8272"), Color("5e5a52")])
+			d["coat_col"] = _pick(r, [KHAKI, KHAKI.darkened(0.1), Color("9a8a68"), Color("8e8062")])
 			d["hat"] = "fedora"
 			d["hat_col"] = _pick(r, [Color("6a6660"), Color("5a5750"), Color("7a766e")])
 			d["band"] = Color("2a2826")
