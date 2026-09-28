@@ -136,7 +136,7 @@ wired in yet: Keep Rolling's `steamworks.gd` + GodotSteam slot into `Net` the sa
 | `scripts/net/net.gd` | autoload `Net`: solo / host / join, lobby, requests, state and snapshots |
 | `scripts/world/world.gd` | the street: spawning, host simulation, crimes and witnesses, cops, requests |
 | `scripts/world/city_plan.gd`, `city_builder.gd` | the city as data (seeded), then built as meshes |
-| `scripts/world/actor.gd`, `person.gd` | people: movement, brains, fights / the dressed Woods models and their clips |
+| `scripts/world/actor.gd`, `person.gd` | people: movement, brains, fights / the dressed Quaternius cast, hats and clips |
 | `scripts/world/vehicle.gd`, `player_controller.gd`, `camera_rig.gd`, `ambience.gd` | trucks and traffic, your input, the camera, sound |
 | `scripts/ui/*` | HUD and dialogs, family ledger, city map, country map, main menu |
 
@@ -150,9 +150,10 @@ sites each month (balance check). Networking: `-- --autohost --players=2 --mptes
 
 ## Assets and licences
 
-- People, hats aside: the owner's own low-poly villager, woman and elder from **Woods**
-  (`assets/models/characters/LICENSE_Villager.txt`), rigged on the KayKit skeleton, with the
-  **Quaternius Universal Animation Library** (CC0) retargeted in Woods.
+- People, hats aside: **Quaternius Ultimate Modular Men / Women** (CC0,
+  `assets/models/characters/quaternius/LICENSE.txt`), mixed and dyed per person, animated with the
+  **Quaternius Universal Animation Library** 1 + 2 (CC0) retargeted by `tools/rig/` (see its
+  README). The owner's own Woods villager, woman and elder (`LICENSE_Villager.txt`) remain as a fallback.
 - Rain, murmur, music, UI and fight sounds: the owner's own Woods / Keep Rolling audio. The
   gunshot, glass, engine and whistle were synthesised for this game.
 - City props, cars, lamps, crates: **Kenney** City Kits, Car Kit, Mini Market (CC0, `assets/kenney/*/License.txt`).
