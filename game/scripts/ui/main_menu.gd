@@ -201,8 +201,7 @@ func _build_home() -> void:
 		_host_mode = false
 		_show_page("new"))
 	var cont := _add_item("Continue", _save_blurb(), _continue)
-	cont.disabled = not Game.has_save()
-	cont.focus_mode = Control.FOCUS_NONE if cont.disabled else Control.FOCUS_ALL
+	cont.visible = Game.has_save()
 	_add_item("Play with friends", "", func() -> void: _show_page("friends"))
 	_add_item("How to play", "", func() -> void: _show_page("howto"))
 	_add_item("Settings", "", func() -> void: _show_page("settings"))
@@ -290,6 +289,7 @@ func _build_panels() -> void:
 	for k in _pages:
 		_frame.add_child(_pages[k])
 		(_pages[k] as Control).visible = false
+	(_pages["new"] as Node).find_child("IdentitySlot", true, false).add_child(_identity)
 
 
 ## A page: heading, rule, body, a footer of buttons. Returns [page, body, footer].
