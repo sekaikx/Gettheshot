@@ -14,7 +14,10 @@ const FENDER := Color("16161a")
 const LENS := Color("d6d9cc")
 const RED_LENS := Color("7a1712")
 const AMBER := Color("e0a040")
-const SHADOW_K := 0.8            # car shadows: this share of GroundUtil.SV per metre of height
+const SHADOW_K := 1.25           # car shadows: this share of GroundUtil.SV per metre of height
+const SHADOW_A := 0.5            # how dark the drop shadow is at its core
+const SHADOW_SOFT := 4.0         # half the width of its soft edge, px
+const SHADOW_RINGS := 5
 
 var kind := "sedan"
 var s: Dictionary
@@ -89,7 +92,8 @@ func _init(k: String, body: Color, fam: Color, seed_value: int) -> void:
 				# a rich man's tourer: two-tone, bright paint above the black fenders
 				paint = [Color("4a1e22"), Color("1f3a2c"), Color("2a3450"), Color("5a4a36")][r.randi_range(0, 3)]
 				roof_col = paint
-	hat_col = Pal.SUITS[r.randi_range(0, Pal.SUITS.size() - 1)].lightened(0.08)
+	hat_col = Pal.SUITS[r.randi_range(0, Pal.SUITS.size() - 1)].lightened(0.2)
+	insert_col = roof_col.lerp(Color("2a2725"), 0.35)
 	hat_band = [Color("1c1a18"), Color("3a2a22"), Color("2a2a38")][r.randi_range(0, 2)]
 	coat_col = Pal.SUITS[r.randi_range(0, Pal.SUITS.size() - 1)]
 	skin = Pal.SKIN[r.randi_range(0, 3)]
@@ -229,24 +233,46 @@ func draw_shadow(ci: CanvasItem, off: Vector2, strength: float, load_n: int) -> 
 		if shape.is_empty():
 			shape = h
 		else:
-			var merged := Geometry2D.merge_polygons(shape, h)
-			var best := shape
-			var best_a := 0.0
-			for m in merged:
-				var a := absf(CarPaint.signed_area(m))
-				if a > best_a and not Geometry2D.is_polygon_clockwise(m) == Geometry2D.is_polygon_clockwise(shape) or a > best_a:
-					best_a = a
-					best = m
-			shape = best
-	var sh := Color(0.02, 0.02, 0.05, 0.36 * strength)
-	CarPaint.feather(ci, shape, 7.0, sh)
+			shape = _largest(Geometry2D.merge_polygons(shape, h), shape)
+	# a soft edge: nested offsets (Clipper, so concave corners stay clean), each a thin layer
+	var sh := Color(0.02, 0.02, 0.05, SHADOW_A * strength / SHADOW_RINGS)
+	for k in SHADOW_RINGS:
+		var d := lerpf(SHADOW_SOFT, -SHADOW_SOFT, float(k) / (SHADOW_RINGS - 1))
+		for poly in Geometry2D.offset_polygon(shape, d, Geometry2D.JOIN_ROUND):
+			_fill_safe(ci, poly, sh)
 	# right under the car: the ground it hides from the sky
 	var under: PackedVector2Array = fps[0][0]
-	CarPaint.feather(ci, CarPaint.inset(under, 3.0), 8.0, Color(0.01, 0.01, 0.03, 0.42))
+	var uc := Color(0.01, 0.01, 0.03, 0.14)
+	for k in 3:
+		for poly in Geometry2D.offset_polygon(under, -2.0 - k * 3.0, Geometry2D.JOIN_ROUND):
+			_fill_safe(ci, poly, uc)
 	# tyres on the ground
 	for w in wheels():
 		var c: Vector2 = w["c"]
-		FastDraw.soft(ci, Transform2D.IDENTITY, c + off * 0.12, Vector2(float(w["len"]) * 0.6, float(w["wid"]) * 1.1), 0.0, Color(0, 0, 0, 0.45))
+		FastDraw.soft(ci, Transform2D.IDENTITY, c + off * 0.12, Vector2(float(w["len"]) * 0.6, float(w["wid"]) * 1.2), 0.0, Color(0, 0, 0, 0.5))
+
+
+static func _largest(polys: Array, fallback: PackedVector2Array) -> PackedVector2Array:
+	var best := fallback
+	var best_a := -1.0
+	for m: PackedVector2Array in polys:
+		var a := absf(CarPaint.signed_area(m))
+		if a > best_a:
+			best_a = a
+			best = m
+	return best
+
+
+static func _fill_safe(ci: CanvasItem, poly: PackedVector2Array, col: Color) -> void:
+	if poly.size() < 3:
+		return
+	var tri := Geometry2D.triangulate_polygon(poly)
+	if tri.is_empty():
+		return
+	var cols := PackedColorArray()
+	cols.resize(poly.size())
+	cols.fill(col)
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), tri, poly, cols)
 
 
 # ------------------------------------------------------------------ wheels
@@ -256,8 +282,9 @@ func wheels() -> Array:
 	var tr := float(s["tr"]) * 2.0 * M
 	var tw := float(s["tw"]) * M
 	var track := float(s["track"])
+	var ftrack := float(s.get("ftrack", track))
 	for sg: float in [-1.0, 1.0]:
-		out.append({"c": v(float(s["fa"]), track * sg), "len": tr, "wid": tw, "front": true})
+		out.append({"c": v(float(s["fa"]), ftrack * sg), "len": tr, "wid": tw, "front": true})
 		if bool(s["dual"]):
 			for k: float in [-0.085, 0.085]:
 				out.append({"c": v(float(s["ra"]), (track + k) * sg), "len": tr, "wid": tw * 1.05, "front": false})
@@ -269,7 +296,7 @@ func wheels() -> Array:
 func draw_wheels(ci: CanvasItem, steer_angle: float, L: Vector2) -> void:
 	# the front axle and the drag link show through the gaps beside the hood
 	var fa := float(s["fa"])
-	var track := float(s["track"])
+	var track := float(s.get("ftrack", s["track"]))
 	ci.draw_line(v(fa, -track + 0.05), v(fa, track - 0.05), Color("1c1b1a"), 0.07 * M, true)
 	ci.draw_line(v(fa - 0.02, -track + 0.1), v(fa - 0.02, track - 0.1), Color("2a2927"), 0.02 * M, true)
 	for w in wheels():

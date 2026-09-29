@@ -95,7 +95,7 @@ static func _roof(p: CarPainter, ci: CanvasItem, L: Vector2, ro: Array, insert: 
 		CarPaint.flat(ci, ins, p.insert_col, L, 1.4, 0.4)
 		ci.draw_polyline(CarPaint.closed(CarPaint.inset(ins, -1.2)), CarPaint.alpha(CarPaint.SKY, 0.18), 0.8, true)
 		# the leathercloth's soft grain: a dull sheen, no gloss
-		CarPaint.streak(ci, p.v(x0 + 0.34, 0.0) + L * 4.0, p.v(x1 - 0.24, 0.0) + L * 4.0, (hw - 0.2) * M, CarPaint.alpha(CarPaint.SKY, 0.07))
+		CarPaint.streak(ci, p.v(x0 + 0.34, 0.0) + L * 4.0, p.v(x1 - 0.24, 0.0) + L * 4.0, (hw - 0.2) * M, CarPaint.alpha(CarPaint.SKY, 0.12))
 	# the crown catches the sky along the side facing the sun, a hot line along the top
 	var sgn := -1.0 if L.y < 0.0 else 1.0
 	var sheen := CarPaint.alpha(CarPaint.WARM if bright else CarPaint.SKY, 0.14 if bright else 0.2)
@@ -166,10 +166,11 @@ static func _taxi_roof(p: CarPainter, ci: CanvasItem, L: Vector2, ro: Array) -> 
 	var font := W.font("deco")
 	CarPaint.sign_text(ci, p.v((x0 + x1) * 0.5 - 0.1, 0.0), "TAXI", 19, Color("e8c040"), font, (x1 - x0 - 0.6) * M)
 	var lc := p.v(x1 - 0.1, 0.0)
-	var lr := CarPaint.rpoly(Rect2(lc - Vector2(0.09, 0.2) * M, Vector2(0.18, 0.4) * M), 0.05 * M, 3)
+	var lr := CarPaint.rpoly(Rect2(lc - Vector2(0.07, 0.2) * M, Vector2(0.14, 0.4) * M), 0.05 * M, 3)
 	CarPaint.feather(ci, CarPaint.shift(lr, -L * 2.5), 3.0, Color(0, 0, 0, 0.35))
 	CarPaint.panel(ci, lr, Color("e9dcb0"), L, 1.6, 0.25, 0.4)
-	CarPaint.sign_text(ci, lc, "TAXI", 7, Color("2a2218"), W.font("cond"), 0.36 * M)
+	for sg: float in [-1.0, 1.0]:
+		FastDraw.disc(ci, lc + p.v(0.0, 0.1 * sg), 0.035 * M, Color("d08a2a"))
 
 
 static func _police_roof(p: CarPainter, ci: CanvasItem, L: Vector2, ro: Array) -> void:
@@ -329,7 +330,7 @@ static func _person(p: CarPainter, ci: CanvasItem, L: Vector2, c: Vector2, hat: 
 			FastDraw.disc(ci, hc + L * 0.8, 0.105 * M, hat)
 			FastDraw.disc(ci, hc + L * 2.0, 0.05 * M, CarPaint.lit(hat, 0.2))
 		_:
-			var brim := 0.155 * M if style == "fedora" else 0.14 * M
+			var brim := 0.17 * M if style == "fedora" else 0.155 * M
 			FastDraw.oval(ci, hc, Vector2(brim * 0.95, brim), CarPaint.dk(hat, 0.5))
 			FastDraw.oval(ci, hc + L * 0.5, Vector2(brim * 0.88, brim * 0.93), hat)
 			FastDraw.oval(ci, hc + L * 0.8, Vector2(0.095 * M, 0.085 * M), band)

@@ -220,7 +220,12 @@ static func rings(ci: CanvasItem, rs: Array, cs: Array, fill_last: bool = true) 
 static func fill(ci: CanvasItem, pts: PackedVector2Array, col: Color, aa: bool = true) -> void:
 	if pts.size() < 3:
 		return
-	ci.draw_colored_polygon(pts, col)
+	var tri := Geometry2D.triangulate_polygon(pts)
+	if not tri.is_empty():
+		var cols := PackedColorArray()
+		cols.resize(pts.size())
+		cols.fill(col)
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), tri, pts, cols)
 	if aa and col.a > 0.02:
 		ci.draw_polyline(closed(pts), col, 1.0, true)
 
