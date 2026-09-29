@@ -218,7 +218,7 @@ static func lights(S: Dictionary) -> Array:
 	match kind:
 		"precinct":
 			for s: float in [-1.0, 1.0]:
-				out.append({"pos": xf * Vector2(s * 2.0, 1.2) * W.M, "r": 2.8 * W.M, "color": GLOBE, "e": 0.9, "shape": "round"})
+				out.append({"pos": xf * Vector2(s * 2.0, 1.28) * W.M, "r": 2.8 * W.M, "color": GLOBE, "e": 1.1, "shape": "round"})
 			out.append({"pos": xf * Vector2(0.0, 1.4) * W.M, "r": 2.2 * W.M, "color": Pal.WINDOW_WARM, "e": 0.45, "shape": "round"})
 			return out
 		"warehouse":
@@ -226,11 +226,15 @@ static func lights(S: Dictionary) -> Array:
 			return out
 		"club":
 			out.append({"pos": xf * Vector2(0.0, 1.7) * W.M, "r": 2.8 * W.M, "color": Pal.LAMP, "e": 0.75, "shape": "round"})
+			# lamps over the name board
+			for s: float in [-1.0, 1.0]:
+				out.append({"pos": xf * Vector2(s * (float(S["half"]) * 0.5), 0.9) * W.M, "r": 2.2 * W.M, "color": Pal.LAMP, "e": 0.55, "shape": "round"})
 	var aw := float(S["aw_half"]) if String(S["awning"]) in ["stripe", "solid"] else float(S["half"]) - 0.4
 	for s: float in [-1.0, 1.0]:
-		var r := Rect2(Vector2(minf(s * 0.95, s * (aw - 0.1)), 0.9) * W.M, Vector2(absf(aw - 1.05), 2.2) * W.M)
-		var wr := to_world(S, r)
-		out.append({"pos": wr.get_center(), "size": wr.size, "r": wr.size.x, "color": Pal.WINDOW_WARM, "e": 0.55, "shape": "rect"})
+		# the display window's glow falls out past the awning onto the slabs
+		var u := s * (0.95 + aw) * 0.5
+		var rad := clampf((aw - 0.95) * 0.75, 1.4, 2.4)
+		out.append({"pos": xf * Vector2(u, 1.9) * W.M, "r": rad * W.M, "color": Pal.WINDOW_WARM, "e": 0.6, "shape": "round"})
 	out.append({"pos": xf * Vector2(0.0, 1.1) * W.M, "r": 1.6 * W.M, "color": Pal.WINDOW_WARM, "e": 0.3, "shape": "round"})
 	if String(S["neon"]) != "":
 		out.append({"pos": xf * Vector2(0.0, 1.4) * W.M, "r": 2.6 * W.M, "color": Pal.NEON_RED, "e": 0.55, "shape": "round", "flicker": true})
@@ -403,12 +407,12 @@ static func _precinct_ground(ci: CanvasItem, S: Dictionary) -> void:
 	Items.shadow_rect(ci, S, Rect2(Vector2(-sw, v1 - 0.02) * W.M, Vector2(sw * 2.0, 0.02) * W.M), 0.3, 0.2)
 	# the cheek walls either side, with the lamp posts on them
 	for s: float in [-1.0, 1.0]:
-		var cw := Rect2(Vector2(minf(s * 1.72, s * 2.3), CORN - 0.02) * W.M, Vector2(0.58, v1 - CORN + 0.02) * W.M)
+		var cw := Rect2(Vector2(minf(s * 1.72, s * 2.3), v0) * W.M, Vector2(0.58, v1 - v0) * W.M)
 		Items.shadow_rect(ci, S, cw, 1.0, 0.3)
 		Draw.rect(ci, cw, Pal.PARAPET_STONE.darkened(0.1))
 		Draw.rect(ci, cw.grow(-2.5), Pal.PARAPET_STONE.lightened(0.08))
 		ci.draw_line(Vector2(cw.position.x, cw.position.y + cw.size.y * 0.5), Vector2(cw.end.x, cw.position.y + cw.size.y * 0.5), Color(0, 0, 0, 0.15), 1.0)
-		Items.shadow_pole(ci, S, Vector2(s * 2.0, 1.2) * W.M, 2.8, 4.0)
+		Items.shadow_pole(ci, S, Vector2(s * 2.0, 1.28) * W.M, 2.8, 4.0)
 	# a bicycle rack and the patrolmen's bikes would be too cute: a plain iron railing instead
 	for s: float in [-1.0, 1.0]:
 		var a := Vector2(s * 2.35, 1.5) * W.M
@@ -715,13 +719,13 @@ static func _canopy(ci: CanvasItem, S: Dictionary) -> void:
 static func _precinct_over(ci: CanvasItem, S: Dictionary) -> void:
 	var lit := bool(S["night_on"])
 	for s: float in [-1.0, 1.0]:
-		var c := Vector2(s * 2.0, 1.2) * W.M
+		var c := Vector2(s * 2.0, 1.28) * W.M
 		Items.shadow_circle(ci, S, c, M(0.22), 2.8, 0.2)
 		Draw.circle(ci, c, M(0.08), Items.IRON)
 		if lit:
-			Draw.circle(ci, c, M(0.42), Color(GLOBE, 0.18))
-			Draw.circle(ci, c, M(0.3), Color(GLOBE, 0.3))
-		var glass := GLOBE.lightened(0.25) if lit else Color("5a7aa0")
+			Draw.circle(ci, c, M(0.5), Color(GLOBE, 0.16))
+			Draw.circle(ci, c, M(0.34), Color(GLOBE, 0.3))
+		var glass := Color(0.9, 0.95, 1.0) if lit else Color("5a7aa0")
 		Draw.circle(ci, c, M(0.22), glass.darkened(0.2))
 		Draw.circle(ci, c + Items.lit(S) * 1.5, M(0.19), glass)
 		Draw.circle(ci, c + Items.lit(S) * M(0.09), M(0.06), Color(1, 1, 1, 0.75 if lit else 0.45))
@@ -879,8 +883,8 @@ static func paint_lit(ci: CanvasItem, S: Dictionary, t: float) -> void:
 		for p in pts:
 			var lit := on and (int(t * 6.0) + k / 2) % 3 != 0
 			if lit:
-				Draw.circle(ci, p, 3.2, Color(Pal.LAMP, 0.3))
-			Draw.circle(ci, p, 1.7, Color("fff2c8") if lit else Color("8a8070"))
+				Draw.circle(ci, p, 3.6, Color(Pal.LAMP, 0.45))
+			Draw.circle(ci, p, 1.9, Color("fffbe8") if lit else Color("8a8070"))
 			k += 1
 		var col := Color("fff0c0") if on else Pal.SIGN_GOLD
 		if on:

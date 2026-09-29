@@ -217,7 +217,7 @@ static func baguette_barrel(ci: CanvasItem, S: Dictionary, r: Rect2, rng: Random
 
 ## Butcher: an iron rail of hams and sausages, on two posts.
 static func meat_rail(ci: CanvasItem, S: Dictionary, r: Rect2, rng: RandomNumberGenerator) -> void:
-	var y := r.position.y + r.size.y * 0.45
+	var y := r.position.y + r.size.y * 0.28
 	var a := Vector2(r.position.x + 3.0, y)
 	var b := Vector2(r.end.x - 3.0, y)
 	shadow_pole(ci, S, a, 2.0, 3.0)
@@ -228,21 +228,24 @@ static func meat_rail(ci: CanvasItem, S: Dictionary, r: Rect2, rng: RandomNumber
 	for k in 40:
 		var p := r.position + Vector2(rng.randf() * r.size.x, rng.randf() * r.size.y)
 		Draw.circle(ci, p, rng.randf_range(0.6, 1.3), Color("d8c8a0", 0.7))
-	var n := maxi(2, int((b.x - a.x) / M(0.3)))
+	var n := maxi(2, int((b.x - a.x) / M(0.34)))
 	for k in n:
 		var x := a.x + (b.x - a.x) * (k + 0.5) / n
 		var p := Vector2(x, y + M(0.06))
 		if k % 3 == 1:
 			# a string of sausages
-			for s in 4:
-				var q := p + Vector2(0, s * M(0.07))
-				Draw.capsule(ci, q, q + Vector2(0, M(0.05)), M(0.03), Color("8a3a2a").lightened(rng.randf() * 0.1))
+			for s in 5:
+				var q := p + Vector2(0, s * M(0.085))
+				Draw.capsule(ci, q, q + Vector2(0, M(0.06)), M(0.04), Color("8a3a2a").lightened(rng.randf() * 0.12))
 		else:
 			# a ham: dark red, a cream rim of fat, the bone knuckle
-			Draw.ellipse(ci, p + Vector2(0, M(0.1)) + sh(S, 0.4) * 0.3, Vector2(M(0.1), M(0.15)), Color(FX.SHADE, 0.25))
-			Draw.ellipse(ci, p + Vector2(0, M(0.1)), Vector2(M(0.1), M(0.15)), Color("e0cfae"))
-			Draw.ellipse(ci, p + Vector2(0, M(0.11)), Vector2(M(0.08), M(0.125)), Color("8e3a30").lightened(rng.randf() * 0.1))
-			Draw.circle(ci, p + Vector2(0, M(0.01)), M(0.03), Color("efe4cc"))
+			var hc := p + Vector2(0, M(0.16))
+			Draw.ellipse(ci, hc + sh(S, 1.2) * 0.5, Vector2(M(0.13), M(0.2)), Color(FX.SHADE, 0.25))
+			Draw.ellipse(ci, hc, Vector2(M(0.13), M(0.2)), Color("e0cfae"))
+			Draw.ellipse(ci, hc + Vector2(0, M(0.015)), Vector2(M(0.105), M(0.17)), Color("8e3a30").lightened(rng.randf() * 0.1))
+			Draw.ellipse(ci, hc + lit(S) * 2.0, Vector2(M(0.05), M(0.1)), Color("b0564a"))
+			ci.draw_line(p, hc - Vector2(0, M(0.18)), IRON, 1.5)
+			Draw.circle(ci, hc - Vector2(0, M(0.17)), M(0.035), Color("efe4cc"))
 	ci.draw_line(a, b, IRON, 3.0, true)
 	ci.draw_line(a + Vector2(0, -1), b + Vector2(0, -1), IRON_HI, 1.0, true)
 	Draw.circle(ci, a, 3.5, IRON)
