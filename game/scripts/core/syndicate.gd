@@ -519,7 +519,7 @@ static func bribe_police(game: Node, family: int, city: String) -> Dictionary:
 	if prev >= 0 and prev != family:
 		game.aggression(family, prev, 8)
 	game.mark_dirty()
-	return {"ok": true, "msg": "The %s police now answer to you. Their raids will find the other families." % city_def(city)["name"]}
+	return {"ok": true, "msg": "The %s police work for you now. When they raid, they raid the other families." % city_def(city)["name"]}
 
 
 static func bribe_route(game: Node, family: int, route: String) -> Dictionary:
@@ -529,7 +529,7 @@ static func bribe_route(game: Node, family: int, route: String) -> Dictionary:
 	var r: Dictionary = n["routes"][route]
 	var cost := int(d["bribe"]) + (800 if int(r["owner"]) >= 0 else 0)
 	if f["dirty"] < cost:
-		return {"ok": false, "msg": "Customs men, sheriffs and Coast Guard skippers along the %s: $%d." % [d["name"], cost]}
+		return {"ok": false, "msg": "Buying the customs men and sheriffs along the %s costs $%d." % [d["name"], cost]}
 	f["dirty"] -= cost
 	var prev: int = r["owner"]
 	r["owner"] = family
@@ -537,7 +537,7 @@ static func bribe_route(game: Node, family: int, route: String) -> Dictionary:
 		game.aggression(family, prev, 12)
 		game._notice(prev, "The %s family bought the %s out from under you." % [f["name"], d["name"]], "bad")
 	game.mark_dirty()
-	return {"ok": true, "msg": "The %s is yours: your convoys pass, everybody else's pay you a toll or get stopped." % d["name"]}
+	return {"ok": true, "msg": "The %s is yours. Your convoys get through. Other families pay you a toll or get stopped." % d["name"]}
 
 
 static func set_convoy(game: Node, family: int, route: String, crates: int) -> Dictionary:
@@ -613,12 +613,12 @@ static func buy_warehouse(game: Node, family: int, city: String) -> Dictionary:
 		return {"ok": false, "msg": "You already have a warehouse in %s." % cname(city)}
 	var price := warehouse_price(city)
 	if int(f["clean"]) < price:
-		return {"ok": false, "msg": "A warehouse by the %s costs $%d, clean. The deed has to survive an audit." % [_where(city), price]}
+		return {"ok": false, "msg": "A warehouse by the %s costs $%d from your Bank (clean money)." % [_where(city), price]}
 	f["clean"] -= price
 	n["cities"][city]["wh"][str(family)] = 0
 	game._log("The %s family's trucking company leases a warehouse in %s." % [f["name"], cname(city)])
 	game.mark_dirty()
-	return {"ok": true, "msg": "You own a warehouse in %s. Crates landing there now wait for buyers instead of being dumped: about %d a month sell at $%d." % [
+	return {"ok": true, "msg": "You own a warehouse in %s. Crates that land there now keep until they sell: about %d a month, at $%d each." % [
 		cname(city), sell_cap(n, city, family), int(wholesale(game))]}
 
 
@@ -649,7 +649,7 @@ static func buy_plant(game: Node, family: int, city: String) -> Dictionary:
 	game._log("A %s in %s changes hands. The new owners say they'll make near beer." % [kind, cname(city)])
 	game.mark_dirty()
 	var into := "into your warehouse there" if has_wh(n, city, family) else "dumped at half price until you have a warehouse there"
-	return {"ok": true, "msg": "The %s in %s is yours: %d crates a month (at $%d a crate), %s. It will thicken the file." % [
+	return {"ok": true, "msg": "The %s in %s is yours: %d crates a month (costs $%d a crate), %s. It adds heat." % [
 		kind, cname(city), PLANT_OUT[kind], PLANT_COST, into]}
 
 
@@ -663,17 +663,17 @@ static func pay_union(game: Node, family: int, city: String) -> Dictionary:
 	var cs: Dictionary = n["cities"][city]
 	var cur := int(cs["docks"])
 	if cur == family:
-		return {"ok": false, "msg": "The local at %s already takes your envelope." % c["port"]}
+		return {"ok": false, "msg": "The dockworkers at %s already work for you." % c["port"]}
 	var price := union_price(n, city, family)
 	if int(f["dirty"]) < price:
-		return {"ok": false, "msg": "The local at %s wants $%d up front, $%d a month after." % [c["port"], price, union_wage(city)]}
+		return {"ok": false, "msg": "The dockworkers at %s want $%d now, then $%d a month." % [c["port"], price, union_wage(city)]}
 	f["dirty"] -= price
 	cs["docks"] = family
 	if cur >= 0:
 		game.aggression(family, cur, 12)
-		game._notice(cur, "The union local at %s took the %s family's money instead of yours." % [c["port"], f["name"]], "bad")
+		game._notice(cur, "The dockworkers at %s work for the %s family now, not you." % [c["port"], f["name"]], "bad")
 	game.mark_dirty()
-	return {"ok": true, "msg": "The longshoremen at %s work for you now ($%d a month): your boats unload fast and the inspectors look at the sky. Other families' boats wait, or turn back." % [
+	return {"ok": true, "msg": "The dockworkers at %s work for you now ($%d a month). Your boats unload fast. Other families' boats wait, or turn back." % [
 		c["port"], union_wage(city)]}
 
 
@@ -697,7 +697,7 @@ static func bribe_yard(game: Node, family: int, city: String) -> Dictionary:
 		game._notice(cur, "The yardmaster in %s now takes the %s family's money." % [cname(city), f["name"]], "bad")
 	game.mark_dirty()
 	var lines := rails_through(city).map(func(r: Dictionary) -> String: return r["name"])
-	return {"ok": true, "msg": "The %s yardmaster is yours: your freight on the %s moves without questions." % [cname(city), ", ".join(lines)]}
+	return {"ok": true, "msg": "The %s yardmaster is yours: nobody checks your freight on the %s." % [cname(city), ", ".join(lines)]}
 
 
 ## Move `crates` a month from your warehouse in `from` to your warehouse in `to` along `line`
@@ -740,7 +740,7 @@ static func sabotage(game: Node, family: int, city: String, target: int) -> Dict
 		return {"ok": false, "msg": ""}
 	var cost := river_price(n, city, family)
 	if int(f["dirty"]) < cost:
-		return {"ok": false, "msg": "The boys want $%d for an accident like that." % cost}
+		return {"ok": false, "msg": "The dockworkers want $%d to 'drop' that cargo." % cost}
 	f["dirty"] -= cost
 	n["sabotage"][str(target)] = {"by": family, "city": city, "month": int(game.month)}
 	if game.has_truce(family, target):
@@ -883,7 +883,7 @@ static func _run_routes(game: Node, n: Dictionary, rng: RandomNumberGenerator) -
 			if boat and not sab.is_empty() and sab["city"] == dest:
 				n["sabotage"].erase(str(fam))
 				var by := int(sab["by"])
-				game._notice(fam, "Your boat at %s was never unloaded: a sling 'broke' and %d crates went into the river." % [city_def(dest)["port"], crates], "bad")
+				game._notice(fam, "Your boat at %s never got unloaded: %d crates 'fell' into the river." % [city_def(dest)["port"], crates], "bad")
 				game._notice(by, "The longshoremen dropped the %s family's shipment in the river: %d crates." % [f["name"], crates], "good")
 				if rng.randf() < 0.4:
 					game.aggression(by, fam, 18)
@@ -933,7 +933,7 @@ static func _run_sites(game: Node, n: Dictionary, rng: RandomNumberGenerator) ->
 			var wage := union_wage(id)
 			if f.is_empty() or not f["alive"] or int(f["dirty"]) < wage:
 				cs["docks"] = -1
-				game._notice(dk, "The union local at %s is off your payroll: you missed the envelope." % c["port"], "warn")
+				game._notice(dk, "The dockworkers at %s quit working for you: you didn't pay them." % c["port"], "warn")
 			else:
 				f["dirty"] -= wage
 				_inc(f, "supply", wage)

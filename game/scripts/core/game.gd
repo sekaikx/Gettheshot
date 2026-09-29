@@ -14,6 +14,7 @@ signal notice(family: int, text: String, kind: String)   # family -1 = everyone
 signal crew_spawn_request(crew_id: int)
 signal ai_order(order: Dictionary)
 signal campaign_over
+signal raided(family: int)      # the feds hit a family: the World shows it on the street
 
 const START_YEAR := 1923
 const MONTHS := ["January", "February", "March", "April", "May", "June", "July", "August",
@@ -99,10 +100,16 @@ func new_campaign(config: Dictionary, humans: Array) -> void:
 	for h in humans:
 		if int(h.get("join", -1)) < 0:
 			human_families.append(h)
+	# AI families take the names and colours the players didn't
+	var used_names := human_families.map(func(h: Dictionary) -> String: return String(h.get("family_name", "")))
+	var used_colors := human_families.map(func(h: Dictionary) -> String: return String(h.get("color", "")))
+	var free_names := Names.FAMILY_NAMES.filter(func(n: String) -> bool: return not used_names.has(n))
+	var free_colors := Names.FAMILY_COLORS.filter(func(c: String) -> bool: return not used_colors.has(c))
 	for k in count:
 		var human: Dictionary = human_families[k] if k < human_families.size() else {}
-		var fname: String = human.get("family_name", Names.FAMILY_NAMES[k % Names.FAMILY_NAMES.size()])
-		var color: String = human.get("color", Names.FAMILY_COLORS[k % Names.FAMILY_COLORS.size()])
+		var ai_k := k - human_families.size()
+		var fname: String = human.get("family_name", free_names[ai_k % free_names.size()] if ai_k >= 0 and not free_names.is_empty() else Names.FAMILY_NAMES[k % Names.FAMILY_NAMES.size()])
+		var color: String = human.get("color", free_colors[ai_k % free_colors.size()] if ai_k >= 0 and not free_colors.is_empty() else Names.FAMILY_COLORS[k % Names.FAMILY_COLORS.size()])
 		_add_family(fname, color, human.is_empty(), hqs[k % hqs.size()])
 	var slot := 0
 	for h in humans:
@@ -181,7 +188,8 @@ func _make_businesses() -> void:
 			"protector": -1, "rate": int(e[0]), "owned_by": -1, "value": int(e[1]),
 			"legit": int(e[2]), "launder": int(e[3]), "fear": rng.randi_range(0, 30),
 			"defiance": rng.randi_range(10, 70), "envelope": 0, "speak": false, "stock": 0,
-			"demand": 0, "closed_until": -1, "unpaid": 0, "hq_of": -1})
+			"demand": 0, "closed_until": -1, "unpaid": 0, "hq_of": -1, "broken": [],
+			"weak": Rackets.weak_for(biz.size(), int(cfg["seed"]))})
 
 
 func _add_family(fname: String, color: String, ai: bool, hq: Dictionary) -> Dictionary:
@@ -232,7 +240,7 @@ func _refresh_recruits() -> void:
 			var eth: String = Names.pick(_rng, ["it", "it", "ir", "je"])
 			recruits.append({"id": next_id, "name": Names.hood(_rng, eth), "at": b["id"],
 				"price": _rng.randi_range(150, 350), "wage": _rng.randi_range(80, 160),
-				"tough": _rng.randi_range(40, 95), "look": _rng.randi()})
+				"tough": _rng.randi_range(40, 95), "look": _rng.randi(), "trait": Rackets.trait_for(next_id * 31 + int(cfg["seed"]))})
 			next_id += 1
 
 
@@ -243,7 +251,8 @@ func _add_crew(family: int, rank: String, from_recruit: Dictionary = {}) -> Dict
 		"wage": int(from_recruit.get("wage", 120 if rank == "associate" else 200)),
 		"tough": int(from_recruit.get("tough", _rng.randi_range(45, 85))),
 		"task": "follow", "target": -1, "leader": _family_leader(family), "state": "free",
-		"jail_until": -1, "look": int(from_recruit.get("look", _rng.randi())), "months": 0}
+		"jail_until": -1, "look": int(from_recruit.get("look", _rng.randi())), "months": 0,
+		"trait": String(from_recruit.get("trait", Rackets.trait_for(next_id * 31 + int(cfg["seed"]))))}
 	if f["ai"]:
 		c["task"] = "guard"
 		c["target"] = f["hq"]
@@ -402,6 +411,10 @@ func arrest_price(family: int) -> int:
 # ------------------------------------------------------------------ time
 
 func _process(delta: float) -> void:
+	if running and not over and not Net.is_host():
+		# clients run the clock too between the host's updates (the host's next state corrects it)
+		clock = minf(clock + delta / float(cfg["month_seconds"]), 0.999)
+		return
 	if not running or over or not Net.is_host():
 		return
 	_time += delta
@@ -501,7 +514,8 @@ func _tick_businesses() -> void:
 				if collector.is_empty() and not f["ai"]:
 					b["envelope"] = mini(b["envelope"] + pay, pay * 3)
 				else:
-					var net := int(pay * (1.0 - COLLECTOR_CUT))
+					var cut := 0.0 if String(collector.get("trait", "")) == "earner" else COLLECTOR_CUT
+					var net := int(pay * (1.0 - cut))
 					f["dirty"] += net
 					f["income"]["protection"] += net
 		if b["owned_by"] >= 0 and not closed:
@@ -510,11 +524,16 @@ func _tick_businesses() -> void:
 			f["clean"] += legit
 			f["income"]["legit"] += legit
 			if b["speak"] and b["stock"] > 0:
-				var sold := mini(b["stock"], int(round(b["demand"] * speak_mult)))
+				var food := 1.25 if Rackets.has_ring(int(b["owned_by"]), "food") else 1.0
+				var sold := mini(b["stock"], int(round(b["demand"] * speak_mult * food)))
 				b["stock"] -= sold
 				var cash := int(sold * CRATE_PRICE * (0.6 + 0.4 * econ))
 				f["dirty"] += cash
 				f["income"]["speakeasy"] += cash
+		# the numbers game in the back of the cigar and candy stores
+		if p >= 0 and not closed and b["kind"] in ["cigar", "candy"] and Rackets.has_ring(p, "numbers"):
+			families[p]["dirty"] += 60
+			families[p]["income"]["protection"] += 60
 		b["fear"] = maxf(0.0, b["fear"] - 3.0)
 
 
@@ -537,13 +556,15 @@ func _tick_families() -> void:
 			var amt := clampi(int(f["dirty"]) - keep, 0, laundering_capacity(f["id"]))
 			if amt > 0:
 				f["dirty"] -= amt
-				f["clean"] += int(amt * (1.0 - LAUNDER_FEE))
+				f["clean"] += int(amt * (1.0 - (0.05 if Rackets.has_ring(f["id"], "laundry") else LAUNDER_FEE)))
 				f["income"]["laundered"] += amt
-		# wages
+		# wages (the family eats free if it runs the restaurants)
+		var wage_mult := 0.8 if Rackets.has_ring(f["id"], "eats") else 1.0
 		for c in crew_of(f["id"]):
-			if f["dirty"] >= c["wage"]:
-				f["dirty"] -= c["wage"]
-				f["income"]["wages"] += c["wage"]
+			var wage := int(c["wage"] * wage_mult)
+			if f["dirty"] >= wage:
+				f["dirty"] -= wage
+				f["income"]["wages"] += wage
 				c["loyalty"] = mini(100, c["loyalty"] + 1)
 			else:
 				c["loyalty"] -= 12
@@ -585,7 +606,7 @@ func _tick_families() -> void:
 		if f["heat"] >= 100.0:
 			_federal_raid(f)
 		elif f["heat"] >= 70.0:
-			_notice(f["id"], "The Bureau is building a case against the %s family. Lie low." % f["name"], "bad")
+			_notice(f["id"], "Your heat is high: the Bureau is building a case. Lie low, or make the evidence go away (Tab, Heat).", "bad")
 
 
 ## The family's warehouse on the West St. quay (a business it bought), or {}.
@@ -616,6 +637,8 @@ func _tick_booze() -> void:
 			continue
 		Syndicate.take_stock(nation, "nyc", fid, n)
 		var risk := 0.06 + float(f["heat"]) / 300.0
+		if String(c.get("trait", "")) == "driver":
+			risk *= 0.5
 		if captains.get("Waterfront", -1) == fid:
 			risk *= 0.5
 		var paid := cops.filter(func(k: Dictionary) -> bool: return k["payroll"] == fid).size()
@@ -659,7 +682,8 @@ func _federal_raid(f: Dictionary) -> void:
 	_recalc_heat(f)
 	f["rep"] = maxi(0, f["rep"] - 5)
 	_log("FEDS RAID %s FAMILY: $%d cash and %d crates seized." % [f["name"].to_upper(), lost, seized])
-	_notice(f["id"], "Federal raid! Lost $%d from the stash and %d crates." % [lost, seized], "bad")
+	_notice(f["id"], "Federal raid! They took $%d from your Stash and %d crates." % [lost, seized], "bad")
+	raided.emit(int(f["id"]))
 
 
 func _tick_crew() -> void:
@@ -884,7 +908,7 @@ func act_buy(family: int, biz_id: int) -> Dictionary:
 		return _r(false, "Not for sale.")
 	var price := int(b["value"] * (1.0 if b["protector"] == family else 1.25))
 	if f["clean"] < price:
-		return _r(false, "You need $%d in clean money. Dirty cash would bring the Treasury down on you." % price)
+		return _r(false, "You need $%d in the Bank. Pay with Stash money and the Treasury comes asking where it came from." % price)
 	f["clean"] -= price
 	var prev: int = b["protector"]
 	b["owned_by"] = family
@@ -898,8 +922,8 @@ func act_buy(family: int, biz_id: int) -> Dictionary:
 		var nyc: Dictionary = nation["cities"]["nyc"]
 		if not nyc["wh"].has(str(family)):
 			nyc["wh"][str(family)] = 0
-		return _r(true, "%s on %s is your warehouse now. Convoys landing in New York fill it; truck the crates to your speakeasies, or put a man on the booze run." % [b["name"], b.get("address", "West St.")])
-	return _r(true, "You own %s. It launders $%d a month." % [b["name"], b["launder"]])
+		return _r(true, "%s is your warehouse now. Boats and convoys landing in New York fill it: load the truck here, or put a man on the booze run." % b["name"])
+	return _r(true, "You own %s. Every month it turns $%d of your Stash into Bank money." % [b["name"], b["launder"]])
 
 
 func act_open_speakeasy(peer: int, biz_id: int) -> Dictionary:
@@ -912,12 +936,12 @@ func act_open_speakeasy(peer: int, biz_id: int) -> Dictionary:
 	var f := fam(int(p["family"]))
 	var pay := _pay_dirty(p, f, SPEAKEASY_COST)
 	if not pay:
-		return _r(false, "Fitting out the back room costs $%d in cash." % SPEAKEASY_COST)
+		return _r(false, "A speakeasy costs $%d cash." % SPEAKEASY_COST)
 	b["speak"] = true
 	b["demand"] = {"Little Italy": 16, "Lower East Side": 20, "Garment District": 22,
 		"Hell's Kitchen": 18, "Waterfront": 14}.get(b["district"], 16)
 	_dirty = true
-	return _r(true, "The back room of %s is open for business. Bring it booze." % b["name"])
+	return _r(true, "The speakeasy in the back of %s is open. Now bring it booze." % b["name"])
 
 
 ## Pay from the wallet first, then from the stash (the family's accountant handles it).
@@ -958,12 +982,12 @@ func act_payroll_cop(peer: int, cop_id: int) -> Dictionary:
 	if c["payroll"] == family:
 		return _r(false, "He's already yours.")
 	if p["wallet"] < 100:
-		return _r(false, "You need $100 on you to make the offer.")
+		return _r(false, "You need $100 in your wallet.")
 	p["wallet"] -= 100
 	if c["honesty"] > 0.85:
 		add_evidence(family, "cop", "%s reported a bribe attempt" % c["name"], 12.0, {"cop": cop_id})
 		_dirty = true
-		return _r(false, "\"Are you trying to bribe an officer?\" He takes your name. (+heat)")
+		return _r(false, "\"Are you trying to bribe an officer?\" He takes your name. That's heat.")
 	c["payroll"] = family
 	# a bought cop loses his notebook
 	var fe: Dictionary = fam(family)
@@ -990,7 +1014,7 @@ func act_captain(peer: int, district: String) -> Dictionary:
 	if prev >= 0:
 		_notice(prev, "The precinct captain for %s took a better offer." % district, "bad")
 	_dirty = true
-	return _r(true, "The captain for %s is yours. His patrolmen will be slow to answer calls about your people." % district)
+	return _r(true, "The captain for %s is yours. His cops look the other way." % district)
 
 
 func act_buy_crates(peer: int, n: int) -> Dictionary:
@@ -999,7 +1023,7 @@ func act_buy_crates(peer: int, n: int) -> Dictionary:
 		return _r(false, "")
 	n = mini(n, boat["crates"])
 	if n <= 0:
-		return _r(false, "The boat's empty. Next one comes at night next month.")
+		return _r(false, "The boat's empty. The next one comes next month, at night.")
 	var cost := n * CRATE_COST
 	if p["wallet"] < cost:
 		n = int(p["wallet"]) / CRATE_COST
@@ -1032,12 +1056,12 @@ func act_bank(peer: int, deposit: bool) -> Dictionary:
 		f["dirty"] += amt
 		p["wallet"] = 0
 		_dirty = true
-		return _r(true, "Stashed $%d under the floorboards." % amt)
+		return _r(true, "$%d into the safe." % amt)
 	var take := mini(500, int(f["dirty"]))
 	f["dirty"] -= take
 	p["wallet"] += take
 	_dirty = true
-	return _r(true, "Took $%d from the stash." % take)
+	return _r(true, "You take $%d from the safe." % take)
 
 
 func act_bribe(peer: int) -> Dictionary:
@@ -1124,8 +1148,11 @@ func _tick_evidence() -> void:
 	var fade := {"street": 0.75, "witness": 0.88, "cop": 0.9, "weapon": 0.97, "ledger": 0.95, "body": 0.99,
 		"informant": 1.0, "file": 0.85}
 	for f in families:
+		var meat := Rackets.has_ring(f["id"], "meat")
 		for e in f["evidence"]:
 			e["w"] = float(e["w"]) * float(fade.get(e["kind"], 0.9))
+			if meat and e["kind"] == "body":
+				e["w"] = float(e["w"]) * 0.7
 			if captains.values().has(f["id"]) and e["kind"] in ["street", "cop"]:
 				e["w"] = float(e["w"]) * 0.85
 		f["evidence"] = f["evidence"].filter(func(e: Dictionary) -> bool: return float(e["w"]) >= 0.8)
@@ -1193,7 +1220,7 @@ func act_burn_books(peer: int) -> Dictionary:
 	if books.is_empty():
 		return _r(false, "The books are clean. Your accountant is proud.")
 	if f["clean"] < 300:
-		return _r(false, "The accountant needs $300 clean to rebuild the books without the dirty pages.")
+		return _r(false, "Clean books cost $300 from the Bank.")
 	f["clean"] -= 300
 	for e in books:
 		_drop_evidence(family, e["id"])
@@ -1209,9 +1236,10 @@ func act_cleanup(peer: int, ev_id: int) -> Dictionary:
 		return _r(false, "")
 	if month - int(e["month"]) > 2:
 		return _r(false, "Too late: the police already have the body.")
-	if f["dirty"] < 400:
-		return _r(false, "The cleanup crew wants $400.")
-	f["dirty"] -= 400
+	var cost := 200 if Rackets.has_ring(family, "meat") else 400
+	if f["dirty"] < cost:
+		return _r(false, "The cleanup crew wants $%d." % cost)
+	f["dirty"] -= cost
 	_drop_evidence(family, ev_id)
 	return _r(true, "Lime, a car trunk and the Jersey marshes. There never was a body.")
 
@@ -1244,6 +1272,8 @@ func act_buy_gun(peer: int, kind: String) -> Dictionary:
 	if kind == "tommy" and year() < 1928:
 		return _r(false, "\"The Thompson? Not yet. Army's still got 'em all. Ask me again in '28.\"")
 	var price := int(dealer.get(kind, 0))
+	if Rackets.has_ring(int(p.get("family", -1)), "pawn"):
+		price /= 2
 	if p["wallet"] < price:
 		return _r(false, "$%d, cash." % price)
 	p["wallet"] -= price
@@ -1276,6 +1306,9 @@ func fired(peer: int, district: String) -> void:
 func propose(from_family: int, to_family: int, terms: Dictionary) -> Dictionary:
 	if from_family == to_family:
 		return _r(false, "")
+	# one deal at a time: no demanding tribute again and again while the last one runs
+	if String(terms.get("kind", "truce")) in ["truce", "tribute"] and int(rel(from_family, to_family)["truce_until"]) > month:
+		return _r(false, "You already have a deal with the %s family until %s." % [fam(to_family)["name"], date_text(int(rel(from_family, to_family)["truce_until"]))])
 	var d := {"id": next_id, "from": from_family, "to": to_family, "terms": terms, "expires": month + 1}
 	next_id += 1
 	var target := fam(to_family)
@@ -1363,6 +1396,16 @@ func _ai_month(f: Dictionary) -> void:
 	if men.size() < want_men and f["dirty"] > 900 and (men.size() < 2 or Syndicate._net_dirty(f) > 200):
 		f["dirty"] -= 250
 		_add_crew(id, "associate")
+	# with men to spare, post guards outside the best shops (two stay at the club)
+	var at_club := men.filter(func(c: Dictionary) -> bool: return c["task"] == "guard" and int(c["target"]) == int(f["hq"]))
+	if at_club.size() > 2:
+		var mine := shops_of(id).filter(func(b: Dictionary) -> bool: return int(b["id"]) != int(f["hq"]))
+		mine.sort_custom(func(a, b) -> bool: return int(a["rate"]) + int(a["value"]) / 20 > int(b["rate"]) + int(b["value"]) / 20)
+		for b in mine.slice(0, at_club.size() - 2):
+			if not men.any(func(c: Dictionary) -> bool: return c["task"] == "guard" and int(c["target"]) == int(b["id"])):
+				var g: Dictionary = at_club.pop_back()
+				g["task"] = "guard"
+				g["target"] = b["id"]
 	# booze: from its warehouse on the quay if it has one, else abstract runs from the docks
 	for b in owned_by(id):
 		if b["speak"] and b["stock"] < 10 and Syndicate.stock(nation, "nyc", id) > 0:
@@ -1535,6 +1578,17 @@ func apply_state(s: Dictionary) -> void:
 	for b in biz:
 		if not b.has("address") and plan != null:
 			b["address"] = plan.address_at(float(b["door"][0]), float(b["door"][1]))
+		# fields added by the 2D rebuild: older saves don't have them
+		if not b.has("broken"):
+			b["broken"] = []
+		if not b.has("weak"):
+			b["weak"] = Rackets.weak_for(int(b["id"]), int(cfg["seed"]))
+	for c in crew:
+		if not c.has("trait"):
+			c["trait"] = Rackets.trait_for(int(c["id"]) * 31 + int(cfg["seed"]))
+	for r in recruits:
+		if not r.has("trait"):
+			r["trait"] = Rackets.trait_for(int(r["id"]) * 31 + int(cfg["seed"]))
 	state_changed.emit()
 
 

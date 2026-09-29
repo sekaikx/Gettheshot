@@ -1,0 +1,4 @@
+.claude/worktrees/
+game/assets/map/country_map_debug.png
+game/assets/map/*.png
+game/tools/map/__pycache__/

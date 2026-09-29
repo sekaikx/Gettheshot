@@ -1,72 +1,69 @@
 class_name CameraRig
-extends Node3D
-## The top-down camera: follows your boss (or the truck you drive) at a fixed tilt. Scroll to zoom,
-## Z / C to turn it 45 degrees, hold the middle mouse button and drag to turn it freely.
+extends Camera2D
+## The camera straight above: follows your boss (or the truck you drive, looking ahead). Scroll
+## to zoom. Zooms in a little when you're inside a building, out a little when you drive fast.
+## Shakes on gunshots and punches nearby.
 
-var camera: Camera3D
-var target: Node3D
-var yaw := 0.0
-var yaw_goal := 0.0
-var dist := 17.0
-var dist_goal := 17.0
-var pitch := deg_to_rad(56.0)
-var _focus := Vector3.ZERO
-var _drag := false
+const ZOOM_MIN := 0.45
+const ZOOM_MAX := 1.7
+
+var target: Node2D
+var user_zoom := 1.15
+var inside := false
+var _shake := 0.0
+var _focus := Vector2.ZERO
 
 
 func _ready() -> void:
-	camera = Camera3D.new()
-	camera.fov = 42.0
-	camera.far = 400.0
-	add_child(camera)
-	camera.current = true
+	position_smoothing_enabled = false
+	zoom = Vector2.ONE * user_zoom
+	make_current()
 
 
 func snap() -> void:
 	if target:
 		_focus = target.global_position
-	_place()
+		global_position = _focus
 
 
-func focus_point() -> Vector3:
+func focus_point() -> Vector2:
 	return _focus
 
 
-func turn(steps: int) -> void:
-	yaw_goal += steps * PI * 0.25
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if e is InputEventMouseButton:
+	if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
 		var mb := e as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			dist_goal = maxf(10.0, dist_goal * 0.88)
-		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			dist_goal = minf(75.0, dist_goal * 1.13)
-		elif mb.button_index == MOUSE_BUTTON_MIDDLE or mb.button_index == MOUSE_BUTTON_RIGHT:
-			_drag = mb.pressed
-	elif e is InputEventMouseMotion and _drag:
-		yaw_goal -= (e as InputEventMouseMotion).relative.x * 0.006
-		yaw = yaw_goal
+		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+			user_zoom = minf(ZOOM_MAX, user_zoom * 1.1)
+		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			user_zoom = maxf(ZOOM_MIN, user_zoom / 1.1)
+	elif e is InputEventKey and (e as InputEventKey).pressed:
+		var k := (e as InputEventKey).keycode
+		if k == KEY_EQUAL or k == KEY_KP_ADD:
+			user_zoom = minf(ZOOM_MAX, user_zoom * 1.1)
+		elif k == KEY_MINUS or k == KEY_KP_SUBTRACT:
+			user_zoom = maxf(ZOOM_MIN, user_zoom / 1.1)
 
 
 func _process(delta: float) -> void:
+	var want := user_zoom
 	if target and is_instance_valid(target):
 		var t := target.global_position
 		if target is Vehicle:
-			t += (target as Vehicle).forward() * clampf((target as Vehicle).speed * 0.35, 0.0, 6.0)
-		_focus = _focus.lerp(t, clampf(delta * 6.0, 0.0, 1.0))
-	yaw = lerp_angle(yaw, yaw_goal, clampf(delta * 8.0, 0.0, 1.0))
-	dist = lerpf(dist, dist_goal, clampf(delta * 6.0, 0.0, 1.0))
-	_place()
-
-
-func _place() -> void:
-	var off := Vector3(sin(yaw), 0, cos(yaw)) * cos(pitch) * dist + Vector3(0, sin(pitch) * dist, 0)
-	camera.global_position = _focus + off
-	camera.look_at(_focus + Vector3(0, 1.0, 0), Vector3.UP)
-
-
-## Screen-relative movement: forward on the stick = away from the camera.
-func flat_basis() -> Basis:
-	return Basis(Vector3.UP, yaw + PI)
+			var v := target as Vehicle
+			t += v.forward() * clampf(v.speed * 0.45, -2.0 * W.M, 7.0 * W.M)
+			want *= lerpf(1.0, 0.8, clampf(absf(v.speed) / Vehicle.MAX_SPEED, 0.0, 1.0))
+		elif inside:
+			want *= 1.2
+		_focus = _focus.lerp(t, clampf(delta * 7.0, 0.0, 1.0))
+	var z := lerpf(zoom.x, want, clampf(delta * 4.0, 0.0, 1.0))
+	zoom = Vector2(z, z)
+	var off := Vector2.ZERO
+	if _shake > 0.0:
+		_shake = maxf(0.0, _shake - delta * 3.0)
+		off = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake * 10.0
+	global_position = _focus + off

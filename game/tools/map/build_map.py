@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Bake Famiglia's country map: a 1920s atlas plate of the eastern United States and Canada.
 
-    python3 game/tools/map/build_map.py            # writes game/assets/map/country_map.png (+ _small)
+    python3 game/tools/map/build_map.py            # writes game/assets/map/country_map.jpg (the game's plate)
     python3 game/tools/map/build_map.py --preview  # half-size, quick look (writes to /tmp unless --out)
-    python3 game/tools/map/build_map.py --debug    # also writes $TMPDIR/country_map_debug.png with the game's
+    python3 game/tools/map/build_map.py --debug    # also writes country_map_debug.png with the game's
                                                     # cities and sources as dots (projection check)
     python3 game/tools/map/build_map.py --check godot_render.png   # compare with check_projection.tscn
 
@@ -18,7 +18,6 @@ import argparse
 import json
 import math
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -36,8 +35,6 @@ HERE = Path(__file__).resolve().parent
 GAME = HERE.parent.parent
 OUT_DIR = GAME / "assets" / "map"
 FONT_DIR = OUT_DIR / "fonts"
-# the --debug copy (plate + python-projected dots) stays out of the repo
-DEBUG_PNG = Path(tempfile.gettempdir()) / "country_map_debug.png"
 
 # ----------------------------------------------------------------------------- palette (RGB 0-255)
 PAPER = (233, 223, 199)
@@ -49,11 +46,11 @@ OXBLOOD = (139, 30, 26)
 NAVY = (43, 58, 85)
 # tints are printed on white, then multiplied onto the paper
 STATE_TINTS = [
-    (248, 200, 204),  # rose
-    (252, 236, 168),  # straw
-    (210, 230, 184),  # sage green
-    (224, 212, 238),  # lilac
-    (248, 212, 160),  # buff orange
+    (250, 205, 190),  # rose
+    (252, 234, 170),  # straw
+    (212, 230, 184),  # sage green
+    (226, 212, 236),  # lilac
+    (250, 214, 168),  # apricot
 ]
 CANADA_TINTS = [
     (244, 200, 196), (240, 226, 176), (206, 224, 196), (222, 214, 230), (238, 214, 180),
@@ -143,20 +140,6 @@ class Path2:
         seg = self.cum[i + 1] - self.cum[i]
         t = 0.0 if seg == 0 else (s - self.cum[i]) / seg
         a, b = self.p[i], self.p[i + 1]
-        return a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, math.atan2(b[1] - a[1], b[0] - a[0])
-
-    def at_ext(self, s):
-        """Like at(), but runs straight on past either end (for names longer than their path)."""
-        if 0.0 <= s <= self.length or len(self.p) < 2:
-            return self.at(s)
-        if s < 0:
-            a, b = self.p[0], self.p[1]
-            seg = self.cum[1]
-            t = s / seg if seg else 0.0
-        else:
-            a, b = self.p[-2], self.p[-1]
-            seg = self.cum[-1] - self.cum[-2]
-            t = 1.0 + (s - self.length) / seg if seg else 1.0
         return a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, math.atan2(b[1] - a[1], b[0] - a[0])
 
     def sub(self, s0, s1):
@@ -300,8 +283,6 @@ class Lettering:
         self.ctx = ctx
         self.masks = {"ink": ctx.mask(), "water": ctx.mask(), "relief": ctx.mask(), "outline": ctx.mask()}
         self.symbols = ctx.mask()          # place symbols (ink)
-        self.strip = ctx.mask()            # the band under each name where engraved lines are left open
-        self.ii = None                     # integral image of "land" (plate px) for side-of-shore tests
         self.rects = []                    # occupied boxes, plate px: (x0, y0, x1, y1)
         self.fonts = {}
         self.files = {
@@ -311,62 +292,6 @@ class Lettering:
             "dp": str(FONT_DIR / "IMFeDPsc28P.ttf"),
             "deco": str(FONT_DIR / "Limelight-Regular.ttf"),
         }
-
-    def set_land(self, landish: np.ndarray):
-        """landish: bool work-res array (True = land, big lakes and sea False)."""
-        step = max(1, int(round(self.ctx.U)))
-        a = landish[::step, ::step].astype(np.float64)
-        self.ii_scale = self.ctx.U / step
-        ii = np.zeros((a.shape[0] + 1, a.shape[1] + 1))
-        ii[1:, 1:] = a.cumsum(0).cumsum(1)
-        self.ii = ii
-
-    def landfrac(self, box):
-        """Fraction of land inside a plate-px box."""
-        if self.ii is None:
-            return 0.5
-        h, w = self.ii.shape[0] - 1, self.ii.shape[1] - 1
-        f = self.ii_scale
-        x0 = int(min(max(box[0] * f, 0), w)); x1 = int(min(max(box[2] * f, 0), w))
-        y0 = int(min(max(box[1] * f, 0), h)); y1 = int(min(max(box[3] * f, 0), h))
-        if x1 <= x0 or y1 <= y0:
-            return 0.0
-        ii = self.ii
-        return float(ii[y1, x1] - ii[y0, x1] - ii[y1, x0] + ii[y0, x0]) / ((x1 - x0) * (y1 - y0))
-
-    def side_ok(self, boxes, side, tol=0.06):
-        """side: 'land' / 'water' / 'one' (all on the same side of the shore) / None."""
-        if side is None or not boxes:
-            return True
-        fr = [self.landfrac(b) for b in boxes]
-        if side == "land":
-            return min(fr) >= 1 - tol
-        if side == "water":
-            return max(fr) <= tol
-        return min(fr) >= 1 - tol or max(fr) <= tol
-
-    def add_strip(self, glyphs, font):
-        """Open the engraved lines under a name: a band along the glyph centres."""
-        if not glyphs:
-            return
-        cap_h = -font.getbbox("H", anchor="ls")[1]
-        d = ImageDraw.Draw(self.strip)
-        pts = [(x, y) for _, _, x, y, _ in glyphs]
-        w = max(2, int(round(cap_h * 1.45)))
-        if len(pts) == 1:
-            x, y = pts[0]
-            d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=255)
-        else:
-            # extend half a glyph past both ends
-            (x0, y0), (x1, y1) = pts[0], pts[1]
-            (x2, y2), (x3, y3) = pts[-2], pts[-1]
-            a0 = math.atan2(y1 - y0, x1 - x0); a1 = math.atan2(y3 - y2, x3 - x2)
-            e = cap_h * 0.55
-            pts = [(x0 - math.cos(a0) * e, y0 - math.sin(a0) * e)] + pts + [(x3 + math.cos(a1) * e, y3 + math.sin(a1) * e)]
-            d.line(pts, fill=255, width=w, joint="curve")
-            r = w / 2
-            for (x, y) in (pts[0], pts[-1]):
-                d.ellipse([x - r, y - r, x + r, y + r], fill=255)
 
     def font(self, key, size_plate):
         px = max(6, int(round(size_plate * self.ctx.U)))
@@ -389,7 +314,7 @@ class Lettering:
         out = []
         for ch, a in zip(text, advs):
             if ch != " ":
-                x, y, ang = path.at_ext(s + a / 2)
+                x, y, ang = path.at(s + a / 2)
                 out.append((ch, a, x, y, ang))
             s += a + tracking_w
         return out
@@ -412,7 +337,7 @@ class Lettering:
             n += int(np.any((x0 - pad < r[:, 2]) & (x1 + pad > r[:, 0]) & (y0 - pad < r[:, 3]) & (y1 + pad > r[:, 1])))
         return n
 
-    def draw_glyphs(self, glyphs, font, target, record=True, outline=0, strip=False):
+    def draw_glyphs(self, glyphs, font, target, record=True, outline=0):
         asc, desc = font.getmetrics()
         cap_h = -font.getbbox("H", anchor="ls")[1]
         size = int(max(max((q[1] for q in glyphs), default=1), asc + desc) * 2.2) + 8
@@ -433,20 +358,18 @@ class Lettering:
             target.paste(ImageChops.lighter(cur, im), region)
         if record:
             self.rects.extend(self.boxes(glyphs, font))
-        if strip:
-            self.add_strip(glyphs, font)
 
-    def on_path(self, text, font, pts, tracking_w, target, align=0.5, record=True, outline=0, strip=False):
+    def on_path(self, text, font, pts, tracking_w, target, align=0.5, record=True, outline=0):
         """Draw text glyph by glyph along a work-space polyline. outline > 0: open (hollow) capitals."""
         glyphs = self.layout(text, font, pts, tracking_w, align)
-        self.draw_glyphs(glyphs, font, target, record, outline, strip)
+        self.draw_glyphs(glyphs, font, target, record, outline)
         return glyphs
 
-    def straight(self, text, font, cx, cy, ang, tracking_w, target, record=True, outline=0, strip=False):
+    def straight(self, text, font, cx, cy, ang, tracking_w, target, record=True, outline=0):
         _, total = self.measure(text, font, tracking_w)
         L = total / 2 + 10
         pts = [(cx - math.cos(ang) * L, cy - math.sin(ang) * L), (cx + math.cos(ang) * L, cy + math.sin(ang) * L)]
-        self.on_path(text, font, pts, tracking_w, target, record=record, outline=outline, strip=strip)
+        self.on_path(text, font, pts, tracking_w, target, record=record, outline=outline)
 
     def free(self, box, pad=0.0):
         x0, y0, x1, y1 = box
@@ -462,9 +385,6 @@ def parallel_angle(ctx, lat, lon):
     return math.atan2(float(y1 - y0), float(x1 - x0))
 
 
-# which side of the shore a minor name must keep to while it is nudged for room
-SIDE = {"cape": "water", "bay": "water", "lake_s": None, "river": "land", "mount": "land", "region": "land",
-        "island": None, "note": None}
 MAJOR = {"country", "country2", "state", "state_m", "state_s", "prov", "foreign", "ocean", "sea", "lake"}
 
 
@@ -490,9 +410,7 @@ def place_labels(ctx: Ctx, L: Lettering):
     """Major names go exactly where the table says (and are reported if they crowd a live game city);
     minor ones (rivers, capes, bays, islands, relief) are nudged a little to find room, or left out."""
     reserved = len(L.rects)
-    nudges = [(0, 0), (0, -9), (0, 9), (-14, 0), (14, 0), (0, -17), (0, 17), (-24, -6), (24, 6), (-24, 6), (24, -6),
-              (-34, 0), (34, 0), (0, -26), (0, 26), (-34, -16), (34, 16), (-34, 16), (34, -16), (-48, 0), (48, 0),
-              (0, -36), (0, 36)]
+    nudges = [(0, 0), (0, -9), (0, 9), (-14, 0), (14, 0), (0, -17), (0, 17), (-24, -6), (24, 6), (-24, 6), (24, -6)]
     skipped = []
     for kind, text, lat, lon, opt in LABELS:
         if opt.get("skip"):
@@ -516,15 +434,13 @@ def place_labels(ctx: Ctx, L: Lettering):
             if L.collides(bx):
                 log(f"  note: '{text}' sits on a live game place's label zone")
             L.rects = saved
-            L.draw_glyphs(glyphs, font, target, strip=True)
+            L.draw_glyphs(glyphs, font, target)
             continue
         placed = False
-        side = opt.get("side", SIDE.get(kind))
         for dx, dy in nudges:
             g2 = [(ch, a, x + dx * ctx.U, y + dy * ctx.U, ang) for ch, a, x, y, ang in glyphs]
-            b2 = L.boxes(g2, font)
-            if L.collides(b2, pad=1.0) == 0 and L.side_ok(b2, side):
-                L.draw_glyphs(g2, font, target, strip=True)
+            if L.collides(L.boxes(g2, font), pad=1.0) == 0:
+                L.draw_glyphs(g2, font, target)
                 placed = True
                 break
         if not placed:
@@ -552,7 +468,7 @@ def place_places(ctx: Ctx, L: Lettering):
         x, y = float(x), float(y)
         if not (90 < x < mp.IMAGE_W - 90 and 90 < y < mp.IMAGE_H - 90):
             continue
-        size = 17 if kind == "town" else 16
+        size = 17 if kind == "town" else 18
         fkey = "rm" if kind == "town" else "sc"
         if kind == "national":
             size, fkey = 19, "sc"
@@ -578,7 +494,7 @@ def place_places(ctx: Ctx, L: Lettering):
                 box = (x - tl / 2, y + dy - th / 2, x + tl / 2, y + dy + th / 2)
             if box[0] < 90 or box[2] > mp.IMAGE_W - 90 or box[1] < 90 or box[3] > mp.IMAGE_H - 90:
                 continue
-            if L.free(box, pad=2) and L.side_ok([(box[0] - 1, box[1], box[2] + 1, box[3])], "one", 0.09):
+            if L.free(box, pad=2):
                 chosen = box
                 break
         if chosen is None:
@@ -597,8 +513,7 @@ def place_places(ctx: Ctx, L: Lettering):
         else:
             draw.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], outline=255, width=lw)
         ymid = (chosen[1] + chosen[3]) / 2
-        L.straight(name, font, (chosen[0] + chosen[2]) / 2 * U, ymid * U, 0.0, tw, L.masks["ink"], record=False,
-                   strip=True)
+        L.straight(name, font, (chosen[0] + chosen[2]) / 2 * U, ymid * U, 0.0, tw, L.masks["ink"], record=False)
         L.rects.append(chosen)
         L.rects.append(sym_box)
         placed += 1
@@ -1187,7 +1102,6 @@ def build(args):
                     ("limelight", "Limelight-Regular.ttf")):
         geodata.font(fam, fn, FONT_DIR)
     geodata.font_licence("imfellenglishsc", FONT_DIR)
-    geodata.font_licence("limelight", FONT_DIR, "OFL-Limelight.txt")
     g = load_geo()
     WW, WH = ctx.WW, ctx.WH
     log(f"work canvas {WW}x{WH} (U={ctx.U})")
@@ -1233,7 +1147,8 @@ def build(args):
     ids_land = ids.copy()          # small lakes keep their region: no colour band around them
     ids[~dry] = 0
     log(f"{len(regions)} regions rasterised")
-    adj = adjacency(ids_land, nid)
+    small = ids[::max(1, int(ctx.U * 2)), ::max(1, int(ctx.U * 2))]
+    adj = adjacency(small, nid)
     col = colour_regions(regions, adj)
     pal_light = np.zeros((256, 3), np.float32)
     pal_light[0] = WATER_TINT
@@ -1294,7 +1209,6 @@ def build(args):
 
     # ---- lettering first (the engraver leaves the lines open under the names)
     L = Lettering(ctx)
-    L.set_land(dry)
     reserve_game_places(ctx, L)
     place_labels(ctx, L)
     place_places(ctx, L)
@@ -1302,7 +1216,6 @@ def build(args):
     alltext = ImageChops.lighter(alltext, L.symbols)
     knock = alltext.filter(ImageFilter.GaussianBlur(3.2 * ctx.U)).point(lambda v: min(255, v * 7))
     knock = ImageChops.lighter(knock, alltext)
-    knock_l = ImageChops.lighter(knock, L.strip.filter(ImageFilter.GaussianBlur(1.0 * ctx.U)))
     log("lettering laid out")
 
     # ---- relief hachures
@@ -1323,7 +1236,7 @@ def build(args):
         lons = np.linspace(-130, -20, 800)
         x, y = ctx.P(np.full_like(lons, lat), lons)
         gd.line(list(zip(x.tolist(), y.tolist())), fill=255, width=max(1, int(round(0.9 * ctx.U))), joint="curve")
-    canvas.ink(gm, NAVY, 0.30, knock_l)
+    canvas.ink(gm, NAVY, 0.30, knock)
     del gm
 
     # ---- water lining
@@ -1357,7 +1270,7 @@ def build(args):
         pts = raster.smooth_polyline(pts, 2)
         draw_pattern(fd, pts, [("o", 0.95 * ctx.U), ("g", 4.2 * ctx.U)], 1)
     fath = ImageChops.multiply(fath, Image.fromarray(((~land) * 255).astype(np.uint8)))
-    canvas.ink(fath, WATER_INK, 0.8, knock_l)
+    canvas.ink(fath, WATER_INK, 0.8, knock)
     del fath
     log("fathom line")
 
@@ -1434,9 +1347,9 @@ def build(args):
             for ring in poly:
                 pts = ctx.ring(ring)
                 draw_pattern(sd, pts, [("o", (0.8 if mex else 1.05) * ctx.U), ("g", (5.5 if mex else 4.6) * ctx.U)], 1)
-    canvas.ink(rib.filter(ImageFilter.GaussianBlur(1.5 * ctx.U)), (232, 128, 104), 0.42, L.strip)
-    canvas.ink(sb, INK, 0.9, knock_l)
-    canvas.ink(ib, INK, 1.0, knock_l)
+    canvas.ink(rib.filter(ImageFilter.GaussianBlur(1.5 * ctx.U)), (232, 128, 104), 0.42)
+    canvas.ink(sb, INK, 0.9, knock)
+    canvas.ink(ib, INK, 1.0, knock)
     del rib, ib, sb
     log("boundaries")
 
@@ -1462,7 +1375,7 @@ def build(args):
         draw_pattern(ld, wpts, [("d", 9 * ctx.U), ("g", 5 * ctx.U)], 1.5 * ctx.U)
         la_, lo_ = mp.from_px(np.array([p[0] for p in pts]), np.array([p[1] for p in pts]))
         lines_json["limit_12mi"].append(thin_latlon([(round(float(a), 4), round(float(b), 4)) for a, b in zip(la_, lo_)], 1.0))
-    canvas.ink(lim, OXBLOOD, 0.9, knock_l)
+    canvas.ink(lim, OXBLOOD, 0.9, knock)
     del lim, dfar, la, lo, atlantic
     log("12-mile limit")
 
@@ -1473,7 +1386,7 @@ def build(args):
         pts = mp.catmull_rom([tuple(map(float, ctx.P(a, b))) for a, b in wps], 16)
         draw_pattern(lmd, pts, [("o", 1.35 * ctx.U), ("g", 6.0 * ctx.U)], 1)
         lines_json["lanes"][lid] = [list(p) for p in wps]
-    canvas.ink(lm, OXBLOOD, 0.85, knock_l)
+    canvas.ink(lm, OXBLOOD, 0.85, knock)
     del lm
 
     # ---- railroads
@@ -1484,7 +1397,7 @@ def build(args):
         rrd.line(pts, fill=255, width=max(1, int(round(1.5 * ctx.U))), joint="curve")
         draw_ticks(rrd, pts, 7.5 * ctx.U, 2.8 * ctx.U, 1.05 * ctx.U)
         lines_json["rails"][rid] = [list(p) for p in wps]
-    canvas.ink(rr, INK, 0.95, knock_l)
+    canvas.ink(rr, INK, 0.95, knock)
     del rr
     log("railroads")
 
@@ -1610,29 +1523,31 @@ def main():
     ap.add_argument("--check", type=str, default=None, help="compare a check_projection.tscn render with the debug png")
     args = ap.parse_args()
     if args.check:
-        dbg = Path(args.out) if args.out else DEBUG_PNG
+        dbg = Path(args.out) if args.out else OUT_DIR / "country_map_debug.png"   # --debug writes it next to the plate; don't commit it
         sys.exit(0 if check(Path(args.check), dbg) else 1)
     if args.res is None:
         args.res = 0.5 if args.preview else 1.0
     out = Path(args.out) if args.out else (Path("/tmp/country_map_preview.png") if args.preview
-                                           else OUT_DIR / "country_map.png")
+                                           else OUT_DIR / "country_map.jpg")
     img, lines = build(args)
     out.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out, optimize=True)
+    if out.suffix.lower() in (".jpg", ".jpeg"):
+        # the game ships the plate as a JPEG: paper and ink compress well, 10 MB -> 2 MB
+        img.convert("RGB").save(out, quality=90, optimize=True, progressive=True)
+    else:
+        img.save(out, optimize=True)
     log(f"wrote {out} {img.size}")
     if not args.preview and args.res == 1.0 and not args.out:
-        small = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
-        small.save(OUT_DIR / "country_map_small.png", optimize=True)
         lines["meta"] = {
             "image_size": [mp.IMAGE_W, mp.IMAGE_H], "scale_px_per_unit": mp.SCALE, "center": [mp.CX, mp.CY],
             "projection": "Lambert Conformal Conic, sphere, std parallels 33/45, origin 39N 83W",
             "window": [mp.WIN_LON_MIN, mp.WIN_LON_MAX, mp.WIN_LAT_MIN, mp.WIN_LAT_MAX],
         }
         (OUT_DIR / "map_lines.json").write_text(json.dumps(lines, indent=1), encoding="utf-8")
-        log("wrote country_map_small.png and map_lines.json")
+        log("wrote map_lines.json")
     if args.debug:
         dbg = debug_overlay(img)
-        dpath = out.with_name(out.stem + "_debug.png") if args.out else DEBUG_PNG
+        dpath = out.with_name(out.stem + "_debug.png")
         dbg.save(dpath)
         log(f"wrote {dpath}")
 

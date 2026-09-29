@@ -1,178 +1,138 @@
-# Famiglia (prototype)
+# Famiglia
 
-A grounded Mafia-empire game for **1 to 8 players**, made in **Godot 4.7**. You walk the
-streets of 1920s New York as the boss of a crime family, top-down. Every door and every person
-is something you can deal with. Past New York there's the country: cities to take, smuggling
-routes to buy, convoys to run and hijack.
+A 1920s Mafia game for **1 to 8 players**, made in **Godot 4.7**. You walk the streets of Lower
+Manhattan, seen from straight above, as the boss of a crime family: walk into a shop and lean on
+the owner until he pays, hire muscle at the pool hall, buy a cop, open a speakeasy in the back of a
+bakery, run whisky off the night boat, and take the city one door at a time. Past New York
+there's the whole country: cities to take, smuggling routes to buy, convoys to run and hijack.
 
-Solo play puts you against AI families. With friends, each player founds a family (or joins
-a friend's as underboss), and AI families fill the rest of the city. Players who join a
-running campaign take over an AI family. Rejoining with the same name gives you your seat back.
+Solo play puts you against AI families. With friends, each player founds a family (or joins a
+friend's as underboss), and AI families fill the rest of the city. Players who join a running
+campaign take over an AI family. Rejoining with the same name gives you your seat back.
+
+![The street](../docs/screenshots/2d/street.jpg)
+
+| | |
+|---|---|
+| ![A shakedown in the bakery](../docs/screenshots/2d/shakedown.jpg) | ![Night and rain](../docs/screenshots/2d/night_rain.jpg) |
+| ![The family book](../docs/screenshots/2d/family_book.jpg) | ![Don's View](../docs/screenshots/2d/dons_view.jpg) |
 
 ## Run it
 
 1. Install **Godot 4.7** (standard, not .NET).
 2. Import `game/project.godot` and let it import once, then press **F5**.
-3. **PLAY SOLO**, or **HOST A GAME** (friends use **JOIN** with your IP; the port is 24880,
-   so forward it for internet play), or **CONTINUE** the saved campaign.
+3. **New game** (with Uncle Carmine's tutorial, or without), **Play with friends** (host, or join
+   with the host's IP; the port is 24880, forward it for internet play), or **Continue**.
 
-Campaign length: *1929 to 1933* (the Crash and Repeal, about 2.5 hours at the default pace) or
-*1923 to 1933* (all of Prohibition). The host autosaves every three months and on quit.
+A campaign runs *1929 to 1933* (the Crash and Repeal) or *1923 to 1933* (all of Prohibition); a
+month is a day and a night on the street. The host autosaves every three months and on quit.
+Playing alone, the city waits while a menu, a map or a conversation is open.
 
 ## Controls
 
 | Key | |
 |---|---|
-| WASD | walk (Shift sprint, Alt stroll) |
-| E | talk / use: shop doors, cops, recruits, rival bosses, the union boss, your men, crates, the truck, your warehouse door, the river |
-| F | punch · **G** pistol (needs a gun and ammo, and it's loud) · **R** send your men at the person you face |
-| V | get in / out of the truck (W/S drive, A/D steer, Space brake) · **Q** drop a crate |
-| Z / C, scroll, right-drag | turn and zoom the camera |
-| Tab | the family: crew orders, businesses, **THE CASE** (evidence), **SUPPLY** (sites, stock, freight), sit-downs, the books |
-| J | the country: cities, routes, capos, docks, warehouses, breweries, rail freight |
-| M | the city map · **N** the newspaper · **H** help · Esc menu |
+| WASD / arrows | walk (Shift run, Alt stroll) |
+| E | talk / use: people, the safe, the desk, the map table, the telephone, a till, crates, the truck |
+| F or left click | punch, or smash what's in front of you |
+| G or right click | shoot (needs a gun and bullets, and it's loud) · the mouse aims |
+| R | send your men at the person you face |
+| V | get in / out of a car (W/S drive, A/D steer, Space brake) · next to traffic: steal it |
+| Q | drop the crate you carry |
+| Tab | the family book: your men, your rackets, the heat on you, rivals, money |
+| M | Don's View: the whole city, who pays whom, send your men |
+| J | the country: cities, routes, capos |
+| N | the newspaper · **H** how to play · **Esc** pause · wheel or +/- zoom |
 
-## What's in it
+## How it plays
 
-**The street (New York, walked in person)**
-- A generated Lower Manhattan: 24 blocks in five districts (Hell's Kitchen, Garment District,
-  Little Italy, Lower East Side, Waterfront), with brick and plaster tenements, lit windows,
-  water towers, fire escapes, street lamps, piers, warehouses and the river. Day and night run
-  once a month, with rain and fog.
-- About 60 shops with owners who remember you. You can **offer protection** (men standing behind
-  you help), **lean on them** (the window gets smashed and people see it), **collect the
-  envelope**, **buy the business** with clean money, or open a **speakeasy** in the back.
-  Awnings take the colour of the family a shop pays.
-- **Dirty and clean money**: the stash pays wages and bribes, and you buy property with clean
-  money. Every shop you own launders a set amount a month. Cash you carry can be stolen if
-  you're knocked down.
-- **Booze**: at night a boat ties up at the middle pier. Buy crates, carry them to your truck,
-  drive to your speakeasy and unload. Cops who aren't paid chase contraband.
-- **Men**: hire muscle outside the pool halls. They follow you, fight for you, collect and
-  guard. Unpaid men leave, and a jailed man whose family you don't support may flip.
-- **The law**: patrolmen chase what they see (bribe, go quietly or run), you can buy them one
-  at a time or buy the precinct captain, and the feds raid at 100 heat.
-- **Guns**: Izzy outside the pawnshop sells .38s, ammo and, from 1928, Thompsons.
-- **Evidence** (Tab → THE CASE): heat is the sum of a real file. The file holds named witnesses
-  (the shopkeeper who saw it), a patrolman's notebook, your gun, the books, bodies and informants.
-  - Pay or scare a witness at his shop.
-  - Buy the cop and his notebook disappears.
-  - Throw the gun in the river at the end of a pier.
-  - Burn the books at your club.
-  - Send a cleanup crew for a body.
-  - Reach a rat in custody.
+**The street.** A generated Lower Manhattan in five districts (Hell's Kitchen, the Garment
+District, Little Italy, the Lower East Side, the Waterfront): cobbled and paved streets, streetcar
+tracks down the Bowery, pushcarts on Orchard St., backyards with laundry, the quay and the piers.
+About 60 businesses you walk into: the roof fades and you're in the bakery with the baker behind
+his counter. Day and night pass once a month, with rain and fog; at night the lamps light the
+sidewalks and your speakeasies fill up.
 
-**The country (J)**
-- Fourteen cities at their real latitude and longitude: New York, Chicago, Detroit, Philadelphia,
-  Atlantic City, Boston, Cleveland, Buffalo, Pittsburgh, Baltimore, Kansas City, St. Louis,
-  New Orleans and Miami. Each has a local outfit and a ring showing who holds how much of it.
-  Send men, guns and a capo; buy the local police; order hits on rival capos. Holding a city
-  pays every month.
-- Seven liquor sources (Montreal, Windsor, the Niagara frontier, Saint-Pierre & Miquelon,
-  Rum Row, Nassau, Havana) and thirteen smuggling routes drawn along real water and roads
-  (Lake Champlain, the Detroit River, the Chesapeake, the Gulf, up the Mississippi...). Run
-  convoys, buy the customs men and sheriffs so the route is yours (rivals pay a toll or get
-  turned back), or put men on the road to hijack rivals' convoys. Prohibition agents seize some
-  convoys. Nine freight rail lines (New York Central, Pennsylvania, Illinois Central...) with
-  their stops.
+**Shakedowns.** Offer protection face to face. If he says no, scare him: break his things, rough
+him up, show a gun, bring your men. Every owner has a **weak spot** that scares him twice as much
+(the street tells you what it is). When his fear reaches the mark he pays; push him past it and he
+runs to the cops. Or do him a **favor** (a shop with a "!" over its door needs one) and he pays you
+out of gratitude.
 
-**Supply: docks, warehouses, breweries, rail** (J → a city, or Tab → SUPPLY)
-- **Docks** (every port, river or lake city, named: the West Street piers & Red Hook, the
-  Calumet River docks, Fells Point...): put the dockworkers' union local on the payroll (dirty $
-  up front, $150 a month, $200 in New York). Boats landing at your docks carry half again as much
-  with half the seizure risk; rivals' boats are turned back 30% of the time, or pay a toll if you
-  have a truce. The longshoremen can also drop a rival's next shipment in the river.
-- **Warehouse** (clean $): crates landing in that city go into it and sell over the following
-  months at full wholesale price, up to your share of the city's thirst (more influence, more
-  buyers). Holds 400 crates. No warehouse = the crates are dumped on arrival at half price.
-- **Brewery / distillery** (breweries in Chicago, Philadelphia, St. Louis, Detroit, New York,
-  Baltimore; stills in Cleveland, Pittsburgh, Kansas City, New Orleans; clean $ for the
-  "near beer" licence): 30 (still: 20) crates a month into your warehouse there at $6 a crate.
-  It thickens the evidence file every month and can be raided (padlocked, half the stock poured
-  out); owning the city's police makes a raid rarer.
-- **Rail yard** (New York, Chicago, St. Louis, Pittsburgh, Buffalo, Baltimore, Kansas City,
-  New Orleans): bribe the yardmaster and your freight on every line through that yard moves safely.
-- **Freight orders**: N crates a month on a rail line between two of your warehouses, $1 a
-  crate per 200 miles; a chance the cars are opened (none through your own yard, more for every
-  rival's yard on the line).
-- **New York in person**: the West Street quay is a working supply dock. Freighters at the
-  piers, longshoremen carrying crates, and the union's hiring boss standing by the warehouses
-  (E: put the local on the payroll, or pay to have a rival's next shipment "dropped in the
-  river"). Buy one of the two quay warehouses and it is your New York warehouse: convoys landing
-  in New York fill it and a stack of crates by its door grows and shrinks with the stock (one
-  crate per 5). Park the truck within 9 m and press E at the door to load 10 crates, or give a
-  man the crew order **run the booze** (N crates a month to your speakeasies, with a chance the
-  dry agents stop the truck). Without a quay warehouse, New York crates go straight into the
-  speakeasy cellars and the rest are dumped.
-- AI families buy warehouses where they land convoys, take breweries and docks when they can
-  afford them, and ship freight between their warehouses.
-- The streets have Lower Manhattan names (Mulberry St., Grand St., West St....) and the
-  paper and notices say where things happened.
+**Money.** Your **Wallet** is cash on you (lost if you're knocked down). The **Stash** is the family's
+dirty money, in the safe at your club: it pays wages and bribes. The **Bank** is clean money: it buys
+businesses. A shop you own is a **front**: it turns Stash into Bank every month. A front can hide a
+**speakeasy** in the back.
 
-**Rivals and diplomacy**
-- AI families expand, retaliate, buy fronts, open speakeasies, run routes, send men to other
-  cities and order hits. They hold grudges and offer (or demand) deals.
-- Sit-downs with any boss, AI or human: truces, paying for peace, demanding tribute,
-  alliances against a third family. Nothing is enforced; broken deals are remembered and
-  printed in the paper.
-- History: the Crash (October 1929) and Repeal (December 1933), when the scoring ends. Legacy =
-  clean money, what you own, who pays you, the cities and routes you hold, your name, minus
-  the case against you.
+**Booze.** At night a boat ties up at the middle pier. Buy crates, carry them to your truck, drive
+to your speakeasy. Or buy a warehouse on the quay and let convoys from the country fill it.
+
+**Men.** Hire muscle at the pool halls. Each man has a **specialty** (bruiser, shooter, driver,
+talker, medic, earner). They follow you, guard your shops, collect your envelopes, run booze, and
+take shops for you. Pay them, and look after the families of the ones in prison, or they talk.
+
+**Crime rings.** Protect or own every shop of a trade in the city to get its perk: the pawnshops
+(half-price guns), the laundries (cheap laundering), the restaurants (cheaper wages), the cigar and
+candy stores (the numbers game), and more.
+
+**The law.** What people see becomes **heat**, and heat is a real file: named witnesses (pay or scare
+them in their shop), a patrolman's notebook (buy the cop), your gun (throw it in the river), the
+books (burn them at your club), bodies, informants. Cops chase what they see: bribe them, go quietly
+or run. At 100 heat the feds raid you, and you'll see them pull up outside.
+
+**Rivals.** AI families expand, post guards at their shops, lean on yours, hold grudges and offer or
+demand deals. Sit down with any boss: truces, paying for peace, tribute, alliances. Nothing is
+enforced. Kill a weakened don in his club and his family is finished; finish them all and you run New York.
+
+**The country (J).** A 1920s atlas plate: nine cities with their own outfits, smuggling routes from
+Montreal, Windsor, Rum Row and Havana, rail freight between your warehouses, breweries, dock unions
+and yardmasters. Send men and capos, buy the police, order hits, run convoys, hijack rivals.
+
+**The end.** Repeal (December 1933) ranks the families by legacy: clean money, what they own, who
+pays them, their name on the street, minus the case against them.
 
 ## Multiplayer
 
-Host-authoritative ENet (`scripts/net/net.gd`, modelled on Keep Rolling's). The host runs the
-rules and the AI and sends the campaign state when it changes, plus position snapshots at 10 Hz.
-Each client moves its own boss and truck and asks the host to act. Solo uses the same code
-path with an offline peer. Tested with 1, 2 and 3 players on one machine. Steam lobbies aren't
-wired in yet: Keep Rolling's `steamworks.gd` + GodotSteam slot into `Net` the same way.
+Host-authoritative ENet (`scripts/net/net.gd`). The host runs the rules and the AI and sends the
+campaign state when it changes, plus position snapshots at 10 Hz; each client moves its own boss
+and car and asks the host to act. Solo uses the same code path with an offline peer.
 
 ## Code map
 
 | File | |
 |---|---|
 | `scripts/core/game.gd` | autoload `Game`: the campaign, economy, law, evidence, guns, deals, AI families, save/load |
-| `scripts/core/syndicate.gd` | the country: cities, routes, rail lines (real lat/lon), convoys, ambushes, capos, hits, supply sites and freight |
+| `scripts/core/rackets.gd`, `favors.gd` | shakedowns and weak spots, crime rings, crew specialties, robberies, finishing a family; favors |
+| `scripts/core/syndicate.gd`, `map_projection.gd` | the country: cities, routes, convoys, freight, capos, hits; the map projection |
 | `scripts/net/net.gd` | autoload `Net`: solo / host / join, lobby, requests, state and snapshots |
-| `scripts/world/world.gd` | the street: spawning, host simulation, crimes and witnesses, cops, requests |
-| `scripts/world/city_plan.gd`, `city_builder.gd` | the city as data (seeded), then built as meshes |
-| `scripts/world/actor.gd`, `person.gd` | people: movement, brains, fights / the dressed Quaternius cast, hats and clips |
-| `scripts/world/vehicle.gd`, `player_controller.gd`, `camera_rig.gd`, `ambience.gd` | trucks and traffic, your input, the camera, sound |
-| `scripts/ui/*` | HUD and dialogs, family ledger, city map, country map, main menu |
+| `scripts/world/world.gd` | the street: building the city, collisions and paths, spawning, the host simulation, requests |
+| `scripts/world/actor.gd`, `vehicle.gd`, `player_controller.gd`, `camera_rig.gd` | people and their brains, cars, your hands, the camera |
+| `scripts/world/talk.gd` | what you can say to whom: every conversation and its options |
+| `scripts/world/city_plan.gd` | the city as data, from a seed (metres) |
+| `scripts/world2d/*` | the 2D art: `w.gd` (units, fonts), `pal.gd` (colours), `draw.gd`, people, cars, streets, roofs, shopfronts, interiors, lighting, weather |
+| `scripts/ui/*` | HUD (`hud.gd`, `hud/*`), portraits, the family book and Don's View (`family_book.gd`, `city_map.gd`, `book/*`), the country map, the tutorial and advisor, the main menu (`main_menu.gd`, `menu/*`), the 1920s UI kit (`ui_kit.gd`) |
+| `scripts/core/settings.gd` | volumes, full screen, UI scale, the keys strip (saved in `user://settings.cfg`) |
+| `docs/REBUILD_2D.md` | the architecture and the contract between the pieces |
 
-**Tests**: `godot res://scenes/main.tscn -- --autotest --shot=/tmp/f` plays solo and exercises the
-systems (protection, vandalism, a shooting, convoys, an ambush, a route, a hit, the quay
-warehouse filling from a convoy and loading the truck, a Chicago warehouse and brewery, a freight
-order, the booze run, the union boss, months passing), saving screenshots.
-`-- --autotest --sim=36` just lets 36 months pass quickly and prints every family's money and
-sites each month (balance check). Networking: `-- --autohost --players=2 --mptest` in one instance and
-`-- --autojoin=127.0.0.1 --mptest` in another.
+## Tests
+
+`game/tools/dev/test_all.sh` compiles every script and plays four headless tests: the autotest
+(walk, a shakedown, the warehouse, the union, months passing), the tutorial start to finish, one
+favor of each kind, and the solo pause. Run it before you push.
+
+With a screen: `godot --path game res://scenes/main.tscn -- --autotest --shot=/tmp/f` saves
+screenshots of each step. `-- --autotest --sim=36` lets 36 months pass and prints the families'
+money (balance). Multiplayer: `tools/dev/mptest.sh`.
+
+`python3 game/tools/map/build_map.py` rebuilds the country plate (`assets/map/country_map.jpg`) from
+public-domain map data (needs numpy and Pillow).
 
 ## Assets and licences
 
-- People, hats aside: **Quaternius Ultimate Modular Men / Women** (CC0,
-  `assets/models/characters/quaternius/LICENSE.txt`), mixed and dyed per person, animated with the
-  **Quaternius Universal Animation Library** 1 + 2 (CC0) retargeted by `tools/rig/` (see its
-  README). The owner's own Woods villager, woman and elder (`LICENSE_Villager.txt`) remain as a fallback.
+- Everything on the street is drawn in code (people, cars, streets, buildings, interiors).
+- The country map: Natural Earth (public domain), USGS GMTED2010 / NOAA ETOPO1 relief (public
+  domain), lettered in IM Fell (SIL OFL) and Limelight (SIL OFL).
 - Rain, murmur, music, UI and fight sounds: the owner's own Woods / Keep Rolling audio. The
   gunshot, glass, engine and whistle were synthesised for this game.
-- City props, cars, lamps, crates: **Kenney** City Kits, Car Kit, Mini Market (CC0, `assets/kenney/*/License.txt`).
-- Asphalt, pavement, brick, plaster, planks, concrete, corrugated iron: **Poly Haven** (CC0,
-  `assets/textures/LICENSE_*.txt`).
-- Fonts: Fraunces and Barlow (SIL OFL, `assets/fonts/OFL_*.txt`).
-- Street lettering (shop signboards, wall ads, dock and vehicle lettering): Rye, Limelight, Alfa Slab One,
-  Bevan, Abril Fatface, Playfair Display, IM Fell English SC, Sancreek (SIL OFL, `assets/fonts/signs/LICENSE.txt`).
-- Belgian block paving: **Poly Haven** Cobblestone Floor 05 (CC0). The painted wall advertisements
-  (`assets/textures/wall_ads.jpg`, invented brands) are generated by `assets/textures/gen_wall_ads.py` (CC0,
-  `assets/textures/LICENSE_street_art.txt`).
-- Period cars and trucks, lamp posts, hydrants, pushcarts, fire escapes, water towers, the freighters, the
-  gantry crane and the rum-runner are modelled in code (`scripts/world/car_models.gd`, `props_1920s.gd`,
-  `harbour.gd`, `mesh_kit.gd`).
-- Country map plate (`assets/map/`): baked by `tools/map/build_map.py` from Natural Earth + USGS
-  GMTED2010 / NOAA ETOPO1 (public domain); IM Fell and Limelight fonts (SIL OFL), see `assets/map/LICENSE.txt`.
-- UI kit (paper, ledger, leather, telegram, Art Deco frames, stamps, wax seal, key caps, linocut icons,
-  engraved portraits): generated by `tools/ui/make_ui_art.py` for this game (CC0, `assets/ui/LICENSE.txt`).
-  Fonts: Limelight, Playfair Display, Courier Prime, IM Fell English SC / DW Pica, Rye (SIL OFL) and
-  Special Elite (Apache 2.0), licences in `assets/fonts/`.
-- Deliberately **not used**: Keep Rolling's *Low Poly Megapolis* city models (Unity Asset Store
-  licence; they can't sit in a public repository) and the Sketchfab fan model in Woods.
+- Fonts: Fraunces, Barlow, IM Fell, Limelight, Playfair, Special Elite, Courier Prime, Rye (SIL OFL / Apache, licences in `assets/fonts/` and `assets/map/`).
+- The UI kit art in `assets/ui` is generated by `tools/ui/make_ui_art.py`.

@@ -1,52 +1,45 @@
 class_name Crate
-extends Node3D
-## A crate of bootleg whisky on the ground (or a bundle of dropped cash). Picked up with E.
-
-static var _mat: StandardMaterial3D
-static var _cash_mat: StandardMaterial3D
+extends Node2D
+## A crate of bootleg whisky on the ground, or a bundle of dropped cash. Picked up with E.
 
 var item_id := 0
 var kind := "crate"
 var amount := 0
-
-
-static func material() -> StandardMaterial3D:
-	if _mat == null:
-		_mat = StandardMaterial3D.new()
-		_mat.albedo_texture = load("res://assets/textures/planks_albedo.jpg")
-		_mat.albedo_color = Color(0.85, 0.7, 0.5)
-		_mat.uv1_scale = Vector3(0.6, 0.6, 0.6)
-		_mat.roughness = 0.9
-	return _mat
+var _t := 0.0
 
 
 func setup(id: int, k: String, amt: int) -> void:
 	item_id = id
 	kind = k
 	amount = amt
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	if kind == "crate":
-		bm.size = Vector3(0.62, 0.45, 0.5)
-		mi.material_override = material()
-		mi.position.y = 0.225
-	else:
-		bm.size = Vector3(0.22, 0.08, 0.12)
-		if _cash_mat == null:
-			_cash_mat = StandardMaterial3D.new()
-			_cash_mat.albedo_color = Color("5e8a4e")
-			_cash_mat.emission_enabled = true
-			_cash_mat.emission = Color("2a4a20")
-		mi.material_override = _cash_mat
-		mi.position.y = 0.05
-	mi.mesh = bm
-	add_child(mi)
+	z_index = W.Z_ITEMS
+	rotation = Draw.hash01(id, 7) * 0.6 - 0.3
+	queue_redraw()
+
+
+func _process(delta: float) -> void:
 	if kind == "cash":
-		var l := Label3D.new()
-		l.text = "$%d" % amount
-		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		l.font_size = 40
-		l.outline_size = 10
-		l.modulate = Color("b8e0a0")
-		l.position.y = 0.6
-		add_child(l)
+		_t += delta
+		queue_redraw()
+
+
+func _draw() -> void:
+	var s := W.M
+	if kind == "crate":
+		var r := Rect2(Vector2(-0.31, -0.25) * s, Vector2(0.62, 0.5) * s)
+		Draw.rect(self, Rect2(r.position + Vector2(4, 5), r.size), Pal.SHADOW)
+		Draw.rect(self, r, Color("8a6a44"), true)
+		for k in 4:
+			var y := r.position.y + (k + 0.5) * r.size.y / 4.0
+			draw_line(Vector2(r.position.x + 2, y), Vector2(r.end.x - 2, y), Color("6a4e30"), 1.0)
+		draw_rect(r, Color("4e3822"), false, 2.0)
+		draw_line(r.position, r.end, Color("5e4428"), 2.0)
+		Draw.text(self, Vector2(0, 4), "XXX", 11, Color("2a1c10"), W.font("cond"), HORIZONTAL_ALIGNMENT_CENTER)
+	else:
+		var bob := sin(_t * 3.0) * 1.5
+		var r := Rect2(Vector2(-0.16, -0.08) * s + Vector2(0, bob), Vector2(0.32, 0.16) * s)
+		Draw.rect(self, Rect2(r.position + Vector2(3, 4 - bob), r.size), Pal.SHADOW)
+		Draw.rect(self, r, Color("6e9a5a"), true)
+		draw_rect(r.grow(-2.5), Color("4e7a40"), false, 1.0)
+		draw_line(Vector2(0, r.position.y), Vector2(0, r.end.y), Color("c9b36a"), 2.0)
+		Draw.text(self, Vector2(0, r.position.y - 6), "$%d" % amount, 16, Color("d8f0c0"), W.font("cond"), HORIZONTAL_ALIGNMENT_CENTER, -1, 5)

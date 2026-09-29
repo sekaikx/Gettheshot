@@ -1,5 +1,0 @@
-belgian_block_*: "Cobblestone Floor 05" from Poly Haven (https://polyhaven.com/a/cobblestone_floor_05),
-CC0 1.0 (public domain).
-
-wall_ads.jpg: made for this game by gen_wall_ads.py (in this folder) with the OFL fonts in
-../fonts/signs; released CC0. Every brand on it is invented.

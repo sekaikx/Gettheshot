@@ -29,7 +29,7 @@ const FIT_MARGIN := 120.0
 const FIT_STEP := 0.25
 const EARTH_RADIUS_MILES := 3958.8
 
-const TEXTURE_PATH := "res://assets/map/country_map.png"
+const TEXTURE_PATH := "res://assets/map/country_map.jpg"
 const TEXTURE_SMALL_PATH := "res://assets/map/country_map_small.png"   # 1800x1125, same UVs
 ## Rails, mother-ship lanes, the 12-mile limit and river-following route geometry as lat/lon lists.
 const LINES_PATH := "res://assets/map/map_lines.json"
