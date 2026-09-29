@@ -37,6 +37,7 @@ var _page := ""
 var _scene: MenuTitleScene
 var _scrim: ColorRect
 var _items: VBoxContainer
+var _home_col: VBoxContainer
 var _frame: PanelContainer
 var _pages := {}
 var _page_first := {}
@@ -125,19 +126,21 @@ func _process(delta: float) -> void:
 func _fit(c: Control, margin: Vector2) -> void:
 	if c == null or not c.visible:
 		return
-	var need := c.get_combined_minimum_size()
 	if c == _main:
-		need = Vector2(_main_min_w(), (_main.get_child(0) as Control).get_combined_minimum_size().y)
+		# the title column: left side, centred vertically, shrunk to fit
+		var need_h := _home_col.get_combined_minimum_size()
+		var s_h := minf(1.0, minf((size.y - 70.0) / need_h.y, (size.x - 60.0) / (need_h.x + 112.0)))
+		_home_col.size = need_h
+		_home_col.scale = Vector2(s_h, s_h)
+		_home_col.position = Vector2(roundf(112.0 * minf(1.0, size.x / 1600.0)), roundf((size.y - need_h.y * s_h) * 0.5))
+		return
+	var need := c.get_combined_minimum_size()
 	var avail := size - margin * 2.0
 	if need.x <= 0 or need.y <= 0:
 		return
 	var s := minf(1.0, minf(avail.x / need.x, avail.y / need.y))
-	c.pivot_offset = c.size * 0.5 if c != _main else Vector2(0, c.size.y * 0.5)
+	c.pivot_offset = c.size * 0.5
 	c.scale = Vector2(s, s)
-
-
-func _main_min_w() -> float:
-	return 700.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -178,17 +181,13 @@ func _back() -> void:
 # ------------------------------------------------------------------ building: the title
 
 func _build_home() -> void:
-	_main = MarginContainer.new()
+	_main = Control.new()
 	_main.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_main.add_theme_constant_override("margin_left", 112)
-	_main.add_theme_constant_override("margin_top", 70)
-	_main.add_theme_constant_override("margin_bottom", 56)
 	_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_main)
-	var col := VBoxContainer.new()
+	_home_col = VBoxContainer.new()
+	var col := _home_col
 	col.add_theme_constant_override("separation", 0)
-	col.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_main.add_child(col)
 	col.add_child(MenuLogo.new())
@@ -356,7 +355,7 @@ func _build_identity() -> void:
 	var ph := HBoxContainer.new()
 	ph.add_theme_constant_override("separation", 16)
 	prev.add_child(ph)
-	_seal = UiKit.wax_seal(Color(Names.FAMILY_COLORS[_color]), "V", 64)
+	_seal = MenuWidgets.Seal.new(Color(Names.FAMILY_COLORS[_color]), "V", 60)
 	ph.add_child(_seal)
 	var pv := VBoxContainer.new()
 	pv.add_theme_constant_override("separation", 0)
@@ -938,7 +937,7 @@ func _on_roster() -> void:
 		h.add_theme_constant_override("separation", 14)
 		row.add_child(h)
 		var fam_name := String(r.get("family_name", ""))
-		h.add_child(UiKit.wax_seal(col, fam_name.left(1).to_upper() if not joins else "", 48))
+		h.add_child(MenuWidgets.Seal.new(col, fam_name.left(1).to_upper() if not joins else "", 46))
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", -2)
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL

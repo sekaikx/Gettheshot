@@ -48,7 +48,7 @@ class TitleItem extends Button:
 		var h := size.y
 		var ease_k := _k * _k * (3.0 - 2.0 * _k)
 		if ease_k > 0.0:
-			Draw.hgrad(self, Rect2(0, 4, size.x, h - 8), Color(MenuStyle.GOLD, 0.26 * ease_k), Color(MenuStyle.GOLD, 0.0))
+			Draw.hgrad(self, Rect2(0, 4, minf(size.x, 600.0), h - 8), Color(MenuStyle.GOLD, 0.26 * ease_k), Color(MenuStyle.GOLD, 0.0))
 			draw_rect(Rect2(0, 4, 4, h - 8), Color(MenuStyle.GOLD2, ease_k))
 			var dc := Vector2(22 + 4 * ease_k, h * 0.5)
 			var d := 6.0 * ease_k
@@ -233,3 +233,45 @@ static func draw_key(ci: CanvasItem, r: Rect2, key: String, fs: int = 16) -> voi
 	var f := W.ui_font("cond")
 	var y := r.position.y + r.size.y * 0.5 + (f.get_ascent(fs) - f.get_descent(fs)) * 0.5
 	ci.draw_string(f, Vector2(r.position.x, y), key, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, Color("f2ead6"))
+
+
+## A family's wax seal: a blob of wax in the family colour with its initial pressed in, readable.
+class Seal extends Control:
+	var seal_color := Color("c42828"):
+		set(v):
+			seal_color = v
+			queue_redraw()
+	var letter := "":
+		set(v):
+			letter = v
+			queue_redraw()
+
+	func _init(c: Color = Color("c42828"), l: String = "", d: float = 56.0) -> void:
+		seal_color = c
+		letter = l
+		custom_minimum_size = Vector2(d, d)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var c := size * 0.5
+		var r := minf(size.x, size.y) * 0.5 - 2.0
+		var pts := PackedVector2Array()
+		for k in 28:
+			var a := TAU * k / 28.0
+			var rr := r * (0.93 + 0.07 * Draw.hash01(k, int(seal_color.r8), 5))
+			pts.append(c + Vector2(cos(a), sin(a)) * rr)
+		Draw.shadow(self, pts, Vector2(1.5, 2.5), Color(0, 0, 0, 0.28))
+		Draw.poly(self, pts, seal_color.darkened(0.18))
+		Draw.circle(self, c, r * 0.74, seal_color.darkened(0.32))
+		Draw.circle(self, c + Vector2(-0.8, -0.8), r * 0.7, seal_color)
+		draw_arc(c, r * 0.62, 0, TAU, 32, Color(seal_color.lightened(0.35), 0.6), 1.2, true)
+		Draw.ellipse(self, c + Vector2(-r * 0.38, -r * 0.45), Vector2(r * 0.22, r * 0.12), Color(1, 1, 1, 0.22), -0.6)
+		if letter != "":
+			var f := W.ui_font("deco")
+			var fs := int(r * 0.95)
+			var tw := f.get_string_size(letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			var p := Vector2(c.x - tw * 0.5, c.y + (f.get_ascent(fs) - f.get_descent(fs)) * 0.5)
+			var ink := Color("fbf3df") if seal_color.get_luminance() < 0.62 else Color("2a1a10")
+			draw_string(f, p + Vector2(1, 1.5), letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.35))
+			draw_string(f, p, letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)

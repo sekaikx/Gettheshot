@@ -163,13 +163,13 @@ func _walk() -> void:
 	_sidewalk(156, 250)
 	_road(250)
 	# the owner in his doorway, you walking up, your footsteps behind you
-	_person(Vector2(130, 178), PI * 0.5, Color("e8e0d0"), "", Color(0, 0, 0, 0), 1.25)
+	_person(Vector2(130, 206), PI * 0.3, Color("e8e0d0"), "", Color(0, 0, 0, 0), 1.25)
 	for k in 5:
-		var fp := Vector2(340 - k * 36, 232 - k * 6)
+		var fp := Vector2(370 - k * 34, 236 - k * 2)
 		Draw.ellipse(self, fp + Vector2(0, -4), Vector2(5, 3), Color(INK, 0.2 - k * 0.03))
 		Draw.ellipse(self, fp + Vector2(10, 4), Vector2(5, 3), Color(INK, 0.2 - k * 0.03))
-	_person(Vector2(178, 216), -2.3, Color("25262b"), "fedora", Color("c42828"), 1.25)
-	_bubble_key(Vector2(130, 158), "E", "Talk to the baker")
+	_person(Vector2(196, 226), -2.9, Color("25262b"), "fedora", Color("c42828"), 1.25)
+	_bubble_key(Vector2(130, 194), "E", "Talk to the baker")
 	# WASD
 	var k0 := Vector2(size.x - 124, size.y - 50)
 	MenuWidgets.draw_key(self, Rect2(k0 + Vector2(36, -34), Vector2(32, 30)), "W", 15)

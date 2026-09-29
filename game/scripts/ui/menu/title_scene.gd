@@ -33,6 +33,7 @@ var _beam: _Layer
 var _rain: _Layer
 var _front: _Layer
 var _tower_x := 800.0
+var _post_x := 0.0
 var _blds: Array = []          # {x, w, idx, floors, caffe}
 var _windows: Array = []       # {r: Rect2, per, ph, seed, bias, tint}
 var _shops: Array = []         # {r: Rect2 window, lit: bool, color}
@@ -159,6 +160,14 @@ func _plan() -> void:
 				bd = absf(px - _wd * 0.6)
 				best = px
 	_lamp = Vector2(best, 462)
+	# its post stands at the nearest party wall, so it hides no sign
+	_post_x = best - 70.0
+	var pd := INF
+	for b: Dictionary in _blds:
+		for e in [float(b["x"]), float(b["x"]) + float(b["w"])]:
+			if absf(e - best) < pd and absf(e - best) > 40.0:
+				pd = absf(e - best)
+				_post_x = e
 	# the Deco tower stands behind a low building, so it shows
 	_tower_x = _wd * 0.5
 	for b: Dictionary in _blds:
@@ -503,27 +512,42 @@ func _fire_escape(ci: CanvasItem, x: float, w: float, floors: int, gf: float, fh
 
 func _lamp_post(ci: CanvasItem) -> void:
 	var iron := Color(0.05, 0.05, 0.055)
-	var base := Vector2(_lamp.x - 70, CURB - 3)
+	var base := Vector2(_post_x, CURB - 3)
+	var dir := signf(_lamp.x - _post_x)
+	var top := _lamp.y - 30.0
 	# fluted post with a heavy base
 	Draw.poly(ci, PackedVector2Array([base + Vector2(-13, 0), base + Vector2(13, 0), base + Vector2(8, -30), base + Vector2(-8, -30)]), iron)
-	Draw.rect(ci, Rect2(base.x - 5, _lamp.y - 30, 10, base.y - 30 - _lamp.y + 30), iron)
+	Draw.rect(ci, Rect2(base.x - 5, top, 10, base.y - 30 - top), iron)
 	Draw.rect(ci, Rect2(base.x - 7, base.y - 60, 14, 6), iron)
-	# the crook
+	Draw.rect(ci, Rect2(base.x - 7, top + 40, 14, 5), iron)
+	# the crook: a curl over the top, then the arm out to the lantern
 	var pts := PackedVector2Array()
 	for k in 13:
 		var a := PI + PI * float(k) / 12.0
-		pts.append(Vector2(base.x + 35, _lamp.y - 30) + Vector2(cos(a), sin(a)) * 35.0)
+		pts.append(Vector2(base.x + 30 * dir + cos(a) * 30.0 * dir, top + sin(a) * 30.0))
 	ci.draw_polyline(pts, iron, 6.0, true)
-	ci.draw_line(Vector2(base.x + 70, _lamp.y - 30), Vector2(_lamp.x, _lamp.y - 16), iron, 4.0, true)
+	ci.draw_line(Vector2(base.x + 60 * dir, top), Vector2(_lamp.x + 4 * dir, top), iron, 4.0, true)
+	ci.draw_line(Vector2(_lamp.x, top), Vector2(_lamp.x, _lamp.y - 34), iron, 3.0, true)
+	# a scroll under the arm
+	ci.draw_line(Vector2(base.x, top + 30), Vector2(base.x + 40 * dir, top + 2), Color(iron, 0.9), 2.0, true)
+	# the lamp catches the wet iron on the side facing it
+	var rim := Color(0.62, 0.44, 0.26, 0.75)
+	ci.draw_line(Vector2(base.x + 4.5 * dir, top + 8), Vector2(base.x + 4.5 * dir, base.y - 34), rim, 1.5)
+	ci.draw_line(Vector2(base.x + 60 * dir, top - 2), Vector2(_lamp.x, top - 2), Color(rim, 0.5), 1.2)
+	var rp := PackedVector2Array()
+	for k in 7:
+		var a2 := PI * 1.5 + PI * 0.5 * float(k) / 6.0
+		rp.append(Vector2(base.x + 30 * dir + cos(a2) * 32.5 * dir, top + sin(a2) * 32.5))
+	ci.draw_polyline(rp, Color(rim, 0.6), 1.2, true)
 	# the lantern: a cap with a finial, four panes of glass, the bottom ring
 	var L := _lamp
-	Draw.poly(ci, PackedVector2Array([L + Vector2(-27, -18), L + Vector2(27, -18), L + Vector2(12, -34), L + Vector2(-12, -34)]), iron)
+	Draw.poly(ci, PackedVector2Array([L + Vector2(-22, -18), L + Vector2(22, -18), L + Vector2(10, -34), L + Vector2(-10, -34)]), iron)
 	Draw.circle(ci, L + Vector2(0, -37), 4.5, iron)
-	Draw.poly(ci, PackedVector2Array([L + Vector2(-21, -18), L + Vector2(21, -18), L + Vector2(14, 22), L + Vector2(-14, 22)]), Color(1.0, 0.86, 0.58))
+	Draw.poly(ci, PackedVector2Array([L + Vector2(-17, -18), L + Vector2(17, -18), L + Vector2(12, 22), L + Vector2(-12, 22)]), Color(1.0, 0.86, 0.58))
 	Draw.poly(ci, PackedVector2Array([L + Vector2(-9, -12), L + Vector2(9, -12), L + Vector2(6, 16), L + Vector2(-6, 16)]), Color(1.0, 0.97, 0.86))
 	ci.draw_line(L + Vector2(-7, -18), L + Vector2(-5, 22), Color(iron, 0.7), 2.0)
 	ci.draw_line(L + Vector2(7, -18), L + Vector2(5, 22), Color(iron, 0.7), 2.0)
-	Draw.rect(ci, Rect2(L.x - 17, L.y + 21, 34, 5), iron)
+	Draw.rect(ci, Rect2(L.x - 15, L.y + 21, 30, 5), iron)
 	Draw.poly(ci, PackedVector2Array([L + Vector2(-8, 26), L + Vector2(8, 26), L + Vector2(0, 36)]), iron)
 
 

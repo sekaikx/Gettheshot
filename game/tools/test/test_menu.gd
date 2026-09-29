@@ -3,11 +3,12 @@ extends Node
 ##   xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 --resolution 1600x900 --path game res://tools/test/test_menu.tscn -- --shot=/tmp/menu
 ## Saves <shot>_title.png, _new.png, _host.png, _friends.png, _join.png, _lobby.png, _client.png,
 ## _settings.png, _howto_1.png ... _howto_8.png. --only=title,new limits the list.
-## Nothing is saved to the player's profile or settings.
+## --scale=1.4 tries a UI size. Nothing is saved to the player's profile or settings.
 
 var menu: Control
 var prefix := "/tmp/menu"
 var only: PackedStringArray = []
+var scale := 0.0
 
 
 func _ready() -> void:
@@ -16,6 +17,8 @@ func _ready() -> void:
 			prefix = a.substr(7)
 		if a.begins_with("--only="):
 			only = a.substr(7).split(",")
+		if a.begins_with("--scale="):
+			scale = float(a.substr(8))
 	menu = load("res://scenes/main.tscn").instantiate()
 	add_child(menu)
 	_run.call_deferred()
@@ -38,6 +41,9 @@ func _want(shot_name: String) -> bool:
 
 func _run() -> void:
 	await _wait(30)
+	if scale > 0.0:
+		get_tree().root.content_scale_factor = scale
+		await _wait(4)
 	var scene: MenuTitleScene = menu.get("_scene")
 	if _want("title"):
 		scene.t = 10.4
@@ -60,6 +66,10 @@ func _run() -> void:
 	if _want("join"):
 		menu.call("_show_page", "join")
 		await _shot("join")
+	if _want("status"):
+		menu.call("_show_page", "join")
+		menu.call("_set_status", "Calling 192.168.1.20...")
+		await _shot("status")
 	if _want("lobby"):
 		Net.roster = {1: {"name": "Alex", "family_name": "Vitale", "color": "#c42828", "join": -1},
 			2: {"name": "Jess", "family_name": "O'Hara", "color": "#3ca05a", "join": -1},
