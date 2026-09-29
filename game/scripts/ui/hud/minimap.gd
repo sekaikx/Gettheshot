@@ -21,6 +21,9 @@ var waypoint := Vector2.INF
 var hold := false
 var _a := 1.0
 var _hover := false
+var _plan_id := -1
+var _blocks_m: Array[Rect2] = []
+var _lots_m: Array = []        # [Rect2 metres, kind colour, lot id]
 
 
 func _ready() -> void:
@@ -101,28 +104,19 @@ func _draw() -> void:
 		var pd: Dictionary = pier
 		_rect_m(Rect2(Vector2(float(pd["x0"]), float(pd["z0"])), Vector2(float(pd["x1"]) - float(pd["x0"]), float(pd["z1"]) - float(pd["z0"]))), center_m, sc, c, mr, UI.with_a(Color("6b5642"), a))
 	# blocks (sidewalks) and the buildings on them
+	_cache(plan)
 	var view := Rect2(center_m - Vector2(RADIUS_M, RADIUS_M) * 1.1, Vector2(RADIUS_M, RADIUS_M) * 2.2)
-	for blk in plan.blocks:
-		var br: Array = blk["rect"]
-		var rm := Rect2(Vector2(float(br[0]), float(br[1])), Vector2(float(br[2]) - float(br[0]), float(br[3]) - float(br[1])))
+	var walk := UI.with_a(Color("8f877a").darkened(0.35 + night * 0.25), a)
+	for rm in _blocks_m:
 		if rm.intersects(view):
-			_rect_m(rm, center_m, sc, c, mr, UI.with_a(Color("8f877a").darkened(0.35 + night * 0.25), a))
+			_rect_m(rm, center_m, sc, c, mr, walk)
 	var inside := int(world.get("inside_lot")) if world.get("inside_lot") != null else -1
-	for lot in plan.lots:
-		var ld: Dictionary = lot
-		var lr_px := W.lot_rect(ld)
-		var lr := Rect2(lr_px.position / W.M, lr_px.size / W.M)
+	for it in _lots_m:
+		var lr: Rect2 = it[0]
 		if not lr.intersects(view):
 			continue
-		var kind := String(ld["kind"])
-		var col := Color("4a403a")
-		if kind == "courtyard":
-			col = Color("4c4a38")
-		elif bool(ld.get("shop", false)) or kind in ["club", "poolhall", "precinct", "warehouse"]:
-			col = Color("5a4a40")
-		if int(ld["id"]) == inside:
-			col = Color("7a6450")
-		_rect_m(lr.grow(-0.4), center_m, sc, c, mr, UI.with_a(col.darkened(night * 0.3), a))
+		var col: Color = Color("7a6450") if int(it[2]) == inside else it[1]
+		_rect_m(lr, center_m, sc, c, mr, UI.with_a(col.darkened(night * 0.3), a))
 	# businesses: who they pay
 	var mine := UI.my_family()
 	for b in Game.biz:
@@ -225,6 +219,29 @@ func _draw() -> void:
 	draw_polyline(PackedVector2Array([arrow[0], arrow[1], arrow[2], arrow[3], arrow[0]]), UI.with_a(UI.fam_col(mine), a), 1.2, true)
 	_frame(outer, mr, a)
 	_plate(me, a)
+
+
+## The plan never changes during a game: its blocks and buildings in metres, worked out once.
+func _cache(plan: CityPlan) -> void:
+	var pid := plan.get_instance_id()
+	if pid == _plan_id:
+		return
+	_plan_id = pid
+	_blocks_m.clear()
+	_lots_m.clear()
+	for blk in plan.blocks:
+		var br: Array = blk["rect"]
+		_blocks_m.append(Rect2(Vector2(float(br[0]), float(br[1])), Vector2(float(br[2]) - float(br[0]), float(br[3]) - float(br[1]))))
+	for lot in plan.lots:
+		var ld: Dictionary = lot
+		var lr_px := W.lot_rect(ld)
+		var kind := String(ld["kind"])
+		var col := Color("4a403a")
+		if kind == "courtyard":
+			col = Color("4c4a38")
+		elif bool(ld.get("shop", false)) or kind in ["club", "poolhall", "precinct", "warehouse"]:
+			col = Color("5a4a40")
+		_lots_m.append([Rect2(lr_px.position / W.M, lr_px.size / W.M).grow(-0.4), col, int(ld["id"])])
 
 
 ## A plan rectangle (metres) drawn clipped to the map.

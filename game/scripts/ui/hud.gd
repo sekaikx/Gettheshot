@@ -353,7 +353,8 @@ func show_place(title: String, sub: String) -> void:
 ## A waypoint on the street (Don's View sets it); Vector2.INF clears it.
 func set_waypoint(px: Vector2) -> void:
 	_waypoint = px
-	if px != Vector2.INF:
+	# Don's View says so itself while it's open
+	if px != Vector2.INF and not _map.visible:
 		toast("Waypoint set. Follow the flag.", "info")
 
 
@@ -612,6 +613,7 @@ func _process(delta: float) -> void:
 	_minimap.hold = talking
 	_marks.hidden_prompt = _modal != "" or in_jail()
 	_marks.hidden_meters = _modal != ""
+	_marks.hidden_goals = _modal != ""
 	_avoid()
 	var tg: Variant = _objective.get("target", Vector2.INF)
 	_marks.target = tg if tg is Vector2 else Vector2.INF
@@ -625,7 +627,8 @@ func _process(delta: float) -> void:
 	_minimap.waypoint = _waypoint
 	_jail.until = jail_until
 	# the toasts sit under the date (and the sit-down badge)
-	_toasts.position = Vector2(_last_size.x - 16 - Toasts.W_TOAST, 14 + _clock.used_height() + 10)
+	var ty := 14 + _clock.used_height() + 10
+	_toasts.position = Vector2(_last_size.x - 16 - Toasts.W_TOAST, lerpf(_toasts.position.y, ty, clampf(delta * 10.0, 0.0, 1.0)) if absf(_toasts.position.y - ty) < 200.0 else ty)
 	_mentor.position = Vector2(16, _last_size.y - 16 - 200 - _controls.strip_height() - 8)
 	if _paused and _modal not in ["menu", "help"]:
 		_set_paused(false)

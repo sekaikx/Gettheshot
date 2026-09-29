@@ -86,6 +86,15 @@ func _run() -> void:
 	if _want("meter"):
 		await _shot("meter")
 	hud.clear_meter("fear_test")
+	hud.set_prompt("Carrying a crate  ·  Q to drop it", me.position, "")
+	await _wait(0.4)
+	if _want("carry"):
+		await _shot("carry")
+	hud.set_prompt("Pick the lock of the back door", Vector2.INF, "E")
+	await _wait(0.4)
+	if _want("docked"):
+		await _shot("docked")
+	hud.set_prompt("")
 	# a shopkeeper conversation with the meter
 	Talk.world = world
 	shop["shake"] = 0
@@ -156,6 +165,13 @@ func _run() -> void:
 	await _wait(1.2)
 	if _want("goal2"):
 		await _shot("goal2")
+	hud.set_objective({"title": "Run off the O'Hara thugs", "detail": "Outside Adler's Provisions  ·  $120", "target": W.door(far)})
+	for t in [["You got the envelope: $90.", "money"], ["Tommy Marino is in a cell for 2 months.", "bad"], ["The Kaplan family says no.", "info"],
+			["The feds are watching you. Heat is at 70.", "warn"], ["Adler's Provisions pays you now.", "good"], ["The O'Hara family wants a sit-down.", "deal"]]:
+		hud.toast(String(t[0]), String(t[1]))
+	await _wait(1.0)
+	if _want("toasts"):
+		await _shot("toasts")
 	Game.clock = 0.74
 	world.set("weather", "rain")
 	await _wait(0.8)

@@ -26,6 +26,7 @@ var _mv := {}                     # id -> displayed value
 var _mflip := {}                  # id -> drawn under the person
 var _pflip := false
 var hidden_meters := false        # a panel or a conversation is open
+var hidden_goals := false
 
 
 func _ready() -> void:
@@ -77,8 +78,9 @@ func _draw() -> void:
 		else:
 			_pscreen = Vector2(area.x * 0.5, area.y - 150.0)
 		_pscreen_ok = true
-	_draw_goal(ct, z, target, false)
-	_draw_goal(ct, z, waypoint, true)
+	if not hidden_goals:
+		_draw_goal(ct, z, target, false)
+		_draw_goal(ct, z, waypoint, true)
 	if not hidden_meters:
 		for id in meters:
 			var m: Dictionary = meters[id]
