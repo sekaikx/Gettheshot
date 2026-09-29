@@ -185,6 +185,22 @@ func _build_home() -> void:
 	_main.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_main)
+	# a dark wash down the left so the menu reads over the lit shop signs
+	var wash := TextureRect.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(0.02, 0.02, 0.04, 0.82))
+	g.set_color(1, Color(0.02, 0.02, 0.04, 0.0))
+	g.add_point(0.55, Color(0.02, 0.02, 0.04, 0.62))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.width = 256
+	gt.height = 4
+	wash.texture = gt
+	wash.stretch_mode = TextureRect.STRETCH_SCALE
+	wash.anchor_bottom = 1.0
+	wash.anchor_right = 0.5
+	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_main.add_child(wash)
 	_home_col = VBoxContainer.new()
 	var col := _home_col
 	col.add_theme_constant_override("separation", 0)
