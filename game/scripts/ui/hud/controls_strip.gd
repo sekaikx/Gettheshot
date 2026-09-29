@@ -36,7 +36,7 @@ func strip_width() -> float:
 
 func _process(delta: float) -> void:
 	_t += delta
-	var want := 1.0 if (_t < SHOW and not hold) else 0.0
+	var want := 1.0 if (_t < SHOW and not hold and bool(Settings.get_value("show_controls", true))) else 0.0
 	var old := _a
 	_a = move_toward(_a, want, delta * (0.5 if want < 1.0 and not hold else 4.0))
 	if absf(_a - old) > 0.0001:

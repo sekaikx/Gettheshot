@@ -59,6 +59,7 @@ func _build() -> void:
 		if Store.has_bus("sfx"):
 			_rows.append({"id": "sfx", "text": "Sound effects", "sub": "", "icon": "", "kind": "slider", "key": ""})
 		_rows.append({"id": "fullscreen", "text": "Full screen", "sub": "", "icon": "", "kind": "toggle", "key": ""})
+		_rows.append({"id": "show_controls", "text": "Show the keys at the bottom", "sub": "", "icon": "", "kind": "toggle", "key": ""})
 		_rows.append({"id": "back", "text": "Back", "sub": "", "icon": "leave", "kind": "button", "key": "Esc"})
 	var h := 140.0 + _rows.size() * ROW + 20.0
 	_card = Rect2((size - Vector2(W_CARD, h)) * 0.5, Vector2(W_CARD, h))

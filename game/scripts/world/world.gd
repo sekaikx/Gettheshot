@@ -119,9 +119,7 @@ func _ready() -> void:
 	lighting = Lighting.new()
 	add_child(lighting)
 	lighting.setup(self)
-	lighting.add_static(ground.lights())
-	lighting.add_static(fronts.lights())
-	lighting.add_static(interiors.lights())
+	_add_static_lights()
 	weather_fx = Weather.new()
 	add_child(weather_fx)
 	weather_fx.setup(self)
@@ -2770,6 +2768,15 @@ func _fx(args: Array) -> void:
 			pass
 
 
+var _light_sig := ""
+
+
+func _add_static_lights() -> void:
+	lighting.add_static(ground.lights())
+	lighting.add_static(fronts.lights())
+	lighting.add_static(interiors.lights())
+
+
 func _on_game_notice(family: int, text: String, kind: String) -> void:
 	if Net.is_host():
 		Net.to_all("notice", [family, text, kind])
@@ -2779,6 +2786,15 @@ func _on_state_changed() -> void:
 	fronts.update_owners()
 	roofs.update_owners()
 	interiors.update_from_game()
+	# a shop padlocked, reopened or turned into a speakeasy: its windows light differently
+	var sig := ""
+	for b in Game.biz:
+		sig += "%d%d" % [1 if int(b["closed_until"]) >= Game.month else 0, 1 if b["speak"] else 0]
+	if sig != _light_sig:
+		if _light_sig != "":
+			lighting.clear_static()
+			_add_static_lights()
+		_light_sig = sig
 	_update_stacks()
 	if hud:
 		hud.refresh()

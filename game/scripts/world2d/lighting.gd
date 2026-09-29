@@ -79,8 +79,12 @@ func add_static(lights: Array) -> void:
 
 
 func clear_static() -> void:
+	var keep := {}
+	for s in _dyn.values():
+		keep[s] = true
 	for c in _root.get_children():
-		c.queue_free()
+		if not keep.has(c):
+			c.queue_free()
 	_flicker.clear()
 
 
