@@ -961,6 +961,10 @@ func _overview(ci: CanvasItem, r: Rect2, fid: int) -> void:
 	if men.is_empty():
 		Art.para(ci, Vector2(r.position.x, y), "Nobody's on the street for you. Hire muscle at a pool hall.", "sans", 16, Art.INK_SOFT, r.size.x, 21.0)
 		y += 44.0
+	# the families' colours, under your men, when there's room for both
+	var fams: Array = Game.families.filter(func(f: Dictionary) -> bool: return bool(f["alive"]) and int(f["id"]) != fid)
+	var fh := 34.0 + ceilf(fams.size() / 2.0) * 28.0
+	var show_fams := not fams.is_empty() and y + men.size() * 44.0 + fh <= r.end.y - 50.0
 	var room := int((r.end.y - 70.0 - y) / 44.0)
 	for k in mini(men.size(), maxi(0, room)):
 		var c: Dictionary = men[k]
@@ -981,6 +985,18 @@ func _overview(ci: CanvasItem, r: Rect2, fid: int) -> void:
 		y += 44.0
 	if men.size() > room and room >= 0:
 		Art.text(ci, Vector2(r.position.x, y + 14), "and %d more (Tab: the family book)" % (men.size() - maxi(0, room)), "fell", 15, Art.INK_SOFT)
+	if show_fams:
+		y += 8.0
+		Art.text(ci, Vector2(r.position.x, y + 14), "THE OTHER FAMILIES", "fell_sc", 17, Art.OXBLOOD)
+		y += 26.0
+		var colw := floorf(r.size.x * 0.5)
+		for k in fams.size():
+			var f: Dictionary = fams[k]
+			var oid := int(f["id"])
+			var at := Vector2(r.position.x + (k % 2) * colw, y + floorf(k / 2.0) * 28.0)
+			Art.crest(ci, at + Vector2(10, 12), 22.0, Art.fam_color(oid), "", false)
+			Art.text(ci, at + Vector2(28, 19), Art.fit(String(f["name"]), "semi", 16, colw - 70.0), "semi", 16, Art.INK)
+			Art.text_r(ci, Vector2(at.x + colw - 14.0, at.y + 19), "%d shops" % Game.shops_of(oid).size(), "sans", 14, Art.INK_SOFT)
 	Art.para(ci, Vector2(r.position.x, r.end.y - 44), "Click a shop to see who runs it, and to send your men.", "fell", 17, Art.INK_SOFT, r.size.x, 22.0)
 
 
