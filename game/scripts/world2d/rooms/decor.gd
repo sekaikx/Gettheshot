@@ -420,16 +420,6 @@ static func _fan(k: Kit, R: Rect2) -> void:
 	k.disc(Vector2.ZERO + k.lit * 1.5, 2.0, Pal.BRASS.lightened(0.4))
 
 
-static func _photos(k: Kit, R: Rect2, sd: int) -> void:
-	# framed photographs along the wall (seen edge-on from above: a row of frames)
-	var n := maxi(2, int(R.size.x / 16.0))
-	for j in n:
-		var x := R.position.x + (j + 0.5) * R.size.x / n
-		var w := 10.0 + (j % 2) * 3.0
-		k.rect(Rect2(x - w * 0.5, R.position.y - 1, w, R.size.y + 3), Pal.SIGN_GOLD.darkened(0.25) if j % 2 == 0 else Pal.SIGN_BLACK.lightened(0.1))
-	var _unused := sd
-
-
 static func _portrait(k: Kit, R: Rect2) -> void:
 	# the family portrait in a heavy gilt frame over the desk: the old Don seated, his sons standing
 	# behind him, painted dark and varnished. Drawn leaning off the wall so it reads from above.
@@ -625,13 +615,16 @@ static func lamp(k: Kit, l: Dictionary, glow: float) -> void:
 			k.disc(Vector2.ZERO, 4.0, Pal.AWNING_CREAM.lerp(warm, glow))
 		"billiard":
 			# the long green shade over the pool table
-			var r := Rect2(-16, -6, 32, 12)
-			k.shadow(r, 34.0, 0.14)
-			k.rrect(r, 5.0, Pal.FELT.darkened(0.05))
-			k.rrect(r.grow(-2.5), 3.5, Pal.FELT.lightened(0.14))
-			k.line(Vector2(-12, 0), Vector2(12, 0), Pal.BRASS, 1.5)
+			# two green enamel shades on a brass bar, hung low over the table
+			k.line(Vector2(-20, 0), Vector2(20, 0), Pal.BRASS.darkened(0.1), 2.5)
+			k.line(Vector2(-20, -1), Vector2(20, -1), Pal.BRASS.lightened(0.3), 1.0)
 			for sgn: float in [-1.0, 1.0]:
-				k.disc(Vector2(sgn * 8.0, 0), 2.2, Pal.AWNING_CREAM.lerp(warm, glow))
+				var c := Vector2(sgn * 12.0, 0)
+				k.shadow_disc(c, 7.0, 30.0, 0.16)
+				k.disc(c, 7.0, Pal.AWNING_COLORS[1].darkened(0.55))
+				k.disc(c + k.lit * 1.5, 5.2, Pal.AWNING_COLORS[1].darkened(0.2))
+				k.ring(c, 7.0, Pal.BRASS, 1.0)
+				k.disc(c, 1.8, Pal.BRASS.lightened(0.2))
 		"globe":
 			k.shadow_disc(Vector2.ZERO, 7.0, 34.0, 0.12)
 			k.disc(Vector2.ZERO, 7.0, Pal.AWNING_CREAM.darkened(0.05).lerp(warm, glow * 0.8))

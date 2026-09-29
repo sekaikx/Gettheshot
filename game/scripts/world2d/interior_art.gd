@@ -291,11 +291,11 @@ func _draw_bulbs(id: int) -> void:
 			"chandelier": r = 10.0
 			"speak": warm = Pal.LAMP.lerp(Pal.NEON_RED, 0.3)
 			"banker": r = 4.0
-			"billiard": r = 12.0
+			"billiard": r = 9.0
 		for j in 3:
 			g.draw_circle(p, r * (2.2 - j * 0.6), Color(warm, 0.08 + j * 0.06), true, -1.0, true)
 		if style == "billiard":
-			for sgn in [-1.0, 1.0]:
-				g.draw_circle(p + Vector2(sgn * 8.0, 0), 2.6, Color(1.0, 0.95, 0.8), true, -1.0, true)
+			for sgn: float in [-1.0, 1.0]:
+				g.draw_circle(p + Vector2(sgn * 12.0, 0), 3.0, Color(1.0, 0.95, 0.8), true, -1.0, true)
 		else:
 			g.draw_circle(p, r * 0.42, Color(1.0, 0.95, 0.8), true, -1.0, true)

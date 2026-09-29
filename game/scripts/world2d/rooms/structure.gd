@@ -111,11 +111,11 @@ static func _parquet(k: Kit, r: Rect2, s: int) -> void:
 						segs.append(Vector2(p.x, y))
 						segs.append(Vector2(p.x + sz.x, y))
 	for ix in nx + 1:
-		grid.append(Vector2(r.position.x + ix * q, r.position.y))
-		grid.append(Vector2(r.position.x + ix * q, r.end.y))
+		grid.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.position.y))
+		grid.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.end.y))
 	for iy in ny + 1:
-		grid.append(Vector2(r.position.x, r.position.y + iy * q))
-		grid.append(Vector2(r.end.x, r.position.y + iy * q))
+		grid.append(Vector2(r.position.x, minf(r.position.y + iy * q, r.end.y)))
+		grid.append(Vector2(r.end.x, minf(r.position.y + iy * q, r.end.y)))
 	k.lines(segs, base.darkened(0.3), 1.0)
 	k.lines(grid, base.darkened(0.42), 1.0)
 	# a dark border band
@@ -189,11 +189,11 @@ static func _checker(k: Kit, r: Rect2, a: Color, b: Color, s: int) -> void:
 				k.rect(Rect2(p, sz), a.darkened(0.05))
 	var segs := PackedVector2Array()
 	for ix in nx + 1:
-		segs.append(Vector2(r.position.x + ix * q, r.position.y))
-		segs.append(Vector2(r.position.x + ix * q, r.end.y))
+		segs.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.position.y))
+		segs.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.end.y))
 	for iy in ny + 1:
-		segs.append(Vector2(r.position.x, r.position.y + iy * q))
-		segs.append(Vector2(r.end.x, r.position.y + iy * q))
+		segs.append(Vector2(r.position.x, minf(r.position.y + iy * q, r.end.y)))
+		segs.append(Vector2(r.end.x, minf(r.position.y + iy * q, r.end.y)))
 	k.lines(segs, Color(a.darkened(0.35), 0.5), 1.0)
 
 
@@ -210,11 +210,11 @@ static func _tile(k: Kit, r: Rect2, base: Color, s: int, wet: bool, dusty: bool)
 				k.rect(Rect2(p, Vector2(minf(q, r.end.x - p.x), minf(q, r.end.y - p.y))), base.darkened(0.05 + 0.04 * (t - 0.78) * 5.0))
 	var segs := PackedVector2Array()
 	for ix in nx + 1:
-		segs.append(Vector2(r.position.x + ix * q, r.position.y))
-		segs.append(Vector2(r.position.x + ix * q, r.end.y))
+		segs.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.position.y))
+		segs.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.end.y))
 	for iy in ny + 1:
-		segs.append(Vector2(r.position.x, r.position.y + iy * q))
-		segs.append(Vector2(r.end.x, r.position.y + iy * q))
+		segs.append(Vector2(r.position.x, minf(r.position.y + iy * q, r.end.y)))
+		segs.append(Vector2(r.end.x, minf(r.position.y + iy * q, r.end.y)))
 	k.lines(segs, base.darkened(0.2), 1.0)
 	if wet:
 		for j in 5:
@@ -248,11 +248,11 @@ static func _lino(k: Kit, r: Rect2, a: Color, b: Color, s: int) -> void:
 		k.ellipse(c, rad, Color(b.darkened(0.2), 0.08), k.h(j, 4, s + 3) * PI)
 	var segs := PackedVector2Array()
 	for ix in nx + 1:
-		segs.append(Vector2(r.position.x + ix * q, r.position.y))
-		segs.append(Vector2(r.position.x + ix * q, r.end.y))
+		segs.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.position.y))
+		segs.append(Vector2(minf(r.position.x + ix * q, r.end.x), r.end.y))
 	for iy in ny + 1:
-		segs.append(Vector2(r.position.x, r.position.y + iy * q))
-		segs.append(Vector2(r.end.x, r.position.y + iy * q))
+		segs.append(Vector2(r.position.x, minf(r.position.y + iy * q, r.end.y)))
+		segs.append(Vector2(r.end.x, minf(r.position.y + iy * q, r.end.y)))
 	k.lines(segs, Color(b.darkened(0.3), 0.35), 1.0)
 
 

@@ -513,8 +513,8 @@ static func _trade(p: Plan, kind: String) -> Vector3:
 		p.lamp(0.0, mid)
 	p.lamp(0.0, (cb + sv0) * 0.5 + 0.1, "shade")
 	var norm: Dictionary = {
-		"bakery": {"L": ["oven", "oven"], "B": ["crates", "flour_sacks"], "P": ["crates", "barrel"], "T": ["rack", "proving_rack"]},
-		"butcher": {"L": ["icebox", "cold_room"], "B": ["table", "saw_bench"], "P": ["crates", "bone_barrel"], "T": ["table", "chop_block"]},
+		"bakery": {"L": ["oven", "oven"], "B": ["crates", "flour_sacks"], "P": ["crates", "barrel"], "T": ["rack", "proving_rack", "marble_slab"]},
+		"butcher": {"L": ["icebox", "cold_room"], "B": ["table", "saw_bench"], "P": ["crates", "bone_barrel"], "T": ["table", "chop_block", "barrel"]},
 		"grocer": {"L": ["shelf", "crate_shelf"], "B": ["crates", "potato_sacks"], "P": ["crates", "barrel"], "T": ["crates", "crates", "produce_crates"]},
 		"tailor": {"L": ["table", "sewing_bench"], "B": ["press", "steam_press"], "P": ["crates", "dummy_box"], "T": ["crates", "cloth_bales"]},
 		"barber": {"L": ["shelf", "towel_shelf"], "B": ["stove", "boiler"], "P": ["sink", "wash_basin"], "T": ["crates", "crates"]},
