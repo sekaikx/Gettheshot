@@ -198,7 +198,7 @@ func _rep_word(rep: int) -> String:
 		return "Respected"
 	if rep >= 20:
 		return "Known"
-	return "Nobody yet"
+	return "Unknown"
 
 
 ## The family's front page: the crest, the don, the numbers that matter.
@@ -214,7 +214,7 @@ func _family_front(f: Dictionary, men: int, cw: float) -> Dictionary:
 		if int(b["owned_by"]) != fid:
 			shops += 1
 	var stats := [["Men", str(men), "men"], ["Rackets", str(shops), "shop"], ["Heat", str(int(round(float(f["heat"])))), "heat"],
-		["Name", _rep_word(int(f["rep"])), "crown"]]
+		["Reputation", _rep_word(int(f["rep"])), "crown"]]
 	return _b(270.0, func(ci: Control, r: Rect2) -> void:
 		var c := Vector2(r.get_center().x, r.position.y + 64)
 		Art.ornament(ci, Vector2(c.x, c.y), r.size.x * 0.46, Color(Art.INK_SOFT, 0.5))
@@ -451,6 +451,9 @@ func _rackets(cw: float) -> Dictionary:
 			district = String(b["district"])
 			left.append(_district(district))
 		left.append(_shop_row(b, cw))
+	if shops.size() < 9:
+		left.append(_gap(8.0))
+		left.append(_note("Want more? Walk into a shop and offer the owner protection. A shop with a \"!\" needs a favor: do it, and he pays you.", cw, "bang"))
 	var pay_cops := Game.cops.filter(func(c: Dictionary) -> bool: return int(c["payroll"]) == fid).size()
 	var caps: Array = Game.captains.keys().filter(func(d: Variant) -> bool: return int(Game.captains[d]) == fid)
 	if pay_cops > 0 or not caps.is_empty():

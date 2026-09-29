@@ -109,12 +109,57 @@ func _ready() -> void:
 		book.call("_redraw_all")
 		await _frames(6)
 		_shot("book_hover")
+		# the keyboard: 3 (Heat), down twice, then the mouse clicks the Rivals tab
+		book.hits.hover = ""
+		_key(KEY_3)
+		await _frames(3)
+		_key(KEY_DOWN)
+		_key(KEY_DOWN)
+		await _frames(6)
+		_shot("book_keys")
+		print("book tab after keys: ", book.get("tab"), " focus: ", book.hits.focus)
+		var tabs: Array = book.lay["tabs"]
+		await _click((tabs[3] as Rect2).get_center())
+		await _frames(6)
+		print("book tab after click: ", book.get("tab"))
+		_key(KEY_PAGEDOWN)
+		_key(KEY_E)
+		await _frames(4)
+		_key(KEY_1)
+		await _frames(4)
+		# open a picker with the keyboard: find a Guard button, press Enter, go down, Esc
+		book.hits.focus = "o_%d_guard" % int(c["id"])
+		book.hits.keys = true
+		_key(KEY_ENTER)
+		await _frames(3)
+		_key(KEY_DOWN)
+		_key(KEY_DOWN)
+		await _frames(4)
+		_shot("book_picker_keys")
+		_key(KEY_ESCAPE)
+		await _frames(3)
+		print("picker closed: ", (book.get("picker") as Dictionary).is_empty())
 		book.visible = false
 	if only in ["", "map"]:
 		map.visible = true
 		map.call("open")
 		await _frames(12)
 		_shot("map")
+		# the keyboard: filter 2 (mine), E (next shop), then the mouse wheel and a drag
+		_key(KEY_2)
+		_key(KEY_E)
+		_key(KEY_E)
+		await _frames(6)
+		_shot("map_keys")
+		var fr: Rect2 = map.get("frame")
+		_wheel(fr.get_center(), true)
+		await _frames(2)
+		await _drag(fr.get_center(), fr.get_center() + Vector2(-120, 40))
+		_key(KEY_1)
+		_key(KEY_BACKSPACE)
+		map.call("_fit")
+		await _frames(4)
+		print("map filter: ", map.get("filter"), " sel: ", map.get("sel"), " zoom: ", map.get("zoom"))
 		if map.has_method("test_select"):
 			map.call("test_select")
 			await _frames(10)
@@ -123,6 +168,71 @@ func _ready() -> void:
 			await _frames(10)
 			_shot("map_zoom")
 	get_tree().quit()
+
+
+func _key(k: Key) -> void:
+	var e := InputEventKey.new()
+	e.keycode = k
+	e.pressed = true
+	Input.parse_input_event(e)
+	var u := InputEventKey.new()
+	u.keycode = k
+	u.pressed = false
+	Input.parse_input_event(u)
+	Input.flush_buffered_events()
+
+
+func _click(p: Vector2) -> void:
+	var m := InputEventMouseMotion.new()
+	m.position = p
+	m.global_position = p
+	Input.parse_input_event(m)
+	for pressed in [true, false]:
+		var b := InputEventMouseButton.new()
+		b.button_index = MOUSE_BUTTON_LEFT
+		b.pressed = pressed
+		b.position = p
+		b.global_position = p
+		Input.parse_input_event(b)
+		Input.flush_buffered_events()
+		await get_tree().process_frame
+
+
+func _wheel(p: Vector2, up: bool) -> void:
+	var b := InputEventMouseButton.new()
+	b.button_index = MOUSE_BUTTON_WHEEL_UP if up else MOUSE_BUTTON_WHEEL_DOWN
+	b.pressed = true
+	b.position = p
+	b.global_position = p
+	Input.parse_input_event(b)
+	Input.flush_buffered_events()
+
+
+func _drag(a: Vector2, b: Vector2) -> void:
+	var d := InputEventMouseButton.new()
+	d.button_index = MOUSE_BUTTON_LEFT
+	d.pressed = true
+	d.position = a
+	d.global_position = a
+	Input.parse_input_event(d)
+	for k in 6:
+		var m := InputEventMouseMotion.new()
+		var p := a.lerp(b, float(k + 1) / 6.0)
+		m.position = p
+		m.global_position = p
+		m.relative = (b - a) / 6.0
+		m.button_mask = MOUSE_BUTTON_MASK_LEFT
+		Input.parse_input_event(m)
+		Input.flush_buffered_events()
+		await get_tree().process_frame
+	var u := InputEventMouseButton.new()
+	u.button_index = MOUSE_BUTTON_LEFT
+	u.pressed = false
+	u.position = b
+	u.global_position = b
+	Input.parse_input_event(u)
+	Input.flush_buffered_events()
+	await get_tree().process_frame
 
 
 func _frames(n: int) -> void:
