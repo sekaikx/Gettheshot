@@ -218,28 +218,28 @@ static func lights(S: Dictionary) -> Array:
 	match kind:
 		"precinct":
 			for s: float in [-1.0, 1.0]:
-				out.append({"pos": xf * Vector2(s * 2.0, 1.28) * W.M, "r": 2.8 * W.M, "color": GLOBE, "e": 1.1, "shape": "round"})
-			out.append({"pos": xf * Vector2(0.0, 1.4) * W.M, "r": 2.2 * W.M, "color": Pal.WINDOW_WARM, "e": 0.45, "shape": "round"})
+				out.append({"pos": xf * (Vector2(s * 2.0, 1.28) * W.M), "r": 2.8 * W.M, "color": GLOBE, "e": 1.1, "shape": "round"})
+			out.append({"pos": xf * (Vector2(0.0, 1.4) * W.M), "r": 2.2 * W.M, "color": Pal.WINDOW_WARM, "e": 0.45, "shape": "round"})
 			return out
 		"warehouse":
-			out.append({"pos": xf * Vector2(0.0, 0.8) * W.M, "r": 4.0 * W.M, "color": Pal.LAMP, "e": 0.8, "shape": "round"})
+			out.append({"pos": xf * (Vector2(0.0, 0.8) * W.M), "r": 4.0 * W.M, "color": Pal.LAMP, "e": 0.8, "shape": "round"})
 			return out
 		"club":
-			out.append({"pos": xf * Vector2(0.0, 1.7) * W.M, "r": 2.8 * W.M, "color": Pal.LAMP, "e": 0.75, "shape": "round"})
+			out.append({"pos": xf * (Vector2(0.0, 1.7) * W.M), "r": 2.8 * W.M, "color": Pal.LAMP, "e": 0.75, "shape": "round"})
 			# lamps over the name board
 			for s: float in [-1.0, 1.0]:
-				out.append({"pos": xf * Vector2(s * (float(S["half"]) * 0.5), 0.9) * W.M, "r": 2.2 * W.M, "color": Pal.LAMP, "e": 0.55, "shape": "round"})
+				out.append({"pos": xf * (Vector2(s * (float(S["half"]) * 0.5), 0.9) * W.M), "r": 2.2 * W.M, "color": Pal.LAMP, "e": 0.55, "shape": "round"})
 	var aw := float(S["aw_half"]) if String(S["awning"]) in ["stripe", "solid"] else float(S["half"]) - 0.4
 	for s: float in [-1.0, 1.0]:
 		# the display window's glow falls out past the awning onto the slabs
 		var u := s * (0.95 + aw) * 0.5
 		var rad := clampf((aw - 0.95) * 0.75, 1.4, 2.4)
-		out.append({"pos": xf * Vector2(u, 1.9) * W.M, "r": rad * W.M, "color": Pal.WINDOW_WARM, "e": 0.6, "shape": "round"})
-	out.append({"pos": xf * Vector2(0.0, 1.1) * W.M, "r": 1.6 * W.M, "color": Pal.WINDOW_WARM, "e": 0.3, "shape": "round"})
+		out.append({"pos": xf * (Vector2(u, 1.9) * W.M), "r": rad * W.M, "color": Pal.WINDOW_WARM, "e": 0.6, "shape": "round"})
+	out.append({"pos": xf * (Vector2(0.0, 1.1) * W.M), "r": 1.6 * W.M, "color": Pal.WINDOW_WARM, "e": 0.3, "shape": "round"})
 	if String(S["neon"]) != "":
-		out.append({"pos": xf * Vector2(0.0, 1.4) * W.M, "r": 2.6 * W.M, "color": Pal.NEON_RED, "e": 0.55, "shape": "round", "flicker": true})
+		out.append({"pos": xf * (Vector2(0.0, 1.4) * W.M), "r": 2.6 * W.M, "color": Pal.NEON_RED, "e": 0.55, "shape": "round", "flicker": true})
 	if String(S["marquee"]) != "":
-		out.append({"pos": xf * Vector2(0.0, 1.2) * W.M, "r": 3.0 * W.M, "color": Pal.LAMP, "e": 0.7, "shape": "round"})
+		out.append({"pos": xf * (Vector2(0.0, 1.2) * W.M), "r": 3.0 * W.M, "color": Pal.LAMP, "e": 0.7, "shape": "round"})
 	if bool(S["speak"]):
 		for it in S["items"]:
 			if it["slot"] == "b":
@@ -308,7 +308,7 @@ static func paint_ground(ci: CanvasItem, S: Dictionary) -> void:
 		Items.paint(ci, S, t, rr, W.rng(int(S["seed"]) + (1 if it["slot"] == "a" else 2)))
 		if bool(S["summer"]) and t in ["cafe_table", "rest_table"]:
 			var c := rr.get_center()
-			var rad := minf(M(1.0), rr.size.x * 0.5 + M(0.25))
+			var rad := minf(M(0.95), rr.size.x * 0.5 + M(0.1))
 			FX.soft_circle(ci, c + Items.sh(S, 2.2), rad, 0.2)
 
 
@@ -622,7 +622,16 @@ static func _awning(ci: CanvasItem, S: Dictionary) -> void:
 static func _rolled_awning(ci: CanvasItem, S: Dictionary) -> void:
 	var a := M(float(S["aw_half"]))
 	var col: Color = S["col"]
-	var r := Rect2(Vector2(-a, M(CORN - 0.02)), Vector2(a * 2.0, M(0.2)))
+	# the steel shutter pulled down over the whole front: its ribbed foot on the slabs
+	var half := M(float(S["half"]) - 0.2)
+	var sh := Rect2(Vector2(-half, M(CORN - 0.04)), Vector2(half * 2.0, M(0.16)))
+	Draw.rect(ci, sh, Color("4a4c4e"))
+	var x0 := -half
+	while x0 < half:
+		ci.draw_line(Vector2(x0, sh.position.y), Vector2(x0, sh.end.y), Color("6a6c6e"), 1.0)
+		x0 += 4.0
+	ci.draw_line(Vector2(-half, sh.end.y), Vector2(half, sh.end.y), Color("2a2a2c"), 2.0)
+	var r := Rect2(Vector2(-a, M(CORN + 0.1)), Vector2(a * 2.0, M(0.2)))
 	Items.shadow_rect(ci, S, r, 0.5, 0.25)
 	var sw := M(float(S["stripe"]))
 	var x := -a
@@ -638,9 +647,15 @@ static func _rolled_awning(ci: CanvasItem, S: Dictionary) -> void:
 	ci.draw_rect(r, Color(0, 0, 0, 0.35), false, 1.0)
 
 
+## A line's height in a block of text, as a fraction top to bottom in the world (the frame of a
+## north-facing shop is upside down).
+static func _line(S: Dictionary, frac: float) -> float:
+	return frac if float(S["sgn"]) > 0.0 else 1.0 - frac
+
+
 ## The notice pasted over the door of a padlocked shop.
 static func _notice(ci: CanvasItem, S: Dictionary) -> void:
-	var r := Rect2(Vector2(-0.82, CORN + 0.2) * W.M, Vector2(1.64, 0.82) * W.M)
+	var r := Rect2(Vector2(-0.82, CORN + 0.3) * W.M, Vector2(1.64, 0.8) * W.M)
 	if String(S["kind"]) == "club":
 		r.position.y = M(0.95)
 	Items.shadow_rect(ci, S, r, 0.3, 0.3)
@@ -649,9 +664,9 @@ static func _notice(ci: CanvasItem, S: Dictionary) -> void:
 	ci.draw_rect(r.grow(-2.5), Color("8a2a22"), false, 1.5)
 	var cond := W.font("cond")
 	var serif := W.font("serif")
-	text(ci, S, r.position + Vector2(r.size.x * 0.5, r.size.y * 0.32), "CLOSED", FX.fit(cond, "CLOSED", r.size.x - 10.0, 20, 9), Color("8a2a22"), cond)
-	text(ci, S, r.position + Vector2(r.size.x * 0.5, r.size.y * 0.62), "BY ORDER", FX.fit(cond, "BY ORDER", r.size.x - 14.0, 13, 8), Pal.SIGN_BLACK, cond)
-	text(ci, S, r.position + Vector2(r.size.x * 0.5, r.size.y * 0.84), "U.S. Prohibition Agent", FX.fit(serif, "U.S. Prohibition Agent", r.size.x - 12.0, 8, 6), Color(0.2, 0.18, 0.15, 0.8), serif)
+	text(ci, S, r.position + Vector2(r.size.x * 0.5, r.size.y * _line(S, 0.32)), "CLOSED", FX.fit(cond, "CLOSED", r.size.x - 10.0, 20, 9), Color("8a2a22"), cond)
+	text(ci, S, r.position + Vector2(r.size.x * 0.5, r.size.y * _line(S, 0.62)), "BY ORDER", FX.fit(cond, "BY ORDER", r.size.x - 14.0, 13, 8), Pal.SIGN_BLACK, cond)
+	text(ci, S, r.position + Vector2(r.size.x * 0.5, r.size.y * _line(S, 0.84)), "U.S. Prohibition Agent", FX.fit(serif, "U.S. Prohibition Agent", r.size.x - 12.0, 8, 6), Color(0.2, 0.18, 0.15, 0.8), serif)
 	# a red wax seal and the tape at the corners
 	Draw.circle(ci, r.position + Vector2(r.size.x - 8.0, r.size.y - 8.0), 4.0, Color("a8281e"))
 	for c in [r.position, r.position + Vector2(r.size.x, 0)]:
@@ -825,7 +840,7 @@ static func _bracket_sign(ci: CanvasItem, S: Dictionary, t: String, slot: Rect2,
 ## A café parasol in summer: eight gores of canvas, cream and the awning colour.
 static func _parasol(ci: CanvasItem, S: Dictionary, slot: Rect2, first: bool) -> void:
 	var c := slot.get_center()
-	var rad := minf(M(1.0), slot.size.x * 0.5 + M(0.25))
+	var rad := minf(M(0.95), slot.size.x * 0.5 + M(0.1))
 	var col: Color = S["col"]
 	var L := Items.lit(S)
 	var n := 8
