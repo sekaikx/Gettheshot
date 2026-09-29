@@ -455,6 +455,8 @@ static func _trade(p: Plan, kind: String) -> Vector3:
 			p.add("chair", iu - 0.9, dv0, iu, dv0 + 0.9, true, false, 0, "shine_stand", Vector2(-1, 0))
 			p.add("shelf", iu - 0.4, dv0 + 1.1, iu, dv1, true, true, 15, "shoe_rack", Vector2(-1, 0))
 			p.dec("leather", -iu + 0.1, dv0 + 1.75, -iu + 0.7, dv1)
+			p.dec("shoepile", -iu + 0.85, dv0 + 1.15, -iu + 1.5, dv0 + 1.75, Vector2(1, 0))
+			p.dec("paint", iu - 1.0, dv0 + 0.95, iu - 0.5, dv0 + 1.4, Vector2(-1, 0), {"style": "polish"})
 		"pawnshop":
 			p.add("display", -iu, dv0, -iu + 0.75, dv1, true, true, 35, "jewel_case", Vector2(1, 0))
 			p.add("shelf", iu - 0.4, dv0 - 0.3, iu, dv1 + 0.2, true, true, 30, "instruments", Vector2(-1, 0))
@@ -485,6 +487,8 @@ static func _trade(p: Plan, kind: String) -> Vector3:
 			p.add("crates", iu - 0.65, dv0 + 1.65, iu, dv1, true, false, 0, "hardware_barrels", Vector2(-1, 0))
 			p.dec("brooms", -iu + 0.55, dv1 - 0.1, -iu + 1.0, dv1 + 0.4)
 			p.dec("rope", iu - 1.2, dv1 - 0.15, iu - 0.7, dv1 + 0.35)
+			p.dec("paint", -iu + 0.55, dv0 + 0.1, -iu + 1.1, dv0 + 0.75, Vector2(1, 0))
+			p.dec("ladder", iu - 2.3, 0.9, iu - 0.9, 1.2, Vector2(0, -1))
 		"drugstore":
 			p.add("bar", -iu, dv0, -iu + 1.05, dv1, true, true, 20, "soda_fountain", Vector2(1, 0))
 			var sv2 := dv0 + 0.4

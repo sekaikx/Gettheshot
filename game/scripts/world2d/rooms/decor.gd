@@ -84,6 +84,9 @@ static func draw(k: Kit, d: Dictionary) -> void:
 		"smoke": _smoke(k, R, sd)
 		"beads": _beads(k, R, sd)
 		"chalk": _chalk(k, R)
+		"paint": _paint(k, R, st, sd)
+		"ladder": _ladder(k, R)
+		"shoepile": _shoepile(k, R, sd)
 		_: k.top(R, WOOD, 1.5)
 	k.reset()
 
@@ -579,6 +582,48 @@ static func _beads(k: Kit, R: Rect2, sd: int) -> void:
 			continue
 		var x := R.position.x + (j + 0.5) * R.size.x / n
 		k.disc(Vector2(x, 0), 1.6, Pal.AWNING_CREAM if j % 3 != 0 else Pal.SIGN_BLACK.lightened(0.2))
+
+
+static func _paint(k: Kit, R: Rect2, st: String, sd: int) -> void:
+	# a stack of paint cans (or tins of shoe polish), lids up
+	var r := 5.0 if st != "polish" else 3.2
+	var cols := [Pal.FLOOR_TILE_2, Pal.AWNING_COLORS[2].lightened(0.2), Pal.AWNING_CREAM, Pal.AWNING_COLORS[1].lightened(0.2), Pal.GOLD]
+	var nx := maxi(1, int(R.size.x / (r * 2.2)))
+	var ny := maxi(1, int(R.size.y / (r * 2.2)))
+	for j in ny:
+		for i in nx:
+			var c := R.position + Vector2((i + 0.5) * R.size.x / nx, (j + 0.5) * R.size.y / ny)
+			var col: Color = cols[(i + j * 2 + sd) % cols.size()]
+			if st == "polish":
+				k.ball(c, r, Pal.SIGN_BLACK.lightened(0.2), 2.0, 0.2)
+				k.disc(c, r * 0.6, col.darkened(0.2))
+			else:
+				G.can(k, c, r, col)
+				k.line(c + Vector2(-r * 0.7, -r * 0.2), c + Vector2(r * 0.7, -r * 0.2), Color(col.darkened(0.3), 0.8), 1.0)
+
+
+static func _ladder(k: Kit, R: Rect2) -> void:
+	# a wooden stepladder lying folded against the wall
+	var wood := Pal.ROPE.darkened(0.15)
+	k.shadow(R.grow(-1.0), 4.0, 0.2)
+	k.line(Vector2(R.position.x, R.position.y + 2), Vector2(R.end.x, R.position.y + 2), wood, 3.0)
+	k.line(Vector2(R.position.x, R.end.y - 2), Vector2(R.end.x, R.end.y - 2), wood, 3.0)
+	var n := maxi(3, int(R.size.x / 10.0))
+	for j in n:
+		var x := R.position.x + (j + 0.5) * R.size.x / n
+		k.line(Vector2(x, R.position.y + 2), Vector2(x, R.end.y - 2), wood.darkened(0.15), 2.0)
+
+
+static func _shoepile(k: Kit, R: Rect2, sd: int) -> void:
+	# a basket of shoes waiting to be mended, each with its paper ticket
+	var r := minf(R.size.x, R.size.y) * 0.48
+	k.ball(Vector2.ZERO, r, Pal.ROPE.darkened(0.2), 5.0, 0.08)
+	k.disc(Vector2.ZERO, r * 0.8, Pal.ROPE.darkened(0.4))
+	for j in 5:
+		var a := j * 1.3 + Draw.hash01(j, 1, sd)
+		var c := Vector2.from_angle(a) * r * 0.35
+		G.shoe(k, c, r * 0.7, a + 1.2, [Pal.LEATHER, Pal.SIGN_BLACK.lightened(0.15), Pal.RUST, Pal.LEATHER.lightened(0.15)][j % 4])
+	G.paper(k, Rect2(Vector2(r * 0.1, -r * 0.2), Vector2(6, 4)), 0.4, 1)
 
 
 static func _chalk(k: Kit, R: Rect2) -> void:

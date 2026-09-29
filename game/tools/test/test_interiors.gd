@@ -12,7 +12,7 @@ var art: InteriorArt
 var cam: Camera2D
 var dbg: Node2D
 var lots := {}           # kind -> [normal lot, broken lot, speak lot, closed lot]
-var rows_z := [0.0, 20.0, 40.0, 60.0]
+var rows_z := [0.0, 26.0, 52.0, 78.0]
 var col_x := {}          # kind -> x centre
 var show_debug := false
 
