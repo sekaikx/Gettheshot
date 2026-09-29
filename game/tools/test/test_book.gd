@@ -96,6 +96,14 @@ func _ready() -> void:
 			book.call("set_tab", k)
 			await _frames(12)
 			_shot("book_%s" % ["family", "rackets", "heat", "rivals", "money"][k])
+			# the next pages, when there are any
+			var pl: int = (book.call("_pages_of", "left") as Array).size()
+			var pr: int = (book.call("_pages_of", "right") as Array).size()
+			if pl > 1 or pr > 1:
+				book.call("turn", 1, "left")
+				book.call("turn", 1, "right")
+				await _frames(8)
+				_shot("book_%s_p2" % ["family", "rackets", "heat", "rivals", "money"][k])
 		# a picker open over the family page
 		book.call("set_tab", 0)
 		await _frames(4)

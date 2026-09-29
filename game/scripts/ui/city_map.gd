@@ -63,6 +63,7 @@ var _note_t := 0.0
 var _spots: Array = []        # [{id, pos (local px), r}] for picking businesses
 var _open_t := 1.0
 var _started := false
+var _rehover := 0             # the sheet moved under the mouse: find the shop under it again
 
 
 func _ready() -> void:
@@ -218,6 +219,7 @@ func zoom_at(screen: Vector2, f: float) -> void:
 
 
 func _moved_sheet() -> void:
+	_rehover = 3
 	_geo.queue_redraw()
 	_marks.queue_redraw()
 	_ui.queue_redraw()
@@ -627,7 +629,7 @@ func _draw_ui() -> void:
 		_fit()
 		_moved_sheet())
 	_compass(ci, Vector2(frame.end.x - 46, frame.end.y - 74))
-	_scale_bar(ci, Vector2(frame.end.x - 46, frame.end.y - 22))
+	_scale_bar(ci, Vector2(frame.end.x - 46, frame.end.y - 18))
 	_legend(ci, Vector2(frame.position.x, S.y - 22))
 	_panel(ci, fid)
 	# the close button, over the card
@@ -676,18 +678,23 @@ func _compass(ci: CanvasItem, c: Vector2) -> void:
 	Art.text_c(ci, c + Vector2(0, -r - 8.0), "N", "fell_sc", 16, Art.INK)
 
 
-## A scale bar, centred on c: 100 feet, or 50 when zoomed in far.
+## A scale bar, centred on c: a round number of feet that stays about 60-110 px long.
 func _scale_bar(ci: CanvasItem, c: Vector2) -> void:
-	var feet := 100 if zoom < 2.5 else 50
+	var feet := 25
+	for f in [25, 50, 100, 200, 500]:
+		feet = f
+		if f * 0.3048 * _scale() >= 60.0:
+			break
 	var w := feet * 0.3048 * _scale()
-	var r := Rect2(c - Vector2(w * 0.5 + 10, 16), Vector2(w + 20, 30))
-	Art.box(ci, r, Color(MAP_PAPER, 0.9), Color(Art.INK, 0.4), 1, 2)
+	c.x = minf(c.x, frame.end.x - 12.0 - w * 0.5 - 12.0)
+	var r := Rect2(c - Vector2(w * 0.5 + 12, 24), Vector2(w + 24, 36))
+	Art.box(ci, r, Color(MAP_PAPER, 0.92), Color(Art.INK, 0.4), 1, 2)
 	var bx := c.x - w * 0.5
-	var by := c.y + 2.0
+	var by := c.y + 1.0
 	for k in 4:
 		ci.draw_rect(Rect2(bx + k * w / 4.0, by, w / 4.0, 5), Art.INK if k % 2 == 0 else MAP_PAPER)
 	ci.draw_rect(Rect2(bx, by, w, 5), Art.INK, false, 1.0)
-	Art.text_c(ci, Vector2(c.x, by - 4.0), "%d feet" % feet, "fell", 14, Art.INK_SOFT)
+	Art.text_c(ci, Vector2(c.x, by - 8.0), "%d feet" % feet, "fell", 14, Art.INK_SOFT)
 
 
 func _legend(ci: CanvasItem, at: Vector2) -> void:
@@ -1145,6 +1152,15 @@ func _process(delta: float) -> void:
 		center += pan.normalized() * delta * 420.0 / _scale()
 		_clamp_center()
 		_moved_sheet()
+	# the sheet moved under a still mouse: the shop under it changed
+	if _rehover > 0:
+		_rehover -= 1
+	if _rehover == 1:
+		var nb := _pick(_mouse) if frame.has_point(_mouse) and hits.at(_mouse).is_empty() else -1
+		if nb != _hover:
+			_hover = nb
+			_marks.queue_redraw()
+			_ui.queue_redraw()
 	# people move: redraw the pins a few times a second (and the pulse on the selection)
 	if _tick <= 0.0:
 		_tick = 0.1

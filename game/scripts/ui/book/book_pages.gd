@@ -453,7 +453,7 @@ func _rackets(cw: float) -> Dictionary:
 		left.append(_shop_row(b, cw))
 	if shops.size() < 9:
 		left.append(_gap(8.0))
-		left.append(_note("Want more? Walk into a shop and offer the owner protection. A shop with a \"!\" needs a favor: do it, and he pays you.", cw, "bang"))
+		left.append(_note("Want more? Walk into a shop and offer the owner protection. Some owners need a favor (a gold ! on the map): do it, and he pays you.", cw, "bang"))
 	var pay_cops := Game.cops.filter(func(c: Dictionary) -> bool: return int(c["payroll"]) == fid).size()
 	var caps: Array = Game.captains.keys().filter(func(d: Variant) -> bool: return int(Game.captains[d]) == fid)
 	if pay_cops > 0 or not caps.is_empty():
@@ -491,12 +491,14 @@ func _shop_row(b: Dictionary, cw: float) -> Dictionary:
 		tags = ["%s · %s" % [b["address"], b["district"]], "Your headquarters"]
 	elif owned:
 		tags.append("Front: washes %s" % Art.money(int(b["launder"])))
-	if bool(b["speak"]):
-		tags.append("Speakeasy: %s" % _count(int(b["stock"]), "crate", "crates"))
 	if int(b["unpaid"]) > 0 and not owned:
-		red.append("Didn't pay")
+		red.append(["Didn't pay", Art.OXBLOOD])
 	if int(b["closed_until"]) >= Game.month:
-		red.append("Padlocked")
+		red.append(["Padlocked", Art.OXBLOOD])
+	var speak := ""
+	if bool(b["speak"]):
+		var st := int(b["stock"])
+		speak = "Speakeasy · %s" % (_count(st, "crate", "crates") if st > 0 else "no booze")
 	return _b(54.0, func(ci: Control, r: Rect2) -> void:
 		var x := r.position.x
 		var y := r.position.y
@@ -508,18 +510,26 @@ func _shop_row(b: Dictionary, cw: float) -> Dictionary:
 		var nx := x + 44.0
 		var name := "%s Social Club" % Game.fam(fid).get("name", "") if club else String(b["name"])
 		var room := r.size.x - 44.0 - 222.0
-		Art.text(ci, Vector2(nx, y + 22), Art.fit(name, "semi", 18, room), "semi", 18, Art.INK)
+		var sw := Art.text_w(speak, "cond", 15) + 12.0 if speak != "" else 0.0
+		var nw := minf(Art.text_w(name, "semi", 18), room - (sw + 10.0 if sw > 0.0 else 0.0))
+		Art.text(ci, Vector2(nx, y + 22), Art.fit(name, "semi", 18, nw + 1.0), "semi", 18, Art.INK)
+		if speak != "":
+			var sc := Color("7a5412") if int(b["stock"]) > 0 else Art.OXBLOOD
+			var srr := Rect2(nx + nw + 10.0, y + 7, sw, 19)
+			Art.box(ci, srr, Color(sc, 0.12), sc, 1, 3)
+			Art.text(ci, srr.position + Vector2(6, 15), speak, "cond", 15, sc)
 		var line := "  ·  ".join(tags)
 		var rw := 0.0
 		for t in red:
-			rw += Art.text_w(String(t), "cond", 15) + 18.0
+			rw += Art.text_w(String(t[0]), "cond", 15) + 18.0
 		var lw := minf(Art.text_w(line, "fell", 16), room - rw)
 		Art.text(ci, Vector2(nx, y + 43), Art.fit(line, "fell", 16, room - rw), "fell", 16, Art.INK_SOFT)
 		var tx := nx + lw + 10.0
 		for t in red:
-			var tw := Art.text_w(String(t), "cond", 15) + 12.0
-			Art.box(ci, Rect2(tx, y + 29, tw, 19), Color(Art.OXBLOOD, 0.12), Art.OXBLOOD, 1, 3)
-			Art.text(ci, Vector2(tx + 6, y + 44), String(t), "cond", 15, Art.OXBLOOD)
+			var tc: Color = t[1]
+			var tw := Art.text_w(String(t[0]), "cond", 15) + 12.0
+			Art.box(ci, Rect2(tx, y + 29, tw, 19), Color(tc, 0.12), tc, 1, 3)
+			Art.text(ci, Vector2(tx + 6, y + 44), String(t[0]), "cond", 15, tc)
 			tx += tw + 6.0
 		# what it brings
 		var amt := ""
@@ -621,11 +631,14 @@ func _gauge(heat: float, cw: float) -> Dictionary:
 		face.append(c + Vector2(R, 12))
 		face.append(c + Vector2(-R, 12))
 		Draw.poly(ci, face, Color("f6f0de"))
+		# the scale sweeps a little less than half a turn, so 0 and 100 sit clear of the needle
+		var a0 := PI + 0.2
+		var span := PI - 0.4
 		# the danger band from 70 to 100
-		ci.draw_arc(c, R - 16, PI + PI * 0.7, TAU, 24, Color(Art.OXBLOOD, 0.85), 16.0, true)
-		ci.draw_arc(c, R - 16, PI + PI * 0.4, PI + PI * 0.7, 18, Color("c9a54a", 0.55), 16.0, true)
+		ci.draw_arc(c, R - 16, a0 + span * 0.7, a0 + span, 24, Color(Art.OXBLOOD, 0.85), 16.0, true)
+		ci.draw_arc(c, R - 16, a0 + span * 0.4, a0 + span * 0.7, 18, Color("c9a54a", 0.55), 16.0, true)
 		for k in 21:
-			var a := PI + PI * k / 20.0
+			var a := a0 + span * k / 20.0
 			var d := Vector2(cos(a), sin(a))
 			var long := k % 2 == 0
 			ci.draw_line(c + d * (R - (30.0 if long else 26.0)), c + d * (R - 4.0), Art.INK, 2.0 if long else 1.0, true)
@@ -635,7 +648,7 @@ func _gauge(heat: float, cw: float) -> Dictionary:
 		Art.text_c(ci, c + Vector2(0, -R * 0.42), "HEAT", "fell_sc", 20, Art.INK_SOFT)
 		# the needle
 		var v := clampf(heat / 100.0, 0.0, 1.04)
-		var an := PI + PI * v
+		var an := a0 + span * v
 		var nd := Vector2(cos(an), sin(an))
 		var tip := c + nd * (R - 12.0)
 		Draw.poly(ci, PackedVector2Array([c + nd.orthogonal() * 6.0 + Vector2(3, 4), tip + Vector2(3, 4), c - nd.orthogonal() * 6.0 + Vector2(3, 4)]), Color(0, 0, 0, 0.2))
@@ -671,17 +684,21 @@ func _bullets(lines: Array, cw: float) -> Dictionary:
 
 ## The manila folder the file lives in, laid over the right page.
 func _folder(ci: Control, r: Rect2, fid: int) -> void:
+	var first := int(bk.get("page_r")) == 0
 	var fr := Rect2(r.position + Vector2(-18, 22), r.size + Vector2(36, -10))
+	if not first:
+		fr = Rect2(r.position + Vector2(-18, -6), r.size + Vector2(36, 18))
 	# the back cover, a little askew
 	ci.draw_set_transform(fr.get_center(), 0.012, Vector2.ONE)
 	var back := Rect2(-fr.size * 0.5 + Vector2(6, 4), fr.size)
 	Art.box(ci, Rect2(back.position + Vector2(4, 6), back.size), Color(0, 0, 0, 0.18), Color(0, 0, 0, 0), 0, 4)
 	Art.box(ci, back, Art.MANILA_DARK, Art.MANILA_DARK.darkened(0.2), 1, 4)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# the tab on top
-	var tabr := Rect2(fr.position + Vector2(24, -26), Vector2(300, 32))
-	Art.box(ci, tabr, Art.MANILA, Art.MANILA_DARK, 1, 6)
-	Art.typed(ci, tabr.position + Vector2(16, 22), "BUREAU OF INVESTIGATION", 17, Color("2a1c10"), 3)
+	# the tab on top (the first page only: the others are the same folder, further in)
+	if first:
+		var tabr := Rect2(fr.position + Vector2(24, -26), Vector2(300, 32))
+		Art.box(ci, tabr, Art.MANILA, Art.MANILA_DARK, 1, 6)
+		Art.typed(ci, tabr.position + Vector2(16, 22), "BUREAU OF INVESTIGATION", 17, Color("2a1c10"), 3)
 	Art.box(ci, Rect2(fr.position + Vector2(3, 5), fr.size), Color(0, 0, 0, 0.2), Color(0, 0, 0, 0), 0, 4)
 	Art.box(ci, fr, Art.MANILA, Art.MANILA_DARK, 1, 4)
 	var rng := W.rng(fid * 13 + 5)
@@ -850,7 +867,7 @@ func _family_card(o: Dictionary, cw: float) -> Dictionary:
 		var tx := x + 118.0
 		var tw := r.size.x - 118.0
 		var cw2 := Art.text_w(status, "cond", 16) + 20.0
-		Art.text(ci, Vector2(tx, y + 34), Art.fit("The %s Family" % name, "serif", 25, tw - cw2 - 10.0), "serif", 25, Art.INK)
+		Art.text(ci, Vector2(tx, y + 34), Art.fit("The %s Family" % name, "serif", 25, tw - cw2 - 10.0), "serif", 25, Art.INK if alive else Color(Art.INK, 0.55))
 		if alive:
 			var chip := Rect2(r.end.x - cw2, y + 14, cw2, 26)
 			if status == "No deal":
@@ -859,16 +876,17 @@ func _family_card(o: Dictionary, cw: float) -> Dictionary:
 			else:
 				Art.box(ci, chip, scol, scol.darkened(0.3), 1, 13)
 				Art.text(ci, chip.position + Vector2(10, 19), status, "cond", 16, Art.PAPER_LIGHT)
+		if not alive:
+			Art.text(ci, Vector2(tx, y + 60), Art.fit("Out of the game. Their shops are up for grabs.", "fell", 17, tw - 150.0), "fell", 17, Art.INK_SOFT)
+			Art.stamp(ci, Vector2(r.end.x - 78, y + 70), "FINISHED", Color(0.6, 0.1, 0.08, 0.8), 24, -0.12, oid)
+			ci.draw_line(Vector2(x, r.end.y - 6), Vector2(r.end.x, r.end.y - 6), Color(Art.INK_SOFT, 0.22), 1.0)
+			return
 		Art.text(ci, Vector2(tx, y + 60), Art.fit("%s  ·  %s" % [who, _word(o)], "fell", 17, tw), "fell", 17, Art.INK_SOFT)
 		Icons.draw(ci, "men", Vector2(tx + 10, y + 80), 18.0, Art.INK, Art.PAPER)
 		Art.text(ci, Vector2(tx + 26, y + 87), _count(men, "man", "men"), "cond", 19, Art.INK)
 		var sx := tx + 40.0 + Art.text_w(_count(men, "man", "men"), "cond", 19)
 		Icons.draw(ci, "shop", Vector2(sx + 10, y + 80), 18.0, Art.INK, Art.PAPER)
 		Art.text(ci, Vector2(sx + 26, y + 87), "%s pay them" % _count(shops, "shop", "shops"), "cond", 19, Art.INK)
-		if not alive:
-			Art.stamp(ci, Vector2(r.get_center().x + 40, y + 62), "FINISHED", Color(0.6, 0.1, 0.08, 0.8), 30, -0.12, oid)
-			ci.draw_line(Vector2(x, r.end.y - 6), Vector2(r.end.x, r.end.y - 6), Color(Art.INK_SOFT, 0.22), 1.0)
-			return
 		var third := Game.families.filter(func(t: Dictionary) -> bool: return bool(t["alive"]) and int(t["id"]) != fid and int(t["id"]) != oid)
 		var dirty := int(Game.fam(fid)["dirty"])
 		var specs := [
