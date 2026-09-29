@@ -60,6 +60,7 @@ func _ready() -> void:
 		[5.4, func() -> void: _shakedown()],
 		[7.0, func() -> void: _shot("shakedown")],
 		[7.2, func() -> void: _smash_more()],
+		[7.6, func() -> void: _rough_up()],
 		[8.0, func() -> void:
 			var b := Game.biz_by_id(_shop_id)
 			_checks["shakedown_result"] = int(b["protector"]) == 0 or int(b.get("snapped_until", -1)) >= Game.month
@@ -211,6 +212,16 @@ func _smash_more() -> void:
 		if bool(it["breakable"]) and not (b["broken"] as Array).has(int(it["id"])):
 			world.local_actor.place((it["rect"] as Rect2).get_center() + (lay["front"] as Vector2) * 0.9 * W.M, 0.0)
 			Net.to_host("smash", [_shop_id, it["id"]])
+
+
+## Still won't pay after his things are broken: rough him up, like a player would.
+func _rough_up() -> void:
+	var b := Game.biz_by_id(_shop_id)
+	var owner := world.actor("s%d" % _shop_id)
+	for i in 4:
+		if owner == null or int(b["protector"]) == 0 or int(b.get("shake", -1)) != 0 or owner.is_down():
+			return
+		world.melee(world.local_actor, owner)
 
 
 ## Buy the first warehouse on the quay (in person), a warehouse and the brewery in Chicago, a
