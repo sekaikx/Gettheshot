@@ -22,6 +22,16 @@ func show_place(title: String, sub: String) -> void:
 	queue_redraw()
 
 
+func is_showing() -> bool:
+	return _t < LIFE and _title != ""
+
+
+## Where the banner is on screen, while it shows.
+func banner_rect() -> Rect2:
+	var w := clampf(UI.tw(UI.font("deco"), _title, 36) + 160.0, 300.0, max_w)
+	return Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, 92.0))
+
+
 func _process(delta: float) -> void:
 	if _t < LIFE:
 		_t += delta

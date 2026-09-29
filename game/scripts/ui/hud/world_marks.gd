@@ -199,6 +199,10 @@ func _draw_goal(ct: Transform2D, z: float, tg: Vector2, is_wp: bool) -> void:
 		var head := sp + Vector2(0, -(18.0 * z + 10.0) - 30.0 + sin(t * 4.0) * 5.0)
 		if _pscreen_ok and _pscreen.distance_to(head) < 70.0:
 			return
+		# never under a HUD panel (the place banner, the money): the ring on the ground is enough
+		for r0 in avoid:
+			if r0.grow(16.0).has_point(head):
+				return
 		_chevron(head, col, is_wp)
 		return
 	# off screen: an arrow at the edge, pointing at it
@@ -217,7 +221,7 @@ func _draw_goal(ct: Transform2D, z: float, tg: Vector2, is_wp: bool) -> void:
 
 func _clear_of_panels(p: Vector2, inner: Rect2) -> Vector2:
 	for r0 in avoid:
-		var r := r0.grow(26.0)
+		var r := r0.grow(34.0)
 		if not r.has_point(p):
 			continue
 		var on_side := absf(p.x - inner.position.x) < 1.0 or absf(p.x - inner.end.x) < 1.0

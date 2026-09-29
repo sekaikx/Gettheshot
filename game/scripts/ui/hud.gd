@@ -245,7 +245,7 @@ func _layout() -> void:
 	_place.position = Vector2.ZERO
 	_place.size = Vector2(area.x, 130)
 	_place.max_w = clampf(area.x - 2.0 * (MoneyPanel.W_PANEL + 40.0), 360.0, 720.0)
-	_paper.mini_bottom = _minimap.position.y - 26.0
+	_paper.mini_bottom = _minimap.position.y - 40.0
 	_avoid()
 
 
@@ -259,6 +259,8 @@ func _avoid() -> void:
 		av.append(Rect2(_controls.position, Vector2(_controls.strip_width(), 30)))
 	if _mentor.is_showing():
 		av.append(_mentor.card_rect())
+	if _place.is_showing():
+		av.append(_place.banner_rect())
 	_marks.avoid = av
 
 
