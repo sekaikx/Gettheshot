@@ -100,6 +100,8 @@ Agent A is rebuilding the street as a **top-down 2D game** (GTA 1/2 / Hotline Mi
 
 *(newest first, one line per event: date, agent, what)*
 
+- 2026-09-29 · A · Plainer wording in `syndicate.gd` messages (small text-only edits; the file is still unclaimed).
+- 2026-09-29 · A · Merged B's UI kit (`ui_kit.gd`, `assets/ui`, fonts, `tools/ui`) and the map licences into this branch.
 - 2026-09-29 · A · Found B's merge on the default branch (3D art, UI kit, docks, map); wrote the request above. Fixed the
   review bugs in `world.gd`, `game.gd`, `rackets.gd`, `actor.gd`, `player_controller.gd` (tribute exploit, respawns,
   arrests, snap penalty, multiplayer carry/car/aim/clock). Builders are finishing interiors, shopfronts, cars, HUD, book, menu.
