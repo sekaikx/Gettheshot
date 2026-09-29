@@ -701,13 +701,13 @@ func _wire_sounds(n: Node) -> void:
 
 
 func _click() -> void:
-	if _ui_click and _ui_click.stream:
+	if _ui_click and is_instance_valid(_ui_click) and _ui_click.is_inside_tree() and _ui_click.stream:
 		_ui_click.play()
 	_tick_cd = 0.15
 
 
 func _on_focus_changed(_c: Control) -> void:
-	if _tick_cd <= 0.0 and _ui_tick and _ui_tick.stream and _t > 0.3:
+	if _tick_cd <= 0.0 and _ui_tick and is_instance_valid(_ui_tick) and _ui_tick.is_inside_tree() and _ui_tick.stream and _t > 0.3:
 		_ui_tick.play()
 		_tick_cd = 0.06
 
