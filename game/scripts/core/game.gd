@@ -411,6 +411,10 @@ func arrest_price(family: int) -> int:
 # ------------------------------------------------------------------ time
 
 func _process(delta: float) -> void:
+	if running and not over and not Net.is_host():
+		# clients run the clock too between the host's updates (the host's next state corrects it)
+		clock = minf(clock + delta / float(cfg["month_seconds"]), 0.999)
+		return
 	if not running or over or not Net.is_host():
 		return
 	_time += delta
