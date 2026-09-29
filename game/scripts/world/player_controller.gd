@@ -139,7 +139,7 @@ func _punch() -> void:
 	if _mouse_t > 0.0 and a.velocity == Vector2.ZERO:
 		_face_mouse()
 	a.person.action("punch")
-	Net.to_host("punch", [])
+	Net.to_host("punch", [a.yaw])
 
 
 func _shoot() -> void:
@@ -147,8 +147,10 @@ func _shoot() -> void:
 	if a == null or a.is_down() or world.local_vehicle or _shoot_cd > 0.0:
 		return
 	_shoot_cd = 0.8
+	if _mouse_t > 0.0 and a.velocity == Vector2.ZERO:
+		_face_mouse()
 	a.person.action("shoot")
-	Net.to_host("shoot", [])
+	Net.to_host("shoot", [a.yaw])
 
 
 func _use() -> void:

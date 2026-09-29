@@ -196,8 +196,9 @@ func hurt(dmg: float, from: Actor, lethal: bool = false) -> void:
 		scare(from.position if from else position, 8.0)
 	elif kind == "debtor":
 		scare(from.position if from else position, 4.0)
-	elif kind in ["crew", "cop", "recruit", "aiboss", "docker", "unionboss", "thug", "fed"] and from and from != self and attack_target == null:
-		attack_target = from
+	elif kind in ["crew", "cop", "recruit", "aiboss", "docker", "unionboss", "thug", "fed"] and from and from != self and attack_target == null \
+			and not (family >= 0 and from.family == family):
+		attack_target = from  # (a stray punch from his own family is shrugged off)
 	if kind == "shop" and from:
 		world.shopkeeper_hurt(self, from, hp <= 0.0)
 

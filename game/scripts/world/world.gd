@@ -1625,7 +1625,7 @@ func _send_pose() -> void:
 	var a := local_actor
 	var v := local_vehicle
 	var d := PackedFloat32Array([a.position.x, a.position.y, a.yaw, a.state, a.speed, 1.0 if a.carrying else 0.0,
-		1.0 if v else 0.0, v.position.x if v else 0.0, v.position.y if v else 0.0, v.yaw if v else 0.0])
+		1.0 if v else 0.0, v.position.x if v else 0.0, v.position.y if v else 0.0, v.yaw if v else 0.0, v.speed if v else 0.0])
 	Net.send_pose(d)
 
 
@@ -1635,9 +1635,10 @@ func _on_pose(peer: int, d: PackedFloat32Array) -> void:
 	var a := actor("p%d" % peer)
 	if a == null or a.down_t > 0.0:
 		return
-	a.net_update(Vector2(d[0], d[1]), d[2], int(d[3]), d[4], d[5] > 0.5)
+	# the host decides what he carries and whether he's in a car: only take the client's position
+	a.net_update(Vector2(d[0], d[1]), d[2], int(d[3]), d[4], a.carrying)
 	a.position = a.net_pos
-	a.hidden_in_car = d[6] > 0.5
+	a.hidden_in_car = d[6] > 0.5 and vehicles.values().any(func(v) -> bool: return (v as Vehicle).driver == peer)
 	a.visible = not a.hidden_in_car
 	if a.hidden_in_car:
 		for v in vehicles.values():
@@ -1647,9 +1648,17 @@ func _on_pose(peer: int, d: PackedFloat32Array) -> void:
 				ve.position = ve.net_pos
 				ve.rotation = d[9]
 				ve.yaw = d[9]
+				if d.size() > 10:
+					ve.speed = d[10]  # so the host can tell when he runs somebody over
 
 
 # ------------------------------------------------------------------ violence and the law (host)
+
+## A punch or a shot goes where the player aimed it on his screen, not where his last pose said.
+func _face(me: Actor, args: Array) -> void:
+	if not args.is_empty():
+		me.yaw = float(args[0])
+		me.person.rotation = me.yaw
 
 func melee(att: Actor, target: Actor) -> void:
 	if target == null or target.is_down():
@@ -1806,6 +1815,8 @@ func cop_caught(cop: Actor, target: Actor) -> void:
 	match target.kind:
 		"boss":
 			var peer := int(target.key.substr(1))
+			if arrests.has(peer):
+				return
 			arrests[peer] = cop.key
 			Net.to_peer(peer, "arrest", [cop.key, Game.arrest_price(target.family)])
 		"crew":
@@ -2029,6 +2040,7 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 		"act":
 			r = _act(peer, me, family, String(args[0]), int(args[1]), args[2] if args.size() > 2 else 0)
 		"punch":
+			_face(me, args)
 			var t := _in_front(me, 1.4 * W.M, 70.0)
 			if t:
 				melee(me, t)
@@ -2042,6 +2054,7 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 				r = {"ok": false, "msg": "No gun, or no bullets. Izzy sells both, in the back of the pawnshop."}
 			else:
 				Game.fired(peer, plan.district_at(me.position.x / W.M, me.position.y / W.M))
+				_face(me, args)
 				shoot(me)
 		"sic":
 			var t := actor(String(args[0]))
@@ -2078,7 +2091,9 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 			if v and v.position.distance_to(me.position) < 4.0 * W.M:
 				if v.family >= 0 and v.family != family and method == "truck_unload":
 					Game.aggression(family, v.family, 10)
-				if method == "truck_load" and me.carrying and v.load < v.max_load():
+				if method == "truck_load" and v.family >= 0 and v.family != family:
+					r = {"ok": false, "msg": "That's the %s family's truck. Load your own." % Game.fam(v.family).get("name", "")}
+				elif method == "truck_load" and me.carrying and v.load < v.max_load():
 					me.set_carry(false)
 					Net.to_peer(peer, "carry", [false])
 					v.set_load(v.load + 1)
@@ -2138,6 +2153,7 @@ func _on_request(peer: int, method: String, args: Array) -> void:
 				Net.to_peer(peer, "jailed", [cell.x, cell.y, 40.0])
 				r = {"ok": false, "msg": "Booked at the 14th Precinct. 40 seconds in a cell. They took everything in your wallet."}
 			elif choice == "run" and cop:
+				cop.knock_down(2.5)  # the shove: a head start
 				cop.chase = me
 				cop.chase_t = 25.0
 				Game.report_crime(family, 6.0, 0, true, plan.district_at(me.position.x / W.M, me.position.y / W.M))
@@ -2450,7 +2466,7 @@ func _act(peer: int, me: Actor, family: int, what: String, target: int, extra: V
 				n = 1
 			for v in vehicles.values():
 				var ve := v as Vehicle
-				if ve.family == family and ve.load > 0 and ve.position.distance_to(W.door(b)) < 9.0 * W.M:
+				if (ve.family == family or ve.family < 0) and ve.load > 0 and ve.position.distance_to(W.door(b)) < 9.0 * W.M:
 					n += ve.load
 					ve.set_load(0)
 			if n == 0:
@@ -2684,6 +2700,14 @@ func _on_event(ev_name: String, args: Array) -> void:
 			hud.show_final()
 		"left":
 			var a := actor("p%d" % int(args[0]))
+			if Net.is_host():
+				# his car is free again
+				for v in vehicles.values():
+					var ve := v as Vehicle
+					if ve.driver == int(args[0]):
+						ve.driver = 0
+						ve.speed = 0.0
+						ve.sim = true
 			if a and Net.is_host():
 				actors.erase(a.key)
 				a.queue_free()
