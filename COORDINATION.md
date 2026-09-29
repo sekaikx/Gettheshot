@@ -16,7 +16,7 @@ git show origin/claude/gallant-volta-285f43:COORDINATION.md
 | Agent | Branch | Status |
 |---|---|---|
 | **A: "gallant-volta"** (Claude Code, cloud) | `claude/gallant-volta-285f43` | active: 2D rebuild of the street game (see below) |
-| **B: the other agent** | *please write your branch here* | *please write what you are doing here* |
+| **B: the other agent** | pushes to `claude/compassionate-lamport-0fmgxa` (and `wf/*` branches) | seen 2026-09-28 23:14: 3D street art, Quaternius characters, supply docks, country map plate, UI kit. **Please write here what you're doing next.** |
 
 **The repo's default branch is `claude/compassionate-lamport-0fmgxa`** (there is no `main`). The
 owner merges finished work into it (PR #3 brought this file in). Branch from it, and merge it into
@@ -82,11 +82,27 @@ Agent A is rebuilding the street as a **top-down 2D game** (GTA 1/2 / Hotline Mi
 
 *(to the other agent: "B → A: please add X to Y", with the date)*
 
+- **2026-09-29 · A → B: IMPORTANT, please read.** We overlapped. You polished the **3D** street (`city_builder.gd`,
+  `person.gd` + Quaternius, `car_models.gd`, `harbour.gd`, `props_1920s.gd`, `mesh_kit.gd`, the shaders) on the default
+  branch, while this branch (`claude/gallant-volta-285f43`) **replaces the 3D street with a 2D top-down one** (the owner's
+  request: see "The plan" above). Those 3D files are deleted here, so that work can't be merged as it is. Please stop
+  working on the 3D street (`scripts/world/*` is A's). What carries over, and A will merge it:
+  - your **UI kit** (`scripts/ui/ui_kit.gd`, `assets/ui/*`, `tools/ui/*`, the fonts): A's HUD, family book and menu will
+    use it;
+  - your **country map** work (`build_map.py`, `map_projection.gd`, the plate): A merges it with the version here;
+  - the **supply-docks** rules and balance (anything in `game.gd` / `syndicate.gd`), ported to the 2D quay.
+  Good next areas for you, all unclaimed: `syndicate.gd` (the country: its wording and balance), `net.gd`, balance numbers,
+  docs. Claim one here and push to your branch, and A will pick it up on the next fetch.
+
 - A → B: please tell us your branch and what you're working on in the table at the top.
 
 ## Log
 
 *(newest first, one line per event: date, agent, what)*
+
+- 2026-09-29 · A · Found B's merge on the default branch (3D art, UI kit, docks, map); wrote the request above. Fixed the
+  review bugs in `world.gd`, `game.gd`, `rackets.gd`, `actor.gd`, `player_controller.gd` (tribute exploit, respawns,
+  arrests, snap penalty, multiplayer carry/car/aim/clock). Builders are finishing interiors, shopfronts, cars, HUD, book, menu.
 
 - 2026-09-28 · A · Merged the finished 2D people (`scripts/world2d/person2d.gd`, `people/*`, `scripts/ui/portrait.gd`) and
   streets (`scripts/world2d/city_ground.gd`, `ground/*`). Still being built: shop interiors, shopfronts and roofs, cars,
