@@ -93,7 +93,7 @@ func _init(k: String, body: Color, fam: Color, seed_value: int) -> void:
 				paint = [Color("4a1e22"), Color("1f3a2c"), Color("2a3450"), Color("5a4a36")][r.randi_range(0, 3)]
 				roof_col = paint
 	hat_col = Pal.SUITS[r.randi_range(0, Pal.SUITS.size() - 1)].lightened(0.2)
-	insert_col = roof_col.lerp(Color("2a2725"), 0.35)
+	insert_col = roof_col.lerp(Color("2a2725"), 0.25)
 	hat_band = [Color("1c1a18"), Color("3a2a22"), Color("2a2a38")][r.randi_range(0, 2)]
 	coat_col = Pal.SUITS[r.randi_range(0, Pal.SUITS.size() - 1)]
 	skin = Pal.SKIN[r.randi_range(0, 3)]
@@ -237,7 +237,7 @@ func draw_shadow(ci: CanvasItem, off: Vector2, strength: float, load_n: int) -> 
 	# one batch: the core, a soft skirt fading out round it, the dark ground right under the car
 	var bt := CarPaint.Batch.new()
 	var sh := Color(0.02, 0.02, 0.05, SHADOW_A * strength)
-	for poly in Geometry2D.offset_polygon(shape, -SHADOW_SOFT * 0.5, Geometry2D.JOIN_ROUND):
+	for poly in Geometry2D.offset_polygon(shape, -SHADOW_SOFT * 0.5, Geometry2D.JOIN_MITER):
 		if Geometry2D.is_polygon_clockwise(poly) != Geometry2D.is_polygon_clockwise(shape):
 			continue
 		bt.rings([CarPaint.grow(poly, SHADOW_SOFT * 2.0), poly], [CarPaint.alpha(sh, 0.0), sh])

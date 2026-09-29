@@ -90,7 +90,7 @@ static func _roof(p: CarPainter, ci: CanvasItem, L: Vector2, ro: Array, insert: 
 	CarPaint.panel(ci, roof, p.roof_col, L, 4.0, 0.22, 0.6)
 	var bright := p.roof_col.get_luminance() > 0.3
 	if insert:
-		var ir := p.rm(x0 + 0.24, x1 - 0.16, -hw + 0.13, hw - 0.13)
+		var ir := p.rm(x0 + 0.28, x1 - 0.18, -hw + 0.15, hw - 0.15)
 		var ins := CarPaint.rpoly(ir, 0.08 * M, 3)
 		CarPaint.flat(ci, ins, p.insert_col, L, 1.4, 0.4)
 		ci.draw_polyline(CarPaint.closed(CarPaint.inset(ins, -1.2)), CarPaint.alpha(CarPaint.SKY, 0.18), 0.8, true)

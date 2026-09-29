@@ -183,7 +183,8 @@ func _close() -> void:
 	_car(g, "touring", Vector2(140, -80), 0.0, 3)
 	_car(g, "truck", Vector2(-140, 80), 0.0, 2, 10, 1.0)
 	_car(g, "taxi", Vector2(140, 80), 0.0, 2, 0, -1.0)
-	await _snap(Vector2(0, 6000), 3.0, "cars_close")
+	_car(g, "police", Vector2(380, 0), deg_to_rad(-60.0), 5, 0, 0.8, 4.0)
+	await _snap(Vector2(60, 6000), 2.6, "cars_close")
 	await _clear(g)
 
 

@@ -89,11 +89,11 @@ static func grow(pts: PackedVector2Array, d: float) -> PackedVector2Array:
 		# outlines have runs of near-duplicate points that would throw the normal about)
 		var a := pts[i]
 		var b := pts[i]
-		for k in range(1, mini(6, n)):
+		for k in range(1, mini(16, n / 2)):
 			a = pts[(i - k + n) % n]
 			if a.distance_squared_to(pts[i]) > 4.0:
 				break
-		for k in range(1, mini(6, n)):
+		for k in range(1, mini(16, n / 2)):
 			b = pts[(i + k) % n]
 			if b.distance_squared_to(pts[i]) > 4.0:
 				break
