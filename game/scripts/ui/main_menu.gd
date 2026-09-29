@@ -1,171 +1,97 @@
 extends Control
-## Title screen: play solo against AI families, host a game for friends, join one, or continue
-## the saved campaign. Any number of players works: every player founds a family (or joins a
-## friend's as underboss), AI families fill the rest of the city.
+## The title screen: a rainy Little Italy night, FAMIGLIA, and six big choices. New game (solo
+## against AI families), Continue the saved campaign, Play with friends (host a table or join
+## one), How to play, Settings, Quit. Any number of players works: every player founds a family
+## (or joins a friend's as underboss), AI families fill the rest of the city.
+##
+## Command line (tests and tools/dev/mptest.sh depend on these):
+##   --autotest            start a solo game at once (short months, no tutorial)
+##   --autohost            host at once; start when --players=N (default 2) are in
+##   --autojoin=IP         join that host at once
+##   --name=X --family=Y   your name and family name
+## The profile (name, family, colour, address) is never saved during those runs.
 
-const GOLD2 := Color("f0d58a")
-const INK := Color("efe6d2")
-const MUTE := Color("9b907c")
+const PAGES := ["new", "friends", "join", "lobby", "settings", "howto"]
+const PACES := [90.0, 150.0, 240.0]
 
-var serif: FontVariation
-var cond: Font
 var _name: LineEdit
 var _fam: LineEdit
 var _color := 0
 var _swatches: Array[Button] = []
-var _rivals: SpinBox
-var _length: OptionButton
-var _pace: OptionButton
+var _rivals_n := 3
+var _length := 0             # 0: 1929 to 1933, 1: 1923 to 1933
+var _pace := 1               # Fast / Normal / Slow
+var _tutorial := true
 var _ip: LineEdit
-var _port: SpinBox
-var _join_mode: OptionButton
+var _port: LineEdit
+var _join_mode := 0          # 0: found my own family, 1: join the host's
 var _status: Label
-var _lobby: VBoxContainer
-var _lobby_list: Label
+var _status_box: PanelContainer
+var _lobby: VBoxContainer     # the roster rows
 var _start_btn: Button
-var _main: VBoxContainer
+var _leave_btn: Button
+var _main: Control            # the title and its menu
+var _host_mode := false
+var _page := ""
+
+var _scene: MenuTitleScene
+var _scrim: ColorRect
+var _items: VBoxContainer
+var _frame: PanelContainer
+var _pages := {}
+var _page_first := {}
+var _identity: VBoxContainer
+var _seal: Control
+var _fam_line: Label
+var _don_line: Label
+var _new_title: Label
+var _new_start: Button
+var _length_hint: Label
+var _pace_hint: Label
+var _lobby_title: Label
+var _lobby_side_host: Control
+var _lobby_side_client: Control
+var _lobby_addr: Label
+var _lobby_rules: Label
+var _wait_label: Label
+var _settings: MenuSettings
+var _howto: MenuHowTo
+var _music: AudioStreamPlayer
+var _rain: AudioStreamPlayer
+var _ui_tick: AudioStreamPlayer
+var _ui_click: AudioStreamPlayer
+var _tick_cd := 0.0
+var _t := 0.0
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	serif = FontVariation.new()
-	serif.base_font = load("res://assets/fonts/Fraunces-Variable.ttf")
-	serif.variation_opentype = {"wght": 700}
-	cond = load("res://assets/fonts/barlow-condensed-latin-700-normal.woff2")
-	theme = _theme()
+	Settings.load_and_apply()
 	var bg := ColorRect.new()
-	bg.color = Color("0b0907")
+	bg.color = Color("07080d")
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-	var art := TextureRect.new()
-	art.set_anchors_preset(Control.PRESET_FULL_RECT)
-	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art.modulate = Color(1, 1, 1, 0.35)
-	if ResourceLoader.exists("res://assets/ui/title.png"):
-		art.texture = load("res://assets/ui/title.png")
-	add_child(art)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 12)
-	col.custom_minimum_size = Vector2(620, 0)
-	center.add_child(col)
-	var title := Label.new()
-	title.text = "FAMIGLIA"
-	title.add_theme_font_override("font", serif)
-	title.add_theme_font_size_override("font_size", 96)
-	title.add_theme_color_override("font_color", Color("d4a532"))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(title)
-	var sub := _label("New York, 1923. Build your empire. Betray your friends.", 22, INK)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(sub)
-	_main = VBoxContainer.new()
-	_main.add_theme_constant_override("separation", 10)
-	col.add_child(_main)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	_name = _edit("Your name", _saved("name", "Alex"))
-	_fam = _edit("Family name", _saved("family", Names.FAMILY_NAMES[0]))
-	row.add_child(_labeled("YOUR NAME", _name))
-	row.add_child(_labeled("YOUR FAMILY", _fam))
-	_main.add_child(row)
-	var sw := HBoxContainer.new()
-	sw.add_theme_constant_override("separation", 6)
-	sw.add_child(_label("COLOURS", 14, MUTE))
-	_color = int(_saved("color", "0"))
-	for k in Names.FAMILY_COLORS.size():
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(40, 30)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(Names.FAMILY_COLORS[k])
-		b.add_theme_stylebox_override("normal", sb)
-		var sbh := sb.duplicate() as StyleBoxFlat
-		sbh.set_border_width_all(3)
-		sbh.border_color = Color.WHITE
-		b.add_theme_stylebox_override("hover", sbh)
-		b.add_theme_stylebox_override("pressed", sbh)
-		b.toggle_mode = true
-		b.button_pressed = k == _color
-		var kk := k
-		b.pressed.connect(func() -> void:
-			_color = kk
-			for s in _swatches: s.button_pressed = s == _swatches[kk])
-		_swatches.append(b)
-		sw.add_child(b)
-	_main.add_child(sw)
-	var setup := HBoxContainer.new()
-	setup.add_theme_constant_override("separation", 10)
-	_rivals = SpinBox.new()
-	_rivals.min_value = 1
-	_rivals.max_value = 7
-	_rivals.value = 3
-	setup.add_child(_labeled("AI FAMILIES", _rivals))
-	_length = OptionButton.new()
-	_length.add_item("1929 to 1933: the Crash and Repeal")
-	_length.add_item("1923 to 1933: all of Prohibition")
-	setup.add_child(_labeled("CAMPAIGN", _length))
-	_pace = OptionButton.new()
-	for t in ["A month is 1.5 minutes", "A month is 2.5 minutes", "A month is 4 minutes"]:
-		_pace.add_item(t)
-	_pace.select(1)
-	setup.add_child(_labeled("PACE", _pace))
-	_main.add_child(setup)
-	var solo := _button("PLAY SOLO", _play_solo)
-	_main.add_child(solo)
-	var cont := _button("CONTINUE THE SAVED CAMPAIGN", _continue)
-	cont.disabled = not Game.has_save()
-	_main.add_child(cont)
-	var host := _button("HOST A GAME FOR FRIENDS", _host)
-	_main.add_child(host)
-	var jrow := HBoxContainer.new()
-	jrow.add_theme_constant_override("separation", 8)
-	_ip = _edit("Host's IP address", _saved("ip", "127.0.0.1"))
-	_port = SpinBox.new()
-	_port.min_value = 1024
-	_port.max_value = 65535
-	_port.value = Net.DEFAULT_PORT
-	_join_mode = OptionButton.new()
-	_join_mode.add_item("Found my own family")
-	_join_mode.add_item("Join the host's family")
-	jrow.add_child(_labeled("IP", _ip))
-	jrow.add_child(_labeled("PORT", _port))
-	jrow.add_child(_labeled("ON ARRIVAL", _join_mode))
-	_main.add_child(jrow)
-	_main.add_child(_button("JOIN A FRIEND'S GAME", _join))
-	_main.add_child(_button("QUIT", func() -> void: get_tree().quit()))
-	_lobby = VBoxContainer.new()
-	_lobby.visible = false
-	_lobby.add_theme_constant_override("separation", 10)
-	col.add_child(_lobby)
-	_lobby.add_child(_label("THE TABLE", 22, GOLD2))
-	_lobby_list = _label("", 20, INK)
-	_lobby.add_child(_lobby_list)
-	var lobby_hint := _label("Friends join with your IP address and port %d (forward the port for play over the internet). Everyone who joins founds a family; AI families fill the rest." % Net.DEFAULT_PORT, 16, MUTE)
-	lobby_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_lobby.add_child(lobby_hint)
-	_start_btn = _button("START THE CAMPAIGN", _start_hosted)
-	_lobby.add_child(_start_btn)
-	_lobby.add_child(_button("LEAVE", func() -> void:
-		Net.leave()
-		_show_main()))
-	_status = _label("", 18, Color("ff8a7a"))
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(_status)
-	var credit := _label("A prototype. People and sound from Woods; city from Kenney (CC0); textures from Poly Haven (CC0).", 13, MUTE)
-	credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(credit)
+	_scene = MenuTitleScene.new()
+	_scene.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_scene)
+	_scrim = ColorRect.new()
+	_scrim.color = Color(0.01, 0.01, 0.02, 0.0)
+	_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_scrim)
+	_build_identity()
+	_build_home()
+	_build_panels()
+	_build_status()
+	_build_audio()
+	_wire_sounds(self)
+	get_viewport().gui_focus_changed.connect(_on_focus_changed)
 	Net.roster_changed.connect(_on_roster)
-	Net.connection_failed.connect(func(r: String) -> void:
-		_status.text = r
-		_show_main())
-	Net.left_lobby.connect(func(r: String) -> void:
-		_status.text = r
-		_show_main())
+	Net.connection_failed.connect(_on_net_failed)
+	Net.left_lobby.connect(_on_net_left)
 	Net.joined_lobby.connect(_on_joined)
 	Net.game_started.connect(_go_world)
+	_show_main()
 	var args := OS.get_cmdline_user_args()
 	if "--autotest" in args:
 		call_deferred("_play_solo")
@@ -174,86 +100,649 @@ func _ready() -> void:
 			_name.text = a.substr(7)
 		if a.begins_with("--family="):
 			_fam.text = a.substr(9)
+	_update_identity()
 	if "--autohost" in args:
 		call_deferred("_host")
-		Net.roster_changed.connect(func() -> void:
-			var want := 2
-			for a2 in OS.get_cmdline_user_args():
-				if a2.begins_with("--players="):
-					want = int(a2.substr(10))
-			if Net.roster.size() >= want and not Net.in_game:
-				get_tree().create_timer(1.0).timeout.connect(_start_hosted))
+		Net.roster_changed.connect(_on_autohost_roster)
 	for a in args:
 		if a.begins_with("--autojoin="):
 			_ip.text = a.substr(11)
 			call_deferred("_join")
 
 
-func _theme() -> Theme:
-	var t := Theme.new()
-	t.default_font = load("res://assets/fonts/barlow-latin-500-normal.woff2")
-	t.default_font_size = 19
-	var btn := StyleBoxFlat.new()
-	btn.bg_color = Color("241f1a")
-	btn.border_color = Color("4a3d2c")
-	btn.set_border_width_all(1)
-	btn.set_content_margin_all(10)
-	var hov := btn.duplicate() as StyleBoxFlat
-	hov.border_color = Color("d4a532")
-	hov.bg_color = Color("2e261c")
-	t.set_stylebox("normal", "Button", btn)
-	t.set_stylebox("hover", "Button", hov)
-	t.set_stylebox("pressed", "Button", hov)
-	t.set_stylebox("focus", "Button", hov)
-	t.set_font("font", "Button", cond)
-	t.set_font_size("font_size", "Button", 22)
-	t.set_color("font_color", "Button", INK)
-	t.set_color("font_hover_color", "Button", GOLD2)
-	var le := StyleBoxFlat.new()
-	le.bg_color = Color("1a1612")
-	le.border_color = Color("4a3d2c")
-	le.set_border_width_all(1)
-	le.set_content_margin_all(8)
-	t.set_stylebox("normal", "LineEdit", le)
-	t.set_stylebox("normal", "OptionButton", btn)
-	t.set_stylebox("hover", "OptionButton", hov)
-	t.set_font("font", "OptionButton", load("res://assets/fonts/barlow-latin-500-normal.woff2"))
-	t.set_font_size("font_size", "OptionButton", 17)
-	return t
+func _process(delta: float) -> void:
+	_t += delta
+	_tick_cd = maxf(0.0, _tick_cd - delta)
+	var want := 0.5 if _page != "" else 0.0
+	_scrim.color.a = move_toward(_scrim.color.a, want, delta * 2.5)
+	_fit(_frame, Vector2(48, 40))
+	_fit(_main, Vector2(0, 0))
+	if _wait_label and _wait_label.is_visible_in_tree():
+		_wait_label.text = "Waiting for the host to start" + ".".repeat(1 + int(_t * 2.0) % 3)
 
 
-func _label(t: String, s: int, c: Color) -> Label:
-	var l := Label.new()
-	l.text = t
-	l.add_theme_font_size_override("font_size", s)
-	l.add_theme_color_override("font_color", c)
-	return l
+## Scale a centred panel down when the window (or a big UI size) leaves too little room.
+func _fit(c: Control, margin: Vector2) -> void:
+	if c == null or not c.visible:
+		return
+	var need := c.get_combined_minimum_size()
+	if c == _main:
+		need = Vector2(_main_min_w(), (_main.get_child(0) as Control).get_combined_minimum_size().y)
+	var avail := size - margin * 2.0
+	if need.x <= 0 or need.y <= 0:
+		return
+	var s := minf(1.0, minf(avail.x / need.x, avail.y / need.y))
+	c.pivot_offset = c.size * 0.5 if c != _main else Vector2(0, c.size.y * 0.5)
+	c.scale = Vector2(s, s)
 
 
-func _labeled(cap: String, ctl: Control) -> VBoxContainer:
-	var v := VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var l := _label(cap, 13, MUTE)
-	l.add_theme_font_override("font", cond)
-	v.add_child(l)
-	ctl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.add_child(ctl)
-	return v
+func _main_min_w() -> float:
+	return 700.0
 
 
-func _edit(ph: String, val: String) -> LineEdit:
-	var e := LineEdit.new()
-	e.placeholder_text = ph
-	e.text = val
-	e.max_length = 16
-	return e
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		var k := (event as InputEventKey).keycode
+		if _page == "howto" and _howto.handle_key(k):
+			get_viewport().set_input_as_handled()
+			return
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_back()
 
 
-func _button(t: String, cb: Callable) -> Button:
-	var b := Button.new()
-	b.text = t
+func _input(event: InputEvent) -> void:
+	# the card pager takes the arrow keys even when a button has the focus
+	if _page == "howto" and event is InputEventKey and event.pressed and not event.echo:
+		var k := (event as InputEventKey).keycode
+		if k == KEY_LEFT or k == KEY_RIGHT:
+			if _howto.handle_key(k):
+				get_viewport().set_input_as_handled()
+
+
+func _back() -> void:
+	match _page:
+		"":
+			pass
+		"join":
+			_show_page("friends")
+		"new":
+			_show_page("friends" if _host_mode else "")
+		"lobby":
+			Net.leave()
+			_show_main()
+		_:
+			_show_main()
+
+
+# ------------------------------------------------------------------ building: the title
+
+func _build_home() -> void:
+	_main = MarginContainer.new()
+	_main.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_main.add_theme_constant_override("margin_left", 112)
+	_main.add_theme_constant_override("margin_top", 70)
+	_main.add_theme_constant_override("margin_bottom", 56)
+	_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_main)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	col.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_main.add_child(col)
+	col.add_child(MenuLogo.new())
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 40)
+	col.add_child(gap)
+	_items = VBoxContainer.new()
+	_items.add_theme_constant_override("separation", 4)
+	col.add_child(_items)
+	_add_item("New game", "", func() -> void:
+		_host_mode = false
+		_show_page("new"))
+	var cont := _add_item("Continue", _save_blurb(), _continue)
+	cont.disabled = not Game.has_save()
+	cont.focus_mode = Control.FOCUS_NONE if cont.disabled else Control.FOCUS_ALL
+	_add_item("Play with friends", "", func() -> void: _show_page("friends"))
+	_add_item("How to play", "", func() -> void: _show_page("howto"))
+	_add_item("Settings", "", func() -> void: _show_page("settings"))
+	_add_item("Quit", "", func() -> void: get_tree().quit())
+	var gap2 := Control.new()
+	gap2.custom_minimum_size = Vector2(0, 34)
+	col.add_child(gap2)
+	col.add_child(_key_hints([["Up", ""], ["Down", "Choose"], ["Enter", "Select"], ["Esc", "Back"]], true))
+	# the version, bottom right
+	var ver := MenuStyle.label("v%s" % String(ProjectSettings.get_setting("application/config/version", "0.1")), "cond", 16, Color(MenuStyle.NIGHT_MUTE, 0.7))
+	ver.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	ver.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	ver.position = Vector2(-24, -34)
+	ver.offset_left = -120
+	ver.offset_top = -40
+	ver.offset_right = -26
+	ver.offset_bottom = -16
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	add_child(ver)
+
+
+func _add_item(text: String, sub: String, cb: Callable) -> Button:
+	var b := MenuWidgets.TitleItem.new(text, sub)
 	b.pressed.connect(cb)
+	_items.add_child(b)
 	return b
+
+
+func _key_hints(keys: Array, on_dark: bool) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pad := Control.new()
+	pad.custom_minimum_size = Vector2(38, 0)
+	h.add_child(pad)
+	for kd in keys:
+		h.add_child(MenuWidgets.KeyCap.new(String(kd[0]), on_dark))
+		if String(kd[1]) != "":
+			var l := MenuStyle.label(String(kd[1]), "semi", 17, MenuStyle.NIGHT_MUTE if on_dark else MenuStyle.INK_SOFT)
+			l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			h.add_child(l)
+			var sp := Control.new()
+			sp.custom_minimum_size = Vector2(12, 0)
+			h.add_child(sp)
+	return h
+
+
+## "March 1931 · the Vitale family" from the save file, or "".
+func _save_blurb() -> String:
+	if not Game.has_save():
+		return ""
+	var txt := FileAccess.get_file_as_string("user://saves/campaign.json")
+	var data = JSON.parse_string(txt) if txt != "" else null
+	if typeof(data) != TYPE_DICTIONARY or not data.has("month"):
+		return ""
+	var out := Game.date_text(int(data["month"]))
+	var players = data.get("players", {})
+	var fams = data.get("families", [])
+	if typeof(players) == TYPE_DICTIONARY and typeof(fams) == TYPE_ARRAY and not players.is_empty():
+		var p = players.get("1", players.values()[0])
+		if typeof(p) == TYPE_DICTIONARY:
+			var fi := int(p.get("family", -1))
+			if fi >= 0 and fi < fams.size() and typeof(fams[fi]) == TYPE_DICTIONARY:
+				out += "  ·  the %s family" % String(fams[fi].get("name", ""))
+	return out
+
+
+# ------------------------------------------------------------------ building: the panels
+
+func _build_panels() -> void:
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(center)
+	_frame = PanelContainer.new()
+	_frame.add_theme_stylebox_override("panel", MenuStyle.frame())
+	center.add_child(_frame)
+	_pages["new"] = _build_new()
+	_pages["friends"] = _build_friends()
+	_pages["join"] = _build_join()
+	_pages["lobby"] = _build_lobby()
+	_pages["settings"] = _build_settings()
+	_pages["howto"] = _build_howto()
+	for k in _pages:
+		_frame.add_child(_pages[k])
+		(_pages[k] as Control).visible = false
+
+
+## A page: heading, rule, body, a footer of buttons. Returns [page, body, footer].
+func _page_shell(title: String) -> Array:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 14)
+	var h := MenuStyle.heading(title, 42)
+	v.add_child(h)
+	v.add_child(MenuStyle.divider(420))
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 6)
+	v.add_child(gap)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 18)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(body)
+	var rule := ColorRect.new()
+	rule.color = Color(MenuStyle.INK, 0.14)
+	rule.custom_minimum_size = Vector2(0, 1)
+	v.add_child(rule)
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 14)
+	v.add_child(foot)
+	return [v, body, foot, h]
+
+
+func _spacer_h() -> Control:
+	var s := Control.new()
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return s
+
+
+func _build_identity() -> void:
+	_identity = VBoxContainer.new()
+	_identity.add_theme_constant_override("separation", 16)
+	_identity.custom_minimum_size = Vector2(410, 0)
+	_name = MenuStyle.field("Your name", _saved("name", "Alex"))
+	_fam = MenuStyle.field("Family name", _saved("family", Names.FAMILY_NAMES[0]))
+	_name.text_changed.connect(func(_s: String) -> void: _update_identity())
+	_fam.text_changed.connect(func(_s: String) -> void: _update_identity())
+	_identity.add_child(MenuStyle.labeled("Your name", _name))
+	_identity.add_child(MenuStyle.labeled("Family name", _fam))
+	var sw := HBoxContainer.new()
+	sw.add_theme_constant_override("separation", 2)
+	_color = clampi(int(_saved("color", "0")), 0, Names.FAMILY_COLORS.size() - 1)
+	for k in Names.FAMILY_COLORS.size():
+		var b := MenuWidgets.Swatch.new(Color(Names.FAMILY_COLORS[k]))
+		b.button_pressed = k == _color
+		b.tooltip_text = "Family colour"
+		var kk := k
+		b.pressed.connect(func() -> void:
+			_color = kk
+			for s in _swatches:
+				s.set_pressed_no_signal(s == _swatches[kk])
+				s.queue_redraw()
+			_update_identity())
+		_swatches.append(b)
+		sw.add_child(b)
+	_identity.add_child(MenuStyle.labeled("Family colour", sw))
+	# how your family will look: a wax seal and the name
+	var prev := PanelContainer.new()
+	prev.add_theme_stylebox_override("panel", MenuStyle.inset())
+	var ph := HBoxContainer.new()
+	ph.add_theme_constant_override("separation", 16)
+	prev.add_child(ph)
+	_seal = UiKit.wax_seal(Color(Names.FAMILY_COLORS[_color]), "V", 64)
+	ph.add_child(_seal)
+	var pv := VBoxContainer.new()
+	pv.add_theme_constant_override("separation", 0)
+	pv.alignment = BoxContainer.ALIGNMENT_CENTER
+	_fam_line = MenuStyle.label("", "deco", 24, MenuStyle.INK)
+	_don_line = MenuStyle.label("", "sans", 17, MenuStyle.INK_SOFT)
+	pv.add_child(_fam_line)
+	pv.add_child(_don_line)
+	ph.add_child(pv)
+	_identity.add_child(prev)
+
+
+func _update_identity() -> void:
+	if _seal == null:
+		return
+	var fam := _fam.text.strip_edges() if _fam.text.strip_edges() != "" else "Vitale"
+	var nm := _name.text.strip_edges() if _name.text.strip_edges() != "" else "Player"
+	_seal.set("seal_color", Color(Names.FAMILY_COLORS[_color]))
+	_seal.set("letter", fam.left(1).to_upper())
+	_fam_line.text = "The %s family" % fam
+	_don_line.text = "Don %s %s" % [nm, fam] if _join_mode == 0 or _page != "join" else "%s, underboss" % nm
+
+
+func _build_new() -> Control:
+	var sh := _page_shell("New game")
+	var body: VBoxContainer = sh[1]
+	var foot: HBoxContainer = sh[2]
+	_new_title = sh[3]
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 56)
+	body.add_child(cols)
+	var left := VBoxContainer.new()
+	left.name = "IdentitySlot"
+	cols.add_child(left)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 16)
+	right.custom_minimum_size = Vector2(470, 0)
+	cols.add_child(right)
+	var rv := MenuStyle.segmented(["1", "2", "3", "4", "5", "6", "7"], _rivals_n - 1, func(i: int) -> void: _rivals_n = i + 1)
+	right.add_child(MenuStyle.labeled("Rival families", rv, "Run by the computer. More rivals, more trouble."))
+	var lv := MenuStyle.segmented(["Short: 1929 to 1933", "Long: 1923 to 1933"], _length, func(i: int) -> void:
+		_length = i
+		_update_hints())
+	var lb := MenuStyle.labeled("Length", lv, " ")
+	_length_hint = lb.get_node("Hint")
+	right.add_child(lb)
+	var pv := MenuStyle.segmented(["Fast", "Normal", "Slow"], _pace, func(i: int) -> void:
+		_pace = i
+		_update_hints())
+	var pb := MenuStyle.labeled("Pace", pv, " ")
+	_pace_hint = pb.get_node("Hint")
+	right.add_child(pb)
+	var tut := HBoxContainer.new()
+	tut.add_theme_constant_override("separation", 14)
+	var sw := MenuWidgets.Switch.new(_tutorial)
+	sw.toggled.connect(func(on: bool) -> void: _tutorial = on)
+	tut.add_child(sw)
+	var tl := MenuStyle.body("Uncle Carmine shows you the ropes, one step at a time.", 16, MenuStyle.INK_SOFT)
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tut.add_child(tl)
+	right.add_child(MenuStyle.labeled("Tutorial", tut))
+	_update_hints()
+	var back := MenuStyle.button("Back")
+	back.pressed.connect(_back)
+	foot.add_child(back)
+	foot.add_child(_spacer_h())
+	_new_start = MenuStyle.button("Start", "primary", 240)
+	_new_start.pressed.connect(func() -> void:
+		if _host_mode:
+			_host()
+		else:
+			_play_solo())
+	foot.add_child(_new_start)
+	_page_first["new"] = _new_start
+	return sh[0]
+
+
+func _update_hints() -> void:
+	var months := Game.REPEAL_MONTH - (72 if _length == 0 else 0)
+	var mins := int(months * PACES[_pace] / 60.0)
+	_length_hint.text = "The Crash, then the end of Prohibition. About %s." % _hours(mins) if _length == 0 \
+		else "All of Prohibition, from the start. About %s." % _hours(mins)
+	var per: String = ["1 min 30 s", "2 min 30 s", "4 minutes"][_pace]
+	_pace_hint.text = "A month in the game lasts %s." % per
+
+
+func _hours(mins: int) -> String:
+	var h := mins / 60
+	var m := int(round((mins % 60) / 15.0)) * 15
+	if m == 60:
+		h += 1
+		m = 0
+	if h == 0:
+		return "%d minutes" % m
+	return "%d hours" % h if m == 0 else "%d h %02d min" % [h, m]
+
+
+func _build_friends() -> Control:
+	var sh := _page_shell("Play with friends")
+	var body: VBoxContainer = sh[1]
+	var foot: HBoxContainer = sh[2]
+	var intro := MenuStyle.body("Up to 8 players. Each of you runs a family, or you run one together.", 20, MenuStyle.INK_SOFT)
+	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(intro)
+	var cards := HBoxContainer.new()
+	cards.add_theme_constant_override("separation", 36)
+	cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_child(cards)
+	var host := MenuWidgets.ChoiceCard.new("handshake", "Host a game", "You pick the rules.\nFriends join you.")
+	host.pressed.connect(func() -> void:
+		_host_mode = true
+		_show_page("new"))
+	cards.add_child(host)
+	var join := MenuWidgets.ChoiceCard.new("telephone", "Join a friend", "Your friend hosts.\nYou need their address.")
+	join.pressed.connect(func() -> void: _show_page("join"))
+	cards.add_child(join)
+	var back := MenuStyle.button("Back")
+	back.pressed.connect(_back)
+	foot.add_child(back)
+	_page_first["friends"] = host
+	return sh[0]
+
+
+func _build_join() -> Control:
+	var sh := _page_shell("Join a friend")
+	var body: VBoxContainer = sh[1]
+	var foot: HBoxContainer = sh[2]
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 56)
+	body.add_child(cols)
+	var left := VBoxContainer.new()
+	left.name = "IdentitySlot"
+	cols.add_child(left)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 16)
+	right.custom_minimum_size = Vector2(470, 0)
+	cols.add_child(right)
+	_ip = MenuStyle.field("For example 192.168.1.20", _saved("ip", "127.0.0.1"), 64)
+	right.add_child(MenuStyle.labeled("Your friend's address", _ip, "Your friend sees it on screen when they host."))
+	_port = MenuStyle.field("24880", str(Net.DEFAULT_PORT), 5)
+	_port.custom_minimum_size.x = 160
+	_port.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_port.text_changed.connect(func(s: String) -> void:
+		var digits := ""
+		for ch in s:
+			if ch >= "0" and ch <= "9":
+				digits += ch
+		if digits != s:
+			_port.text = digits
+			_port.caret_column = digits.length())
+	right.add_child(MenuStyle.labeled("Port", _port, "Leave it at %d unless your friend changed it." % Net.DEFAULT_PORT))
+	var jm := MenuStyle.segmented(["Found my own family", "Join the host's family"], _join_mode, func(i: int) -> void:
+		_join_mode = i
+		_update_identity())
+	right.add_child(MenuStyle.labeled("When you get there", jm))
+	var back := MenuStyle.button("Back")
+	back.pressed.connect(_back)
+	foot.add_child(back)
+	foot.add_child(_spacer_h())
+	var go := MenuStyle.button("Join", "primary", 240)
+	go.pressed.connect(_join)
+	foot.add_child(go)
+	_ip.text_submitted.connect(func(_s: String) -> void: _join())
+	_page_first["join"] = _ip
+	return sh[0]
+
+
+func _build_lobby() -> Control:
+	var sh := _page_shell("The table")
+	var body: VBoxContainer = sh[1]
+	var foot: HBoxContainer = sh[2]
+	_lobby_title = sh[3]
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 48)
+	body.add_child(cols)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 10)
+	left.custom_minimum_size = Vector2(470, 330)
+	cols.add_child(left)
+	left.add_child(MenuStyle.caption("At the table"))
+	_lobby = VBoxContainer.new()
+	_lobby.add_theme_constant_override("separation", 8)
+	left.add_child(_lobby)
+	# the host's side: the address friends need
+	var hs := VBoxContainer.new()
+	hs.add_theme_constant_override("separation", 12)
+	hs.custom_minimum_size = Vector2(420, 0)
+	cols.add_child(hs)
+	hs.add_child(MenuStyle.caption("Friends join with"))
+	var addr_box := PanelContainer.new()
+	addr_box.add_theme_stylebox_override("panel", MenuStyle.inset(MenuStyle.PAPER_DARK, 4))
+	var av := VBoxContainer.new()
+	av.add_theme_constant_override("separation", 2)
+	addr_box.add_child(av)
+	_lobby_addr = MenuStyle.label("", "cond", 38, MenuStyle.INK)
+	av.add_child(_lobby_addr)
+	av.add_child(MenuStyle.label("Port %d" % Net.DEFAULT_PORT, "semi", 19, MenuStyle.INK_SOFT))
+	hs.add_child(addr_box)
+	hs.add_child(MenuStyle.body("Same house or office: that's all they need. Over the internet: forward port %d on your router and give them your public address." % Net.DEFAULT_PORT, 16, MenuStyle.INK_SOFT))
+	var rg := Control.new()
+	rg.custom_minimum_size = Vector2(0, 8)
+	hs.add_child(rg)
+	hs.add_child(MenuStyle.caption("The rules"))
+	_lobby_rules = MenuStyle.body("", 18, MenuStyle.INK)
+	hs.add_child(_lobby_rules)
+	_lobby_side_host = hs
+	# a client's side: waiting
+	var cs := VBoxContainer.new()
+	cs.add_theme_constant_override("separation", 12)
+	cs.custom_minimum_size = Vector2(420, 0)
+	cols.add_child(cs)
+	cs.add_child(MenuStyle.caption("You're in"))
+	_wait_label = MenuStyle.label("Waiting for the host to start...", "semi", 22, MenuStyle.INK)
+	cs.add_child(_wait_label)
+	cs.add_child(MenuStyle.body("The host starts the game when everyone is here. The game opens by itself.", 17, MenuStyle.INK_SOFT))
+	_lobby_side_client = cs
+	_leave_btn = MenuStyle.button("Leave")
+	_leave_btn.pressed.connect(func() -> void:
+		Net.leave()
+		_show_main())
+	foot.add_child(_leave_btn)
+	foot.add_child(_spacer_h())
+	_start_btn = MenuStyle.button("Start the game", "primary", 260)
+	_start_btn.pressed.connect(_start_hosted)
+	foot.add_child(_start_btn)
+	return sh[0]
+
+
+func _build_settings() -> Control:
+	var sh := _page_shell("Settings")
+	var body: VBoxContainer = sh[1]
+	var foot: HBoxContainer = sh[2]
+	_settings = MenuSettings.new()
+	body.add_child(_settings)
+	var back := MenuStyle.button("Back")
+	back.pressed.connect(_back)
+	foot.add_child(back)
+	foot.add_child(_spacer_h())
+	var def := MenuStyle.button("Reset to defaults")
+	def.pressed.connect(func() -> void: _settings.reset())
+	foot.add_child(def)
+	return sh[0]
+
+
+func _build_howto() -> Control:
+	var sh := _page_shell("How to play")
+	var body: VBoxContainer = sh[1]
+	var foot: HBoxContainer = sh[2]
+	_howto = MenuHowTo.new()
+	_howto.closed.connect(_show_main)
+	body.add_child(_howto)
+	var back := MenuStyle.button("Back to the menu")
+	back.pressed.connect(_back)
+	foot.add_child(back)
+	foot.add_child(_spacer_h())
+	var keys := _key_hints([["Left", ""], ["Right", "Turn the cards"]], false)
+	keys.get_child(0).custom_minimum_size.x = 0
+	foot.add_child(keys)
+	return sh[0]
+
+
+func _build_status() -> void:
+	_status_box = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09, 0.03, 0.025, 0.94)
+	sb.border_color = Color(MenuStyle.OXBLOOD_HI, 0.9)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 22
+	sb.content_margin_right = 22
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 12
+	_status_box.add_theme_stylebox_override("panel", sb)
+	_status_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_status_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_status_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_status_box.offset_bottom = -26
+	_status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_status_box)
+	_status = MenuStyle.label("", "semi", 19, Color("ffd9cc"))
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status_box.add_child(_status)
+	_status_box.visible = false
+
+
+func _set_status(t: String) -> void:
+	_status.text = t
+	_status_box.visible = t != ""
+	_status_box.reset_size()
+	_status_box.offset_left = -_status_box.size.x * 0.5
+	_status_box.offset_right = _status_box.size.x * 0.5
+	_status_box.offset_top = -26 - _status_box.size.y
+
+
+# ------------------------------------------------------------------ sound
+
+func _build_audio() -> void:
+	_music = _player("res://assets/audio/night.ogg", &"Music", -9.0, true)
+	_rain = _player("res://assets/audio/rain_loop.ogg", &"SFX", -17.0, true)
+	_ui_tick = _player("res://assets/audio/tick.ogg", &"SFX", -12.0, false)
+	_ui_click = _player("res://assets/audio/click_wood.ogg", &"SFX", -6.0, false)
+	if _music.stream:
+		_music.volume_db = -40.0
+		_music.play()
+		create_tween().tween_property(_music, "volume_db", -9.0, 3.0)
+	if _rain.stream:
+		_rain.play()
+
+
+func _player(path: String, bus: StringName, db: float, loop: bool) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.stream = load(path) if ResourceLoader.exists(path) else null
+	p.bus = bus if AudioServer.get_bus_index(bus) >= 0 else &"Master"
+	p.volume_db = db
+	if loop:
+		p.finished.connect(p.play)
+	add_child(p)
+	return p
+
+
+func _wire_sounds(n: Node) -> void:
+	if n is BaseButton:
+		(n as BaseButton).pressed.connect(_click)
+	for c in n.get_children():
+		_wire_sounds(c)
+
+
+func _click() -> void:
+	if _ui_click and _ui_click.stream:
+		_ui_click.play()
+	_tick_cd = 0.15
+
+
+func _on_focus_changed(_c: Control) -> void:
+	if _tick_cd <= 0.0 and _ui_tick and _ui_tick.stream and _t > 0.3:
+		_ui_tick.play()
+		_tick_cd = 0.06
+
+
+# ------------------------------------------------------------------ pages
+
+func _show_page(p: String) -> void:
+	_page = p
+	_set_status("")
+	_main.visible = p == ""
+	_frame.get_parent().visible = p != ""
+	for k in _pages:
+		(_pages[k] as Control).visible = k == p
+	if p == "":
+		_items.get_child(0).grab_focus.call_deferred()
+		return
+	if p == "new" or p == "join":
+		var slot: Node = (_pages[p] as Node).find_child("IdentitySlot", true, false)
+		if slot and _identity.get_parent() != slot:
+			if _identity.get_parent():
+				_identity.reparent(slot, false)
+			else:
+				slot.add_child(_identity)
+		_update_identity()
+	if p == "new":
+		_new_title.text = ("Host a game" if _host_mode else "New game").to_upper()
+		_new_start.text = "Open the table" if _host_mode else "Start"
+	var first: Control = _page_first.get(p)
+	if p == "settings":
+		_settings.refresh()
+		first = _settings.first_focus()
+	elif p == "howto":
+		_howto.show_page(0)
+		first = _howto.first_focus()
+	if first:
+		first.grab_focus.call_deferred()
+	_frame.reset_size()
+
+
+func _show_main() -> void:
+	_show_page("")
+
+
+# ------------------------------------------------------------------ the profile
+
+func _is_test_run() -> bool:
+	for a in OS.get_cmdline_user_args():
+		if a == "--autotest" or a == "--autohost" or a.begins_with("--autojoin") or a == "--mptest":
+			return true
+	return false
 
 
 func _saved(key: String, def: String) -> String:
@@ -264,6 +753,8 @@ func _saved(key: String, def: String) -> String:
 
 
 func _save_profile() -> void:
+	if _is_test_run():
+		return
 	var cf := ConfigFile.new()
 	cf.set_value("profile", "name", _name.text)
 	cf.set_value("profile", "family", _fam.text)
@@ -272,19 +763,27 @@ func _save_profile() -> void:
 	cf.save("user://profile.cfg")
 
 
+func _port_value() -> int:
+	var p := int(_port.text) if _port.text.is_valid_int() else Net.DEFAULT_PORT
+	return p if p >= 1024 and p <= 65535 else Net.DEFAULT_PORT
+
+
+# ------------------------------------------------------------------ the flows
+
 func _info() -> Dictionary:
 	_save_profile()
 	return {"name": _name.text.strip_edges() if _name.text.strip_edges() != "" else "Player",
 		"family_name": _fam.text.strip_edges() if _fam.text.strip_edges() != "" else "Vitale",
-		"color": Names.FAMILY_COLORS[_color], "join": -1 if _join_mode.selected == 0 else 0}
+		"color": Names.FAMILY_COLORS[_color], "join": -1 if _join_mode == 0 else 0}
 
 
 func _cfg() -> Dictionary:
-	var month_s: float = [90.0, 150.0, 240.0][_pace.selected]
+	var month_s: float = PACES[_pace]
 	if "--autotest" in OS.get_cmdline_user_args():
 		month_s = 40.0
 	return {"seed": randi() % 100000, "families": 0, "month_seconds": month_s,
-		"start_month": 72 if _length.selected == 0 else 0, "end_month": Game.REPEAL_MONTH}
+		"start_month": 72 if _length == 0 else 0, "end_month": Game.REPEAL_MONTH,
+		"tutorial": _tutorial and not _is_test_run()}
 
 
 func _humans() -> Array:
@@ -315,22 +814,23 @@ func _unique_color(c: String, taken: Array) -> String:
 
 
 func _play_solo() -> void:
+	_join_mode = 0
 	Net.my_info = _info()
 	Net.solo()
 	var cfg := _cfg()
 	var humans := _humans()
-	cfg["families"] = humans.size() + int(_rivals.value)
+	cfg["families"] = humans.size() + _rivals_n
 	Game.new_campaign(cfg, humans)
 	Net.start_game()
 
 
 func _continue() -> void:
 	Net.my_info = _info()
-	var err := Net.host_lan(int(_port.value))
+	var err := Net.host_lan(_port_value())
 	if err != OK:
 		Net.solo()
 	if not Game.load_campaign():
-		_status.text = "Could not read the saved campaign."
+		_set_status("Could not read the saved game.")
 		return
 	# the host keeps their seat (peer 1); friends reclaim theirs by joining with the same name
 	var mine := ""
@@ -347,41 +847,129 @@ func _continue() -> void:
 
 
 func _host() -> void:
+	_join_mode = 0
 	Net.my_info = _info()
-	if Net.host_lan(int(_port.value)) == OK:
+	if Net.host_lan(_port_value()) == OK:
 		_show_lobby(true)
 
 
 func _join() -> void:
 	Net.my_info = _info()
-	_status.text = "Calling %s..." % _ip.text
-	Net.join_lan(_ip.text, int(_port.value))
+	_set_status("Calling %s..." % _ip.text)
+	Net.join_lan(_ip.text, _port_value())
 
 
 func _on_joined() -> void:
 	if not Net.is_host():
 		_show_lobby(false)
-		_status.text = ""
+		_set_status("")
+
+
+func _on_net_failed(reason: String) -> void:
+	_set_status(_plain_net(reason))
+	if _page == "lobby":
+		_show_page("join")
+		_set_status(_plain_net(reason))
+
+
+func _on_net_left(reason: String) -> void:
+	if _page == "lobby":
+		_show_main()
+	if reason != "":
+		_set_status(_plain_net(reason))
+
+
+func _plain_net(reason: String) -> String:
+	if reason.begins_with("Could not open port"):
+		return "Can't open the table: port %d is busy. Is another game open?" % _port_value()
+	return reason
+
+
+func _on_autohost_roster() -> void:
+	var want := 2
+	for a2 in OS.get_cmdline_user_args():
+		if a2.begins_with("--players="):
+			want = int(a2.substr(10))
+	if Net.roster.size() >= want and not Net.in_game:
+		get_tree().create_timer(1.0).timeout.connect(_start_hosted)
 
 
 func _show_lobby(host: bool) -> void:
-	_main.visible = false
-	_lobby.visible = true
+	_show_page("lobby")
 	_start_btn.visible = host
+	_lobby_side_host.visible = host
+	_lobby_side_client.visible = not host
+	_lobby_title.text = "YOUR TABLE" if host else "THE TABLE"
+	_lobby_addr.text = _local_address()
+	var rules: Array[String] = ["%d rival famil%s" % [_rivals_n, "y" if _rivals_n == 1 else "ies"],
+		"1929 to 1933" if _length == 0 else "1923 to 1933", ["Fast", "Normal", "Slow"][_pace] + " pace",
+		"Tutorial on" if _tutorial else "No tutorial"]
+	_lobby_rules.text = "%s  ·  %s\n%s  ·  %s" % rules
 	_on_roster()
+	(_start_btn if host else _leave_btn).grab_focus.call_deferred()
 
 
-func _show_main() -> void:
-	_main.visible = true
-	_lobby.visible = false
+## This computer's address on the local network (the one friends type in).
+func _local_address() -> String:
+	var best := ""
+	for a in IP.get_local_addresses():
+		if a.count(".") != 3 or a.begins_with("127.") or a.begins_with("169.254."):
+			continue
+		if best == "" or (a.begins_with("192.168.") and not best.begins_with("192.168.")):
+			best = a
+	return best if best != "" else "127.0.0.1"
 
 
 func _on_roster() -> void:
-	var lines := []
+	if _lobby == null:
+		return
+	for c in _lobby.get_children():
+		c.queue_free()
+	var host_color := Color(Names.FAMILY_COLORS[0])
+	if Net.roster.has(1):
+		host_color = Color(String(Net.roster[1].get("color", Names.FAMILY_COLORS[0])))
 	for id in Net.roster:
 		var r: Dictionary = Net.roster[id]
-		lines.append("%s  ·  the %s family%s" % [r["name"], r["family_name"], "  (host)" if id == 1 else ""])
-	_lobby_list.text = "\n".join(lines)
+		var joins: bool = int(r.get("join", -1)) >= 0 and int(id) != 1
+		var col := host_color if joins else Color(String(r.get("color", Names.FAMILY_COLORS[0])))
+		var row := PanelContainer.new()
+		row.add_theme_stylebox_override("panel", MenuStyle.inset(MenuStyle.PAPER_HI, 4))
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 14)
+		row.add_child(h)
+		var fam_name := String(r.get("family_name", ""))
+		h.add_child(UiKit.wax_seal(col, fam_name.left(1).to_upper() if not joins else "", 48))
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", -2)
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		v.alignment = BoxContainer.ALIGNMENT_CENTER
+		v.add_child(MenuStyle.label(String(r.get("name", "Player")), "semi", 21, MenuStyle.INK))
+		v.add_child(MenuStyle.label("Joins the host's family" if joins else "The %s family" % fam_name, "sans", 16, MenuStyle.INK_SOFT))
+		h.add_child(v)
+		if id == 1:
+			h.add_child(_tag("HOST", MenuStyle.OXBLOOD))
+		if id == Net.my_id():
+			h.add_child(_tag("YOU", MenuStyle.INK))
+		_lobby.add_child(row)
+	if _start_btn:
+		var n := Net.roster.size()
+		_start_btn.text = "Start the game" if n <= 1 else "Start: %d players" % n
+
+
+func _tag(text: String, col: Color) -> Control:
+	var c := CenterContainer.new()
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(3)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 2
+	sb.content_margin_bottom = 3
+	p.add_theme_stylebox_override("panel", sb)
+	p.add_child(MenuStyle.label(text, "cond", 15, MenuStyle.PAPER_HI))
+	c.add_child(p)
+	return c
 
 
 func _start_hosted() -> void:
@@ -389,7 +977,7 @@ func _start_hosted() -> void:
 		return
 	var cfg := _cfg()
 	var humans := _humans()
-	cfg["families"] = humans.filter(func(h: Dictionary) -> bool: return int(h["join"]) < 0).size() + int(_rivals.value)
+	cfg["families"] = humans.filter(func(h: Dictionary) -> bool: return int(h["join"]) < 0).size() + _rivals_n
 	Game.new_campaign(cfg, humans)
 	Net.send_state(Game.get_state())
 	Net.start_game()
