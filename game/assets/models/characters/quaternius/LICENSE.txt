@@ -1,0 +1,13 @@
+Ultimate Modular Men (Feb 2022) and Ultimate Modular Women (April 2022) by Quaternius
+https://quaternius.com  -  "Humanoid Rig / Individual Characters" FBX versions
+
+License: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Files used here (unchanged; recoloured and combined at runtime by scripts/world/person.gd):
+  men/    Suit, Farmer, Worker, Casual, Casual2, Adventurer, King, Beach
+  women/  Formal, Suit, Casual, Worker, Adventurer
+
+Their animations (assets/animations/quat_men.res, quat_women.res) are retargeted from the
+Quaternius Universal Animation Library 1 + 2 (CC0) and the Ultimate Modular Women "Casual"
+character's own clips (CC0) by tools/rig/build_library.gd.
