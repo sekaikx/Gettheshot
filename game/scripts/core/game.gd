@@ -1302,6 +1302,9 @@ func fired(peer: int, district: String) -> void:
 func propose(from_family: int, to_family: int, terms: Dictionary) -> Dictionary:
 	if from_family == to_family:
 		return _r(false, "")
+	# one deal at a time: no demanding tribute again and again while the last one runs
+	if String(terms.get("kind", "truce")) in ["truce", "tribute"] and int(rel(from_family, to_family)["truce_until"]) > month:
+		return _r(false, "You already have a deal with the %s family until %s." % [fam(to_family)["name"], date_text(int(rel(from_family, to_family)["truce_until"]))])
 	var d := {"id": next_id, "from": from_family, "to": to_family, "terms": terms, "expires": month + 1}
 	next_id += 1
 	var target := fam(to_family)

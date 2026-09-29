@@ -109,10 +109,10 @@ static func _mult(game: Node, family: int, b: Dictionary, how: String, crew_ids:
 	return m
 
 
-## Start leaning on a shop (his fear starts where it is).
+## Start leaning on a shop (his fear starts where it is). Not a man who just went to the cops.
 static func start(game: Node, family: int, biz_id: int) -> void:
 	var b: Dictionary = game.biz_by_id(biz_id)
-	if b.is_empty():
+	if b.is_empty() or int(b.get("snapped_until", -1)) >= int(game.month):
 		return
 	b["shake"] = family
 	b["shake_t"] = game.host_time()
@@ -160,6 +160,7 @@ static func check(game: Node, biz_id: int) -> Dictionary:
 		b["defiance"] = maxi(0, int(b["defiance"]) - 20)
 		b["unpaid"] = 0
 		b["envelope"] = 0
+		b["fear"] = 35.0  # he calms down once he pays: a rival has to scare him all over again
 		var f: Dictionary = game.fam(family)
 		f["rep"] = int(f["rep"]) + 2
 		if prev >= 0 and prev != family:
@@ -211,6 +212,8 @@ static func crew_take(game: Node, family: int, biz_id: int, crew_id: int) -> Dic
 		return {"ok": false, "msg": ""}
 	if int(b["protector"]) == family:
 		return {"ok": true, "msg": "%s already pays you." % b["name"]}
+	if int(b.get("snapped_until", -1)) >= int(game.month):
+		return {"ok": false, "msg": "%s won't deal with you: he went to the police. Try again in a month or two." % b["owner_name"]}
 	start(game, family, biz_id)
 	var ids := [crew_id]
 	scare(game, family, biz_id, "crowd", 18.0, ids)
@@ -282,7 +285,13 @@ static func don_killed(game: Node, family: int, by_family: int, street: String) 
 	if shops <= 6:
 		f["alive"] = false
 		for b in game.biz:
-			if int(b["protector"]) == family and int(b["owned_by"]) != family:
+			if b["kind"] == "club":
+				continue
+			if int(b["owned_by"]) == family:
+				# the family's own fronts go back to their managers: up for sale again
+				b["owned_by"] = -1
+				b["speak"] = false
+			if int(b["protector"]) == family:
 				b["protector"] = -1
 				b["fear"] = 10.0
 		for c in game.crew:

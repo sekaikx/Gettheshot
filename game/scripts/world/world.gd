@@ -948,19 +948,9 @@ func _host_spawn() -> void:
 		a.place(W.pa(plan.nodes[randi() % plan.nodes.size()]) + Vector2(randf_range(-1, 1), randf_range(-1, 1)) * W.M)
 	# a newsboy at a busy corner in every district
 	for k in 3:
-		var nb := _make_actor("w%d" % k)
-		nb.sim = true
-		var node: Array = plan.nodes[(k * 29 + 7) % plan.nodes.size()]
-		nb.place(W.pa(node), 0.0)
+		_spawn_newsboy(k)
 	for c in Game.cops:
-		var a := _make_actor("k%d" % c["id"])
-		a.sim = true
-		var nodes := []
-		for n in plan.nodes.size():
-			var p: Array = plan.nodes[n]
-			if plan.district_at(float(p[0]), float(p[1])) == c["district"]:
-				nodes.append(n)
-		a.place(W.pa(plan.nodes[nodes[randi() % nodes.size()] if not nodes.is_empty() else 0]))
+		_spawn_cop(int(c["id"]), false)
 	# the people behind the counters
 	for b in Game.biz:
 		if b["kind"] == "club" and int(b["hq_of"]) >= 0 and false:
@@ -974,19 +964,8 @@ func _host_spawn() -> void:
 		s.sim = true
 		var spot: Vector2 = lay["spots"].get("sergeant", lay["owner_spot"])
 		s.place(spot, float(lay["owner_rot"]) + PI)
-	# Izzy, in the back of the pawnshop
-	for b in Game.biz:
-		if b["kind"] == "pawnshop":
-			var lay := interiors.layout_of(int(b["lot"]))
-			var g := _make_actor("g1")
-			g.sim = true
-			var at: Vector2 = lay["spots"].get("dealer", (lay["back"] as Rect2).get_center() if (lay["back"] as Rect2).size != Vector2.ZERO else W.door(b))
-			g.place(at, (lay["front"] as Vector2).angle())
-			break
-	var tip: Array = plan.piers[1]["tip"]
-	var smug := _make_actor("z1")
-	smug.sim = true
-	smug.place(W.p(float(tip[0]) + 1.0, float(tip[1])), 0.0)
+	_spawn_izzy()
+	_spawn_smuggler()
 	_spawn_waterfront()
 	for f in Game.families:
 		var hq := Game.biz_by_id(int(f["hq"]))
@@ -1886,8 +1865,6 @@ func _cleanup_corpses() -> void:
 		if now > float(_corpses[k]):
 			_corpses.erase(k)
 			var a := actor(k)
-			var was_shop := a != null and a.kind == "shop"
-			var ref := a.ref_id if a else -1
 			if a:
 				actors.erase(k)
 				a.queue_free()
@@ -1898,15 +1875,81 @@ func _cleanup_corpses() -> void:
 					n.place(W.pa(plan.nodes[randi() % plan.nodes.size()]))
 			elif k == "u1":
 				_spawn_union()
+			elif k == "g1":
+				_spawn_izzy()  # a cousin takes over the back room
+			elif k == "z1":
+				_spawn_smuggler()
+			elif k.begins_with("k"):
+				_spawn_cop(int(k.substr(1)), true)
+			elif k.begins_with("w"):
+				_spawn_newsboy(int(k.substr(1)))
 			elif k.begins_with("d"):
 				_spawn_docker(int(k.substr(1)))
-			elif was_shop and ref >= 0:
-				var lay := layout_of_biz(ref)
-				var s := _make_actor("s%d" % ref)
+			elif k.begins_with("s"):
+				var bid := int(k.substr(1))
+				var lay := layout_of_biz(bid)
+				var s := _make_actor("s%d" % bid)
 				if s and not lay.is_empty():
 					s.sim = true
-					s.place(lay["owner_spot"], float(lay["owner_rot"]) + PI)
+					s.place(lay["spots"].get("sergeant", lay["owner_spot"]), float(lay["owner_rot"]) + PI)
 
+
+func _spawn_newsboy(k: int) -> void:
+	var nb := _make_actor("w%d" % k)
+	if nb == null:
+		return
+	nb.sim = true
+	var node: Array = plan.nodes[(k * 29 + 7) % plan.nodes.size()]
+	nb.place(W.pa(node), 0.0)
+
+
+## A patrolman on his beat. A new one (after one was killed) walks out of the precinct.
+func _spawn_cop(id: int, from_precinct: bool) -> void:
+	var c := {}
+	for c2 in Game.cops:
+		if int(c2["id"]) == id:
+			c = c2
+	if c.is_empty():
+		return
+	var a := _make_actor("k%d" % id)
+	if a == null:
+		return
+	a.sim = true
+	if from_precinct:
+		for b in Game.biz:
+			if b["kind"] == "precinct":
+				a.place(W.door(b), W.front_dir(float(b["yaw"])).angle())
+				return
+	var nodes := []
+	for n in plan.nodes.size():
+		var p: Array = plan.nodes[n]
+		if plan.district_at(float(p[0]), float(p[1])) == c["district"]:
+			nodes.append(n)
+	a.place(W.pa(plan.nodes[nodes[randi() % nodes.size()] if not nodes.is_empty() else 0]))
+
+
+## Izzy, in the back of the pawnshop.
+func _spawn_izzy() -> void:
+	for b in Game.biz:
+		if b["kind"] == "pawnshop":
+			var lay := interiors.layout_of(int(b["lot"]))
+			var g := _make_actor("g1")
+			if g == null or lay.is_empty():
+				return
+			g.sim = true
+			var at: Vector2 = lay["spots"].get("dealer", (lay["back"] as Rect2).get_center() if (lay["back"] as Rect2).size != Vector2.ZERO else W.door(b))
+			g.place(at, (lay["front"] as Vector2).angle())
+			return
+
+
+## The man on the night boat, at the middle pier.
+func _spawn_smuggler() -> void:
+	var tip: Array = plan.piers[1]["tip"]
+	var smug := _make_actor("z1")
+	if smug == null:
+		return
+	smug.sim = true
+	smug.place(W.p(float(tip[0]) + 1.0, float(tip[1])), 0.0)
 
 func drop_item(kind: String, at: Vector2, amount: int) -> void:
 	if not Net.is_host():
