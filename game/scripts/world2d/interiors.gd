@@ -257,7 +257,7 @@ static func _shell(p: Plan, ledge: float, win_art: String, front_style: String =
 	var g0 := DOOR_W * 0.5 + 0.2
 	var g1 := hw - 0.35
 	if g1 - g0 > 0.5:
-		for s in [-1.0, 1.0]:
+		for s: float in [-1.0, 1.0]:
 			var a := g0 * s
 			var b := g1 * s
 			p.add("window", minf(a, b), 0.0, maxf(a, b), WT + ledge, ledge > 0.01, true, 20, win_art,
@@ -564,7 +564,7 @@ static func _dining(p: Plan, v0: float, v1: float, art: String, ts: float, chair
 	while v + h <= v1:
 		rows.append(v)
 		v += ts + 0.75
-	for s in [-1.0, 1.0]:
+	for s: float in [-1.0, 1.0]:
 		for cu in cols:
 			for rv in rows:
 				var u := float(cu) * s
@@ -642,7 +642,7 @@ static func _club(p: Plan) -> Vector3:
 	var tu := iu - 1.35
 	var tables := []
 	var patrons := []
-	for s in [-1.0, 1.0]:
+	for s: float in [-1.0, 1.0]:
 		var u := tu * s
 		p.add("table", u - 0.45, 1.35, u + 0.45, 2.25, true, false, 0, "club_table" if p.speak else "card_table", Vector2(0, -1))
 		tables.append([u, 1.8])
@@ -703,7 +703,7 @@ static func _club(p: Plan) -> Vector3:
 
 static func _poolhall(p: Plan) -> Vector3:
 	var iu := p.iu
-	var split := 7.0
+	var split := clampf(p.dp - 4.4, 7.0, 7.6)
 	p.floors = {"shop": "planks_worn", "back": "planks_dark"}
 	_shell(p, 0.0, "window_pool")
 	var bu := iu - 0.75
@@ -720,22 +720,23 @@ static func _poolhall(p: Plan) -> Vector3:
 	# the tables: two columns either side of the aisle, two rows
 	var tl := clampf(iu - 1.6, 1.5, 1.95)
 	var tw := tl * 0.55
-	var r0 := 0.95
+	var r0 := 0.85
 	var rows := [r0]
-	if r0 + 2.0 * tw + 0.8 <= cf - 1.0:
-		rows.append(r0 + tw + 0.8)
+	if r0 + 2.0 * tw + 0.85 <= cf - 0.9:
+		rows.append(r0 + tw + 0.85)
 	var n := 0
 	for rv in rows:
-		for s in [-1.0, 1.0]:
+		for s: float in [-1.0, 1.0]:
 			var u0 := 0.85 * s
 			var u1 := (0.85 + tl) * s
 			p.add("pool_table", minf(u0, u1), rv, maxf(u0, u1), rv + tw, true, false, 0, "pool_table", Vector2(0, -1))
 			p.lamp((u0 + u1) * 0.5, rv + tw * 0.5, "billiard")
 			n += 1
-	for s in [-1.0, 1.0]:
+	for s: float in [-1.0, 1.0]:
 		var wu := (iu - 0.12) * s
 		p.add("rack", minf(wu, iu * s), 1.3, maxf(wu, iu * s), 2.9, false, true, 10, "cue_rack", Vector2(-s, 0))
-	p.dec("beads", -iu + 0.5, r0 + tw * 0.5 - 0.05, iu - 0.5, r0 + tw * 0.5 + 0.05)
+	var bead_v: float = float(rows[rows.size() - 1]) + tw + 0.35
+	p.dec("beads", -iu + 0.5, bead_v - 0.05, iu - 0.5, bead_v + 0.05)
 	p.dec("spittoon", -iu + 0.3, cf - 0.6, -iu + 0.6, cf - 0.3)
 	p.dec("spittoon", iu - 0.6, 0.45, iu - 0.3, 0.75)
 	p.dec("chalk", -0.25, r0 + tw + 0.25, 0.25, r0 + tw + 0.55)
@@ -849,7 +850,7 @@ static func _warehouse(p: Plan) -> Vector3:
 	p.vwall(-hw + WT * 0.5, 0.0, dp, "side")
 	p.vwall(hw - WT * 0.5, 0.0, dp, "side")
 	p.hwall(dp - WT * 0.5, -hw, hw, "back")
-	for s in [-1.0, 1.0]:
+	for s: float in [-1.0, 1.0]:
 		var a := 1.1 * s
 		var b := minf(2.9, ld0 - 0.4) * s
 		p.add("window", minf(a, b), 0.0, maxf(a, b), WT, false, true, 15, "window_warehouse", Vector2(0, -1), {"glass_v": WT, "ledge": 0.0})

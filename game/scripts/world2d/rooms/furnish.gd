@@ -333,7 +333,7 @@ static func _espresso_machine(k: Kit, c: Vector2, sz: float) -> void:
 	k.disc(c + k.lit * 1.2, 9.0 * sz, Pal.BRASS)
 	k.disc(c + k.lit * 3.5 * sz, 3.5 * sz, Pal.BRASS.lightened(0.35))
 	k.disc(c, 3.2 * sz, Pal.BRASS.darkened(0.25))
-	for sgn in [-1.0, 1.0]:
+	for sgn: float in [-1.0, 1.0]:
 		k.disc(c + Vector2(sgn * 8.0, 8.0) * sz, 2.6 * sz, IRON)
 		k.line(c + Vector2(sgn * 8.0, 8.0) * sz, c + Vector2(sgn * 12.0, 12.5) * sz, Pal.SIGN_BLACK, 2.0)
 	# the eagle on top
@@ -592,13 +592,6 @@ static func _case(k: Kit, R: Rect2, art: String, sd: int, br: bool) -> void:
 	k.rect(inner, bed)
 	var sp := br
 	match art:
-		"pastry_case":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				match (i + j * 2) % 4:
-					0: G.croissant(k, c, 9.0, 0.3)
-					1: G.cannolo(k, c, 0.2 + j)
-					2: G.cookie(k, c, 3.5, k.h(i, j, sd))
-					_: G.cookie(k, c, 4.2, 0.9), 11.0, sp)
 		"cake_case":
 			var n := maxi(1, int(inner.size.y / 20.0))
 			for j in n:
@@ -606,43 +599,17 @@ static func _case(k: Kit, R: Rect2, art: String, sd: int, br: bool) -> void:
 				if sp and j % 2 == 1:
 					continue
 				G.cake(k, c, minf(inner.size.x, inner.size.y / n) * 0.36, [Pal.AWNING_CREAM, Pal.FLOOR_TILE_2.lightened(0.45), Pal.COUNTER.lightened(0.15)][j % 3], j == 0)
-		"meat_case":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				k.rect(Rect2(c - Vector2(6, 5), Vector2(12, 10)), ENAMEL.darkened(0.08))
-				match (i + j) % 4:
-					0: G.steak(k, c, 10.0, 0.2, k.h(i, j, sd))
-					1: G.chop(k, c, 8.0, -0.4)
-					2: G.sausage_coil(k, c, 4.5)
-					_: G.links(k, c - Vector2(5, 0), c + Vector2(5, 0), 3), 13.0, sp)
-		"poultry_case":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				G.chicken(k, c, 12.0, PI * 0.5 if i % 2 == 0 else -PI * 0.5), 14.0, sp)
-		"watch_case":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				if (i + j) % 3 == 0:
-					G.pocket_watch(k, c, 3.2)
-				else:
-					G.watch(k, c, 2.8, PI * 0.5), 10.0, sp)
-		"jewel_case":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				if (i + j) % 2 == 0:
-					G.gem_ring(k, c, G.BRIGHTS[(i + j * 3) % G.BRIGHTS.size()])
-				else:
-					G.necklace(k, c, 4.0, Pal.GOLD2), 10.0, sp)
-		"candy_case", "chocolate_case":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				var tr := Rect2(c - Vector2(5, 4), Vector2(10, 8))
-				k.rect(tr, Pal.AWNING_CREAM.lightened(0.1) if art == "candy_case" else Pal.COUNTER.darkened(0.1))
-				G.candy(k, tr.grow(-1.0), sd + i * 7 + j) if art == "candy_case" else _bonbons(k, tr, i + j), 11.0, sp)
-		"cigar_case", "humidor":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				G.cigarbox(k, Rect2(c - Vector2(6, 4.5), Vector2(12, 9)), (i + j) % 2 == 0, k.h(i, j, sd)), 13.0, sp)
-		"cosmetic_case", "drug_case":
-			_rows(k, inner, sd, func(c: Vector2, i: int, j: int) -> void:
-				if (i + j) % 3 == 0:
-					G.box(k, Rect2(c - Vector2(3.5, 2.5), Vector2(7, 5)), G.BRIGHTS[(i * 2 + j) % G.BRIGHTS.size()])
-				else:
-					G.bottle(k, c, 2.4, [Pal.AWNING_COLORS[2].lightened(0.4), Pal.FLOOR_TILE_2.lightened(0.3), Pal.GLASS, Pal.RUST.lightened(0.2)][(i + j) % 4]), 8.0, sp)
+		_:
+			var step: float = {"pastry_case": 11.0, "meat_case": 13.0, "poultry_case": 14.0, "watch_case": 10.0, "jewel_case": 10.0,
+				"candy_case": 11.0, "chocolate_case": 11.0, "cigar_case": 13.0, "humidor": 13.0, "cosmetic_case": 8.0, "drug_case": 8.0}.get(art, 11.0)
+			var nx := maxi(1, int(inner.size.x / step))
+			var ny := maxi(1, int(inner.size.y / step))
+			for j in ny:
+				for i in nx:
+					if sp and k.h(i, j, sd + 77) > 0.55:
+						continue
+					var c2 := inner.position + Vector2((i + 0.5) * inner.size.x / nx, (j + 0.5) * inner.size.y / ny)
+					_case_cell(k, art, c2, i, j, sd)
 	# the glass top
 	if br:
 		k.rect(inner, Color(Pal.SIGN_BLACK, 0.12))
@@ -652,6 +619,50 @@ static func _case(k: Kit, R: Rect2, art: String, sd: int, br: bool) -> void:
 		k.glass(inner, Pal.GLASS.lightened(0.2), 0.32)
 	k.ci.draw_rect(R, frame.darkened(0.35), false, 1.0)
 	k.edges(R, frame, 1.5)
+
+
+static func _case_cell(k: Kit, art: String, c: Vector2, i: int, j: int, sd: int) -> void:
+	match art:
+		"pastry_case":
+			match (i + j * 2) % 4:
+				0: G.croissant(k, c, 9.0, 0.3)
+				1: G.cannolo(k, c, 0.2 + j)
+				2: G.cookie(k, c, 3.5, k.h(i, j, sd))
+				_: G.cookie(k, c, 4.2, 0.9)
+		"meat_case":
+			k.rect(Rect2(c - Vector2(6, 5), Vector2(12, 10)), ENAMEL.darkened(0.08))
+			match (i + j) % 4:
+				0: G.steak(k, c, 10.0, 0.2, k.h(i, j, sd))
+				1: G.chop(k, c, 8.0, -0.4)
+				2: G.sausage_coil(k, c, 4.5)
+				_: G.links(k, c - Vector2(5, 0), c + Vector2(5, 0), 3)
+		"poultry_case":
+			G.chicken(k, c, 12.0, PI * 0.5 if i % 2 == 0 else -PI * 0.5)
+		"watch_case":
+			if (i + j) % 3 == 0:
+				G.pocket_watch(k, c, 3.2)
+			else:
+				G.watch(k, c, 2.8, PI * 0.5)
+		"jewel_case":
+			if (i + j) % 2 == 0:
+				G.gem_ring(k, c, G.BRIGHTS[(i + j * 3) % G.BRIGHTS.size()])
+			else:
+				G.necklace(k, c, 4.0, Pal.GOLD2)
+		"candy_case":
+			var tr := Rect2(c - Vector2(5, 4), Vector2(10, 8))
+			k.rect(tr, Pal.AWNING_CREAM.lightened(0.1))
+			G.candy(k, tr.grow(-1.0), sd + i * 7 + j)
+		"chocolate_case":
+			var tr2 := Rect2(c - Vector2(5, 4), Vector2(10, 8))
+			k.rect(tr2, Pal.COUNTER.darkened(0.1))
+			_bonbons(k, tr2, i + j)
+		"cigar_case", "humidor":
+			G.cigarbox(k, Rect2(c - Vector2(6, 4.5), Vector2(12, 9)), (i + j) % 2 == 0, k.h(i, j, sd))
+		"cosmetic_case", "drug_case":
+			if (i + j) % 3 == 0:
+				G.box(k, Rect2(c - Vector2(3.5, 2.5), Vector2(7, 5)), G.BRIGHTS[(i * 2 + j) % G.BRIGHTS.size()])
+			else:
+				G.bottle(k, c, 2.4, [Pal.AWNING_COLORS[2].lightened(0.4), Pal.FLOOR_TILE_2.lightened(0.3), Pal.GLASS, Pal.RUST.lightened(0.2)][(i + j) % 4])
 
 
 static func _bonbons(k: Kit, r: Rect2, i: int) -> void:
@@ -1232,7 +1243,7 @@ static func _barber_chair(k: Kit, R: Rect2) -> void:
 	var seat := Rect2(-R.size.x * 0.3, -R.size.y * 0.2, R.size.x * 0.6, R.size.y * 0.38)
 	k.rrect(seat, 4.0, Pal.FLOOR_TILE_2.lightened(0.05))
 	k.line(Vector2(seat.position.x + 3, seat.get_center().y), Vector2(seat.end.x - 3, seat.get_center().y), Pal.FLOOR_TILE_2.darkened(0.2), 1.0)
-	for sgn in [-1.0, 1.0]:
+	for sgn: float in [-1.0, 1.0]:
 		k.rrect(Rect2(Vector2(sgn * R.size.x * 0.36 - 2.5, -R.size.y * 0.25), Vector2(5, R.size.y * 0.42)), 2.0, STEEL.lightened(0.4))
 	k.rrect(Rect2(-R.size.x * 0.22, R.size.y * 0.25, R.size.x * 0.44, R.size.y * 0.2), 2.0, STEEL.lightened(0.3))
 	k.line(Vector2(0, R.size.y * 0.18), Vector2(0, R.size.y * 0.25), STEEL, 3.0)
@@ -1241,7 +1252,7 @@ static func _barber_chair(k: Kit, R: Rect2) -> void:
 static func _shine_stand(k: Kit, R: Rect2) -> void:
 	k.top(R, MAHOG, 2.0)
 	k.rrect(Rect2(-R.size.x * 0.32, -R.size.y * 0.42, R.size.x * 0.64, R.size.y * 0.5), 4.0, Pal.LEATHER.lightened(0.2))
-	for sgn in [-1.0, 1.0]:
+	for sgn: float in [-1.0, 1.0]:
 		k.rect(Rect2(Vector2(sgn * R.size.x * 0.18 - 3, R.size.y * 0.22), Vector2(6, 9)), Pal.BRASS)
 	k.rect(Rect2(-R.size.x * 0.45, R.size.y * 0.1, R.size.x * 0.9, 3), Pal.BRASS.darkened(0.2))
 
@@ -1697,7 +1708,7 @@ static func _oven(k: Kit, R: Rect2, sd: int, night: float) -> void:
 	k.rrect(crown.grow(-4.0), crown.size.y * 0.4, Pal.BRICK_DARK)
 	k.disc(Vector2(0, crown.get_center().y), 6.0, IRON)
 	k.disc(Vector2(0, crown.get_center().y), 3.5, IRON.lightened(0.2))
-	for sgn in [-1.0, 1.0]:
+	for sgn: float in [-1.0, 1.0]:
 		var d := Rect2(Vector2(sgn * R.size.x * 0.2 - 10, R.end.y - 10), Vector2(20, 9))
 		k.rect(d, IRON)
 		k.rect(d.grow(-2.0), IRON.lightened(0.12))
@@ -1737,7 +1748,7 @@ static func _icebox(k: Kit, R: Rect2) -> void:
 	k.top(R, OAK, 2.0)
 	k.ci.draw_rect(R.grow(-3.0), OAK.darkened(0.2), false, 1.0)
 	k.line(Vector2(R.position.x + 3, 0), Vector2(R.end.x - 3, 0), OAK.darkened(0.25), 1.0)
-	for sgn in [-1.0, 1.0]:
+	for sgn: float in [-1.0, 1.0]:
 		k.rect(Rect2(Vector2(R.size.x * 0.25 - 3, sgn * R.size.y * 0.25 - 1), Vector2(6, 3)), Pal.BRASS)
 	k.rect(Rect2(R.position.x + 2, R.end.y - 4, R.size.x - 4, 2), Pal.BRASS.darkened(0.2))
 

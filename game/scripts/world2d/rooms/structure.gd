@@ -56,8 +56,9 @@ static func _planks(k: Kit, r: Rect2, base: Color, s: int, wear: float) -> void:
 			var c := base.lightened(0.07 * t) if t > 0.5 else base.darkened(0.09 * (1.0 - t))
 			if k.h(i, j, s + 9) > 0.93:
 				c = c.darkened(0.08)
-			k.rect(Rect2(x0, y0, x1 - x0, y1 - y0), c)
-			if y + len < r.end.y:
+			if y1 > y0:
+				k.rect(Rect2(x0, y0, x1 - x0, y1 - y0), c)
+			if y + len < r.end.y and y + len > r.position.y:
 				joints.append(Vector2(x0, y + len))
 				joints.append(Vector2(x1, y + len))
 			# a couple of nail heads at the joint
@@ -98,7 +99,7 @@ static func _parquet(k: Kit, r: Rect2, s: int) -> void:
 			var c := base.lightened(0.06 * t) if (ix + iy) % 2 == 0 else base.darkened(0.12 + 0.05 * t)
 			k.rect(Rect2(p, sz), c)
 			var vertical := (ix + iy) % 2 == 0
-			for m in [1, 2]:
+			for m: int in [1, 2]:
 				if vertical:
 					var x := p.x + q * m / 3.0
 					if x < p.x + sz.x:
@@ -262,7 +263,7 @@ static func _concrete(k: Kit, r: Rect2, s: int) -> void:
 		var t := k.h(j, 3, s)
 		var rad := Vector2(0.8 + t * 1.6, 0.5 + t) * M
 		var c := _inside(k, r, j, s, rad.x)
-		k.ellipse(c, rad, Color(base.lightened(0.08) if t > 0.5 else base.darkened(0.08), 0.35), k.h(j, 4, s) * PI)
+		k.ellipse(c, rad, Color(base.lightened(0.05) if t > 0.5 else base.darkened(0.05), 0.22), k.h(j, 4, s) * PI)
 	# expansion joints every 3 m
 	var q := 3.0 * M
 	var segs := PackedVector2Array()
@@ -276,7 +277,7 @@ static func _concrete(k: Kit, r: Rect2, s: int) -> void:
 		segs.append(Vector2(r.position.x, y))
 		segs.append(Vector2(r.end.x, y))
 		y += q
-	k.lines(segs, base.darkened(0.3), 1.5)
+	k.lines(segs, Color(base.darkened(0.25), 0.6), 1.0)
 	# oil stains and a crack or two
 	for j in 5:
 		var rad2 := Vector2(0.25 + k.h(j, 7, s) * 0.35, 0.18 + k.h(j, 8, s) * 0.2) * M
@@ -302,13 +303,22 @@ static func wall_ao(k: Kit, walls: Array, room: Rect2) -> void:
 		var r: Rect2 = w["r"]
 		if String(w["style"]) == "bars":
 			continue
+		# only the sides that face into the building (never out onto the sidewalk)
+		var inside := room.grow(1.0)
 		if r.size.x >= r.size.y:
-			k.grad(Rect2(r.position.x, r.end.y, r.size.x, d), c0, c1, true)
-			k.grad(Rect2(r.position.x, r.position.y - d, r.size.x, d), c1, c0, true)
+			var a := Rect2(r.position.x, r.end.y, r.size.x, d)
+			var b := Rect2(r.position.x, r.position.y - d, r.size.x, d)
+			if inside.encloses(a):
+				k.grad(a, c0, c1, true)
+			if inside.encloses(b):
+				k.grad(b, c1, c0, true)
 		else:
-			k.grad(Rect2(r.end.x, r.position.y, d, r.size.y), c0, c1, false)
-			k.grad(Rect2(r.position.x - d, r.position.y, d, r.size.y), c1, c0, false)
-	var _unused := room
+			var a2 := Rect2(r.end.x, r.position.y, d, r.size.y)
+			var b2 := Rect2(r.position.x - d, r.position.y, d, r.size.y)
+			if inside.encloses(a2):
+				k.grad(a2, c0, c1, false)
+			if inside.encloses(b2):
+				k.grad(b2, c1, c0, false)
 
 
 static func wall_shadows(k: Kit, walls: Array) -> void:
@@ -418,7 +428,7 @@ static func openings(k: Kit, list: Array, broken: Array, s: int) -> void:
 		match String(o["style"]):
 			"loading": _loading_door(k, r)
 			_:
-				var smashed := o.has("item") and broken.has(int(o["item"]))
+				var smashed: bool = o.has("item") and broken.has(int(o["item"]))
 				_window(k, r, smashed, s + int(o.get("item", 0)) * 17)
 
 
@@ -499,14 +509,14 @@ static func doors(k: Kit, list: Array, wt: float) -> void:
 		var th := PackedVector2Array([p - half - across * wt * 0.5, p + half - across * wt * 0.5, p + half + across * wt * 0.5, p - half + across * wt * 0.5])
 		k.poly(th, Pal.COUNTER.lightened(0.18) if kind != "cell" else Pal.MANHOLE.lightened(0.25))
 		# jambs: small posts at both ends
-		for sgn in [-1.0, 1.0]:
+		for sgn: float in [-1.0, 1.0]:
 			var c: Vector2 = p + along * (w * 0.5 + 2.0) * sgn
 			var jr := PackedVector2Array([c - along * 3.0 - across * wt * 0.62, c + along * 3.0 - across * wt * 0.62, c + along * 3.0 + across * wt * 0.62, c - along * 3.0 + across * wt * 0.62])
 			k.poly(jr, jamb if kind != "cell" else Pal.MANHOLE)
 		# the leaf, open against the frame, on the room side (away from `out`)
 		var inward := -out
 		if kind == "front":
-			for sgn2 in [-1.0, 1.0]:
+			for sgn2: float in [-1.0, 1.0]:
 				var hinge: Vector2 = p + along * (w * 0.5 - 1.5) * sgn2 + inward * wt * 0.5
 				var leaf_len := w * 0.5 - 1.0
 				_leaf(k, hinge, inward, leaf_len, along * -sgn2, false)
