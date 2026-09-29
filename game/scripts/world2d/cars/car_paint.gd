@@ -77,6 +77,31 @@ static func inset(pts: PackedVector2Array, d: float) -> PackedVector2Array:
 	return out
 
 
+## The outline pushed out by `d` along each vertex's averaged normal, without mitring (for soft
+## skirts round busy outlines: no spikes at the concave corners).
+static func grow(pts: PackedVector2Array, d: float) -> PackedVector2Array:
+	var n := pts.size()
+	var out := PackedVector2Array()
+	out.resize(n)
+	var s := 1.0 if signed_area(pts) > 0.0 else -1.0
+	for i in n:
+		# the direction along the outline, from neighbours at least a couple of px away (clipped
+		# outlines have runs of near-duplicate points that would throw the normal about)
+		var a := pts[i]
+		var b := pts[i]
+		for k in range(1, mini(6, n)):
+			a = pts[(i - k + n) % n]
+			if a.distance_squared_to(pts[i]) > 4.0:
+				break
+		for k in range(1, mini(6, n)):
+			b = pts[(i + k) % n]
+			if b.distance_squared_to(pts[i]) > 4.0:
+				break
+		var e := (b - a).normalized()
+		out[i] = pts[i] - Vector2(-e.y, e.x) * s * d
+	return out
+
+
 static func shift(pts: PackedVector2Array, off: Vector2) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(pts.size())
@@ -175,45 +200,81 @@ static func closed(pts: PackedVector2Array) -> PackedVector2Array:
 
 ## Gradient between concentric rings (same vertex count), the last ring filled flat.
 static func rings(ci: CanvasItem, rs: Array, cs: Array, fill_last: bool = true) -> void:
-	var n: int = (rs[0] as PackedVector2Array).size()
-	if n < 3:
-		return
+	var b := Batch.new()
+	b.rings(rs, cs, fill_last)
+	b.flush(ci)
+
+
+## Triangles collected from many shapes and sent as one draw call (each polygon command is a
+## draw call of its own in the 2D renderer; the layers that redraw often use this).
+class Batch extends RefCounted:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
-	for k in rs.size():
-		pts.append_array(rs[k])
-		var c: Color = cs[k]
-		for i in n:
-			cols.append(c)
-	for k in rs.size() - 1:
-		var a := k * n
-		var b := (k + 1) * n
-		for i in n:
-			var j := (i + 1) % n
-			idx.append(a + i)
-			idx.append(a + j)
-			idx.append(b + j)
-			idx.append(a + i)
-			idx.append(b + j)
-			idx.append(b + i)
-	if fill_last:
-		var last: PackedVector2Array = rs[rs.size() - 1]
-		var base := (rs.size() - 1) * n
-		var tri := Geometry2D.triangulate_polygon(last)
-		if tri.is_empty():
-			# fan from the centre (a ring pinched by a deep inset)
-			pts.append(centroid(last))
-			cols.append(cs[cs.size() - 1])
-			var ctr := pts.size() - 1
+
+	func rings(rs: Array, cs: Array, fill_last: bool = true) -> void:
+		var n: int = (rs[0] as PackedVector2Array).size()
+		if n < 3:
+			return
+		var o := pts.size()
+		for k in rs.size():
+			pts.append_array(rs[k])
+			var c: Color = cs[k]
 			for i in n:
-				idx.append(ctr)
-				idx.append(base + i)
-				idx.append(base + (i + 1) % n)
-		else:
-			for t in tri:
-				idx.append(base + t)
-	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, pts, cols)
+				cols.append(c)
+		for k in rs.size() - 1:
+			var a := o + k * n
+			var b := o + (k + 1) * n
+			for i in n:
+				var j := (i + 1) % n
+				idx.append_array(PackedInt32Array([a + i, a + j, b + j, a + i, b + j, b + i]))
+		if fill_last:
+			var last: PackedVector2Array = rs[rs.size() - 1]
+			var base := o + (rs.size() - 1) * n
+			var tri := Geometry2D.triangulate_polygon(last)
+			if tri.is_empty():
+				# fan from the centre (a ring pinched by a deep inset)
+				pts.append(CarPaint.centroid(last))
+				cols.append(cs[cs.size() - 1])
+				var ctr := pts.size() - 1
+				for i in n:
+					idx.append_array(PackedInt32Array([ctr, base + i, base + (i + 1) % n]))
+			else:
+				for t in tri:
+					idx.append(base + t)
+
+	func poly(p: PackedVector2Array, col: Color) -> void:
+		if p.size() < 3:
+			return
+		var tri := Geometry2D.triangulate_polygon(p)
+		if tri.is_empty():
+			return
+		var o := pts.size()
+		pts.append_array(p)
+		for i in p.size():
+			cols.append(col)
+		for t in tri:
+			idx.append(o + t)
+
+	## A straight stroke with square ends.
+	func line(a: Vector2, b: Vector2, w: float, col: Color) -> void:
+		var d := b - a
+		if d.length_squared() < 0.0001:
+			return
+		var nv := Vector2(-d.y, d.x).normalized() * w * 0.5
+		var o := pts.size()
+		pts.append_array(PackedVector2Array([a - nv, b - nv, b + nv, a + nv]))
+		for i in 4:
+			cols.append(col)
+		idx.append_array(PackedInt32Array([o, o + 1, o + 2, o, o + 2, o + 3]))
+
+	func flush(ci: CanvasItem) -> void:
+		if idx.is_empty():
+			return
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, pts, cols)
+		pts = PackedVector2Array()
+		cols = PackedColorArray()
+		idx = PackedInt32Array()
 
 
 ## A flat polygon with an anti-aliased edge.
@@ -394,7 +455,8 @@ static func glass(ci: CanvasItem, pts: PackedVector2Array, L: Vector2) -> void:
 	ci.draw_polyline(closed(pts), GLASS.darkened(0.35), 1.0, true)
 
 
-static func tyre(ci: CanvasItem, c: Vector2, length: float, width: float, rot: float, L: Vector2) -> void:
+## A tyre seen from above, into a batch: the dark shoulder, the tread's crown, a line down it.
+static func tyre(bt: Batch, c: Vector2, length: float, width: float, rot: float, L: Vector2) -> void:
 	var r := Rect2(-length * 0.5, -width * 0.5, length, width)
 	var pts := rpoly(r, width * 0.42, 3)
 	var t := Transform2D(rot, c)
@@ -402,17 +464,10 @@ static func tyre(ci: CanvasItem, c: Vector2, length: float, width: float, rot: f
 	p.resize(pts.size())
 	for i in pts.size():
 		p[i] = t * pts[i]
-	rings(ci, [p, shift(inset(p, width * 0.22), L * 0.4)], [RUBBER.darkened(0.4), RUBBER_HI])
-	ci.draw_polyline(closed(p), RUBBER.darkened(0.4), 1.0, true)
-	# tread blocks along the top
-	var step := 3.2
-	var k := -length * 0.5 + step * 0.8
+	var edge := RUBBER.darkened(0.4)
+	bt.rings([inset(p, -0.5), p, shift(inset(p, width * 0.22), L * 0.4)], [alpha(edge, 0.0), edge, RUBBER_HI])
 	var ax := Vector2.from_angle(rot)
-	var ay := ax.orthogonal()
-	while k < length * 0.5 - step * 0.5:
-		var q := c + ax * k
-		ci.draw_line(q - ay * width * 0.3, q + ay * width * 0.3, RUBBER.darkened(0.5), 0.8, true)
-		k += step
+	bt.line(c - ax * length * 0.38, c + ax * length * 0.38, maxf(1.0, width * 0.22), RUBBER.darkened(0.5))
 
 
 ## Text painted on a panel, centred at `c`, running along +x.

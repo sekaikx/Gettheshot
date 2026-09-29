@@ -208,7 +208,9 @@ static func draw_open(p: CarPainter, ci: CanvasItem, L: Vector2) -> void:
 	for sg: float in [-1.0, 1.0]:
 		var sx := float(rb[1]) - 0.02
 		var c := p.v(sx, 0.75 * sg)
-		CarPaint.tyre(ci, c, 0.68 * M, 0.14 * M, 0.0, L)
+		var bt := CarPaint.Batch.new()
+		CarPaint.tyre(bt, c, 0.68 * M, 0.14 * M, 0.0, L)
+		bt.flush(ci)
 		CarPaint.chrome_disc(ci, c + p.v(0.0, -0.075 * sg), 0.06 * M, L)
 		ci.draw_line(c + p.v(0.0, -0.05 * sg), c + p.v(0.0, -0.1 * sg), Color("141414"), 2.0, true)
 	var body := _belt(p, ci, L)
@@ -219,7 +221,7 @@ static func draw_open(p: CarPainter, ci: CanvasItem, L: Vector2) -> void:
 	CarPaint.fill(ci, cock, Color("141212"))
 	# the sides throw a shadow into the cockpit, away from the sun
 	CarPaint.feather(ci, CarPaint.shift(CarPaint.inset(cock, 1.0), -L * 4.0), 5.0, Color("201c1a"))
-	var floor_col := Color("2a2622")
+	var floor_col := Color("3a2e26")
 	CarPaint.fill(ci, CarPaint.shift(CarPaint.inset(cock, 5.0), -L * 2.5), floor_col)
 	# the rear bench and the front seat, tufted leather
 	_bench(p, ci, L, x0 + 0.28, x0 + 0.78, hw - 0.1, true)
@@ -361,13 +363,14 @@ static func draw_van(p: CarPainter, ci: CanvasItem, L: Vector2) -> void:
 	var roof := CarPaint.rpoly(p.rm(x0, x1, -hw, hw), Vector4(float(ro[3]), float(ro[3]), float(ro[4]), float(ro[4])) * M, 4)
 	CarPaint.feather(ci, CarPaint.shift(roof, -L * 3.2), 4.0, Color(0, 0, 0, 0.3))
 	CarPaint.panel(ci, roof, p.roof_col, L, 4.4, 0.18, 0.62)
-	# the roof is pressed in long panels with a rain gutter round it
+	# a rain gutter round the roof, a leathercloth insert over the load space, seams across
 	ci.draw_polyline(CarPaint.closed(CarPaint.inset(roof, 3.0)), CarPaint.dk(p.roof_col, 0.5), 0.9, true)
-	var nrib := 5
-	for i in range(1, nrib):
-		var x := lerpf(x0 + 0.1, x1 - 0.1, float(i) / nrib)
-		ci.draw_line(p.v(x, -hw + 0.08), p.v(x, hw - 0.08), CarPaint.dk(p.roof_col, 0.45), 1.0, true)
-		ci.draw_line(p.v(x, -hw + 0.08) + L * 0.9, p.v(x, hw - 0.08) + L * 0.9, CarPaint.gloss(p.roof_col, 0.22), 0.6, true)
+	var ins := CarPaint.rpoly(p.rm(x0 + 0.22, x1 - 0.85, -hw + 0.14, hw - 0.14), 0.07 * M, 3)
+	CarPaint.flat(ci, ins, p.insert_col, L, 1.4, 0.4)
+	CarPaint.streak(ci, p.v(x0 + 0.3, 0.0) + L * 4.0, p.v(x1 - 0.95, 0.0) + L * 4.0, (hw - 0.22) * M, CarPaint.alpha(CarPaint.SKY, 0.1))
+	for x: float in [x1 - 0.72, x0 + 0.1]:
+		ci.draw_line(p.v(x, -hw + 0.06), p.v(x, hw - 0.06), CarPaint.dk(p.roof_col, 0.45), 1.0, true)
+		ci.draw_line(p.v(x, -hw + 0.06) + L * 0.9, p.v(x, hw - 0.06) + L * 0.9, CarPaint.gloss(p.roof_col, 0.22), 0.6, true)
 	var sgn := -1.0 if L.y < 0.0 else 1.0
 	CarPaint.streak(ci, p.v(x0 + 0.15, sgn * (hw - 0.1)), p.v(x1 - 0.1, sgn * (hw - 0.1)), 3.2, CarPaint.alpha(CarPaint.SKY, 0.2))
 	CarPaint.streak(ci, p.v(x0 + 0.25, sgn * (hw - 0.05)), p.v(x1 - 0.15, sgn * (hw - 0.05)), 1.2, CarPaint.alpha(Color.WHITE, 0.28))

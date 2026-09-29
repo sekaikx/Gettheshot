@@ -191,17 +191,43 @@ func _close() -> void:
 func _bench() -> void:
 	var g := _group(Vector2(0, 12000), Rect2(-900, -500, 1800, 1000))
 	var holders: Array = []
-	for i in 15:
+	var n := int(OS.get_environment("BENCH_N")) if OS.get_environment("BENCH_N") != "" else 15
+	for i in n:
 		var a := _car(g, KINDS[i % KINDS.size()], Vector2(-700 + (i % 5) * 350, -300 + (i / 5) * 300), 0.0, i, i % 11, 0.5, 8.0)
 		holders.append(a.get_parent())
 	cam.position = Vector2(0, 12000)
 	cam.zoom = Vector2.ONE
+	for f in 90:
+		await get_tree().process_frame
+	# standing still: only drawing the cached layers
 	var t0 := Time.get_ticks_usec()
-	var frames := 180
+	for f in 60:
+		await get_tree().process_frame
+	var still := (Time.get_ticks_usec() - t0) / 1000.0 / 60.0
+	# what each layer costs to show (hidden one at a time)
+	var parts := ""
+	for layer_name in ["Shadow", "Wheels", "BodySprite"]:
+		for h: Node2D in holders:
+			(h.get_child(0).get_node(layer_name) as CanvasItem).visible = false
+		for f in 5:
+			await get_tree().process_frame
+		var t1 := Time.get_ticks_usec()
+		for f in 40:
+			await get_tree().process_frame
+		parts += " without %s %.2f ms %d calls %d prims," % [layer_name, (Time.get_ticks_usec() - t1) / 1000.0 / 40.0,
+			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)]
+		for h: Node2D in holders:
+			(h.get_child(0).get_node(layer_name) as CanvasItem).visible = true
+	print("BENCH parts:", parts, " all: %d calls %d prims" % [RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)])
+	# all turning and steering at once: shadows, paint and wheels redraw
+	t0 = Time.get_ticks_usec()
+	var frames := 120
 	for f in frames:
 		for h: Node2D in holders:
 			h.rotation += 0.02
 			(h.get_child(0) as CarArt).set_motion(8.0, sin(f * 0.1))
 		await get_tree().process_frame
-	print("BENCH cars: %.2f ms/frame" % ((Time.get_ticks_usec() - t0) / 1000.0 / frames))
+	print("BENCH cars: still %.2f ms/frame, all turning %.2f ms/frame" % [still, (Time.get_ticks_usec() - t0) / 1000.0 / frames])
 	await _clear(g)

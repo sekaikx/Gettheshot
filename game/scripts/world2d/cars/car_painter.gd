@@ -234,22 +234,17 @@ func draw_shadow(ci: CanvasItem, off: Vector2, strength: float, load_n: int) -> 
 			shape = h
 		else:
 			shape = _largest(Geometry2D.merge_polygons(shape, h), shape)
-	# a soft edge: nested offsets (Clipper, so concave corners stay clean), each a thin layer
-	var sh := Color(0.02, 0.02, 0.05, SHADOW_A * strength / SHADOW_RINGS)
-	for k in SHADOW_RINGS:
-		var d := lerpf(SHADOW_SOFT, -SHADOW_SOFT, float(k) / (SHADOW_RINGS - 1))
-		for poly in Geometry2D.offset_polygon(shape, d, Geometry2D.JOIN_ROUND):
-			_fill_safe(ci, poly, sh)
-	# right under the car: the ground it hides from the sky
+	# one batch: the core, a soft skirt fading out round it, the dark ground right under the car
+	var bt := CarPaint.Batch.new()
+	var sh := Color(0.02, 0.02, 0.05, SHADOW_A * strength)
+	for poly in Geometry2D.offset_polygon(shape, -SHADOW_SOFT * 0.5, Geometry2D.JOIN_ROUND):
+		if Geometry2D.is_polygon_clockwise(poly) != Geometry2D.is_polygon_clockwise(shape):
+			continue
+		bt.rings([CarPaint.grow(poly, SHADOW_SOFT * 2.0), poly], [CarPaint.alpha(sh, 0.0), sh])
 	var under: PackedVector2Array = fps[0][0]
-	var uc := Color(0.01, 0.01, 0.03, 0.14)
-	for k in 3:
-		for poly in Geometry2D.offset_polygon(under, -2.0 - k * 3.0, Geometry2D.JOIN_ROUND):
-			_fill_safe(ci, poly, uc)
-	# tyres on the ground
-	for w in wheels():
-		var c: Vector2 = w["c"]
-		FastDraw.soft(ci, Transform2D.IDENTITY, c + off * 0.12, Vector2(float(w["len"]) * 0.6, float(w["wid"]) * 1.2), 0.0, Color(0, 0, 0, 0.5))
+	for poly in Geometry2D.offset_polygon(under, -4.0, Geometry2D.JOIN_ROUND):
+		bt.poly(poly, Color(0.01, 0.01, 0.03, 0.3))
+	bt.flush(ci)
 
 
 static func _largest(polys: Array, fallback: PackedVector2Array) -> PackedVector2Array:
@@ -261,18 +256,6 @@ static func _largest(polys: Array, fallback: PackedVector2Array) -> PackedVector
 			best_a = a
 			best = m
 	return best
-
-
-static func _fill_safe(ci: CanvasItem, poly: PackedVector2Array, col: Color) -> void:
-	if poly.size() < 3:
-		return
-	var tri := Geometry2D.triangulate_polygon(poly)
-	if tri.is_empty():
-		return
-	var cols := PackedColorArray()
-	cols.resize(poly.size())
-	cols.fill(col)
-	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), tri, poly, cols)
 
 
 # ------------------------------------------------------------------ wheels
@@ -294,29 +277,28 @@ func wheels() -> Array:
 
 
 func draw_wheels(ci: CanvasItem, steer_angle: float, L: Vector2) -> void:
-	# the front axle and the drag link show through the gaps beside the hood
-	var fa := float(s["fa"])
-	var track := float(s.get("ftrack", s["track"]))
-	ci.draw_line(v(fa, -track + 0.05), v(fa, track - 0.05), Color("1c1b1a"), 0.07 * M, true)
-	ci.draw_line(v(fa - 0.02, -track + 0.1), v(fa - 0.02, track - 0.1), Color("2a2927"), 0.02 * M, true)
-	for w in wheels():
-		var rot := steer_angle if bool(w["front"]) else 0.0
-		CarPaint.tyre(ci, w["c"], float(w["len"]), float(w["wid"]), rot, L)
-
-
-# ------------------------------------------------------------------ chassis parts
-
-func draw_underbody(ci: CanvasItem) -> void:
+	# one batch: the chassis underneath, the front axle and drag link in the gaps beside the
+	# hood, the tyres
+	var bt := CarPaint.Batch.new()
 	var rad: Array = s["rad"]
 	var x0 := float(s["ra"]) - 0.5
 	var x1 := float(rad[0]) + 0.04
 	var hw := float(s["track"]) - 0.02
-	CarPaint.fill(ci, CarPaint.rpoly(rm(x0, x1, -hw, hw), 0.12 * M, 3), UNDER)
-	# the frame rails and the front spring
+	bt.poly(CarPaint.rpoly(rm(x0, x1, -hw, hw), 0.12 * M, 3), UNDER)
 	for sg: float in [-1.0, 1.0]:
-		ci.draw_line(v(x0 + 0.1, 0.36 * sg), v(x1 - 0.05, 0.3 * sg), Color("1a1918"), 0.06 * M, true)
-	ci.draw_line(v(float(s["fa"]) + 0.08, -0.42), v(float(s["fa"]) + 0.08, 0.42), Color("201f1d"), 0.05 * M, true)
+		bt.line(v(x0 + 0.1, 0.36 * sg), v(x1 - 0.05, 0.3 * sg), 0.06 * M, Color("1a1918"))
+	bt.line(v(float(s["fa"]) + 0.08, -0.42), v(float(s["fa"]) + 0.08, 0.42), 0.05 * M, Color("201f1d"))
+	var fa := float(s["fa"])
+	var track := float(s.get("ftrack", s["track"]))
+	bt.line(v(fa, -track + 0.05), v(fa, track - 0.05), 0.07 * M, Color("1c1b1a"))
+	bt.line(v(fa - 0.02, -track + 0.1), v(fa - 0.02, track - 0.1), 0.02 * M, Color("2a2927"))
+	for w in wheels():
+		var rot := steer_angle if bool(w["front"]) else 0.0
+		CarPaint.tyre(bt, w["c"], float(w["len"]), float(w["wid"]), rot, L)
+	bt.flush(ci)
 
+
+# ------------------------------------------------------------------ chassis parts
 
 func draw_running_boards(ci: CanvasItem, L: Vector2) -> void:
 	var rb: Array = s["rb"]
@@ -578,7 +560,7 @@ func draw_lamps(ci: CanvasItem, level: float, head: bool) -> void:
 	for p: Vector2 in sp["head"]:
 		var c := p - Vector2(lr * 0.6, 0.0)
 		if head:
-			CarPaint.glow(ci, p + Vector2(lr * 0.9, 0.0), Vector2(lr * 3.4, lr * 2.2), CarPaint.alpha(warm, 0.5 * level))
+			CarPaint.glow(ci, p + Vector2(lr * 1.8, 0.0), Vector2(lr * 5.0, lr * 2.8), CarPaint.alpha(warm, 0.5 * level))
 			ci.draw_arc(c, lr * 0.8, -1.1, 1.1, 12, CarPaint.alpha(Color(1.0, 0.96, 0.84), level), lr * 0.34, true)
 			FastDraw.disc(ci, c + Vector2(lr * 0.55, 0.0), lr * 0.42, CarPaint.alpha(Color(1, 1, 0.94), 0.9 * level))
 		else:
