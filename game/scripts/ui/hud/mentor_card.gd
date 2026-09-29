@@ -71,6 +71,11 @@ func _process(delta: float) -> void:
 	_pview.position = Vector2(-off + 16.0, H_AREA - _h + 16.0)
 
 
+## Where the card is on screen (the edge arrows keep clear of it).
+func card_rect() -> Rect2:
+	return Rect2(position + _card().position, _card().size)
+
+
 func _card() -> Rect2:
 	return Rect2(Vector2(-(1.0 - _a) * 20.0, H_AREA - _h), Vector2(W_CARD, _h))
 

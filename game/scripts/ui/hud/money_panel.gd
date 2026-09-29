@@ -150,7 +150,7 @@ func _draw() -> void:
 		var nw := UI.tw(semi, String(it[1]), 18)
 		UI.text(self, Vector2(gx + 26 + nw, y), String(it[2]), sans, 15, UI.MUTE)
 		gx += 26 + nw + UI.tw(sans, String(it[2]), 15) + 13
-	_draw_heat(Vector2(W_PANEL - 146, y))
+	_draw_heat(Vector2(W_PANEL - 156, y))
 	# floaters: "+$500" rising from the number that changed
 	for fl in _floaters:
 		var t := float(fl["t"])
@@ -186,7 +186,7 @@ func _draw_heat(at: Vector2) -> void:
 			Draw.rrect(self, r, 2.0, c)
 			Draw.rect(self, Rect2(r.position + Vector2(2, 1), Vector2(r.size.x - 4, 2)), UI.with_a(Color.WHITE, 0.25))
 		else:
-			Draw.rrect(self, r, 2.0, Color(1, 1, 1, 0.07))
+			Draw.rrect(self, r, 2.0, Color(1, 1, 1, 0.13))
 
 
 static func _seg_color(k: int) -> Color:

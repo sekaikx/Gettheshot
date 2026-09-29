@@ -26,6 +26,14 @@ func strip_height() -> float:
 	return 34.0 * _a
 
 
+func strip_width() -> float:
+	var sans := UI.font("sans")
+	var x := 10.0
+	for k in KEYS:
+		x += UI.keycap_w(String(k[0]), 20.0) + 5.0 + UI.tw(sans, String(k[1]), 14) + 13.0
+	return x
+
+
 func _process(delta: float) -> void:
 	_t += delta
 	var want := 1.0 if (_t < SHOW and not hold) else 0.0

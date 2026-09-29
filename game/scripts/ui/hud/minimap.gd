@@ -91,7 +91,7 @@ func _draw() -> void:
 				draw_line(Vector2(hx - t0, mr.position.y + t0), Vector2(hx - t1, mr.position.y + t1), UI.with_a(Color("2a282c"), a), 1.0)
 			hx += 12.0
 	if inside_r.size.x > 0.0:
-		Draw.rect(self, inside_r, UI.with_a(Color("34363b").lerp(Color("1c2030"), night * 0.5), a))
+		Draw.rect(self, inside_r, UI.with_a(Color("3e4148").lerp(Color("222636"), night * 0.5), a))
 	# the river
 	if plan.water_x > 0.0:
 		var wx := c.x + (plan.water_x - center_m.x) * sc
@@ -106,7 +106,7 @@ func _draw() -> void:
 	# blocks (sidewalks) and the buildings on them
 	_cache(plan)
 	var view := Rect2(center_m - Vector2(RADIUS_M, RADIUS_M) * 1.1, Vector2(RADIUS_M, RADIUS_M) * 2.2)
-	var walk := UI.with_a(Color("8f877a").darkened(0.35 + night * 0.25), a)
+	var walk := UI.with_a(Color("8f877a").darkened(0.12 + night * 0.3), a)
 	for rm in _blocks_m:
 		if rm.intersects(view):
 			_rect_m(rm, center_m, sc, c, mr, walk)
@@ -115,8 +115,11 @@ func _draw() -> void:
 		var lr: Rect2 = it[0]
 		if not lr.intersects(view):
 			continue
-		var col: Color = Color("7a6450") if int(it[2]) == inside else it[1]
-		_rect_m(lr, center_m, sc, c, mr, UI.with_a(col.darkened(night * 0.3), a))
+		var col: Color = Color("9a7a58") if int(it[2]) == inside else it[1]
+		col = col.darkened(night * 0.3)
+		# a darker edge, so neighbouring buildings read apart
+		_rect_m(lr, center_m, sc, c, mr, UI.with_a(col.darkened(0.35), a))
+		_rect_m(lr.grow(-0.55), center_m, sc, c, mr, UI.with_a(col, a))
 	# businesses: who they pay
 	var mine := UI.my_family()
 	for b in Game.biz:
@@ -236,11 +239,11 @@ func _cache(plan: CityPlan) -> void:
 		var ld: Dictionary = lot
 		var lr_px := W.lot_rect(ld)
 		var kind := String(ld["kind"])
-		var col := Color("4a403a")
+		var col := Color("5e4d44")
 		if kind == "courtyard":
-			col = Color("4c4a38")
+			col = Color("58583f")
 		elif bool(ld.get("shop", false)) or kind in ["club", "poolhall", "precinct", "warehouse"]:
-			col = Color("5a4a40")
+			col = Color("76594a")
 		_lots_m.append([Rect2(lr_px.position / W.M, lr_px.size / W.M).grow(-0.4), col, int(ld["id"])])
 
 

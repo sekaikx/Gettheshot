@@ -255,6 +255,10 @@ func _avoid() -> void:
 		Rect2(_clock.position, Vector2(ClockPanel.W_PANEL, _clock.used_height())), Rect2(_minimap.position, _minimap.size + Vector2(16, 16))]
 	if _paper.mini_showing():
 		av.append(Rect2(Vector2(_last_size.x - 400, _paper.mini_bottom - 190), Vector2(400, 210)))
+	if _controls.strip_height() > 4.0:
+		av.append(Rect2(_controls.position, Vector2(_controls.strip_width(), 30)))
+	if _mentor.is_showing():
+		av.append(_mentor.card_rect())
 	_marks.avoid = av
 
 
@@ -464,7 +468,7 @@ func toggle_help() -> void:
 	if _modal != "":
 		return
 	if not _help_from_menu:
-		_set_paused(not Net.is_online())
+		_set_paused(_solo())
 	_help.open()
 	_modal = "help"
 
@@ -537,7 +541,7 @@ func show_final() -> void:
 func _open_menu() -> void:
 	if _modal != "":
 		return
-	_set_paused(not Net.is_online())
+	_set_paused(_solo())
 	_menu.paused_game = _paused
 	_menu.open("main")
 	_modal = "menu"
@@ -551,11 +555,22 @@ func _close_menu() -> void:
 	_set_paused(false)
 
 
+## Playing alone, the city stops while the menu or How to play is open. The World's Pauser does
+## the stopping (for every panel); this only remembers it, for the menu's "PAUSED" line.
 func _set_paused(on: bool) -> void:
-	if on == _paused or not is_inside_tree():
-		return
 	_paused = on
-	get_tree().paused = on
+
+
+func _solo() -> bool:
+	return Net.is_solo and Game.players.size() <= 1
+
+
+func _leave_to_menu() -> void:
+	_set_paused(false)
+	if is_inside_tree():
+		get_tree().paused = false
+	Net.leave()
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func _menu_action(id: String) -> void:
@@ -567,11 +582,9 @@ func _menu_action(id: String) -> void:
 		"save":
 			Net.to_host("save", [])
 		"quit":
-			_set_paused(false)
 			if Net.is_host() and Game.running:
 				Game.save_campaign()
-			Net.leave()
-			get_tree().change_scene_to_file("res://scenes/main.tscn")
+			_leave_to_menu()
 
 
 func _final_action(id: String) -> void:
@@ -581,14 +594,13 @@ func _final_action(id: String) -> void:
 			if _modal == "final":
 				_modal = ""
 		"menu":
-			_set_paused(false)
-			Net.leave()
-			get_tree().change_scene_to_file("res://scenes/main.tscn")
+			_leave_to_menu()
 
 
-## While the game is paused the World's controller doesn't run, so the HUD reads the keys itself.
+## While the city is paused (solo, a panel open) the World's controller doesn't run, so the HUD
+## reads the keys itself.
 func _unhandled_input(e: InputEvent) -> void:
-	if not _paused or not (e is InputEventKey) or not e.pressed or e.echo:
+	if not is_inside_tree() or not get_tree().paused or not (e is InputEventKey) or not e.pressed or e.echo:
 		return
 	var k := (e as InputEventKey).keycode
 	get_viewport().set_input_as_handled()
@@ -612,8 +624,8 @@ func _process(delta: float) -> void:
 	_controls.hold = talking
 	_minimap.hold = talking
 	_marks.hidden_prompt = _modal != "" or in_jail()
-	_marks.hidden_meters = _modal != ""
-	_marks.hidden_goals = _modal != ""
+	_marks.hidden_meters = _modal != "" or in_jail()
+	_marks.hidden_goals = _modal != "" or in_jail()
 	_avoid()
 	var tg: Variant = _objective.get("target", Vector2.INF)
 	_marks.target = tg if tg is Vector2 else Vector2.INF
@@ -629,6 +641,14 @@ func _process(delta: float) -> void:
 	# the toasts sit under the date (and the sit-down badge)
 	var ty := 14 + _clock.used_height() + 10
 	_toasts.position = Vector2(_last_size.x - 16 - Toasts.W_TOAST, lerpf(_toasts.position.y, ty, clampf(delta * 10.0, 0.0, 1.0)) if absf(_toasts.position.y - ty) < 200.0 else ty)
+	# ...and stop above whatever sits under them: the talk box, the folded paper, the minimap
+	var floor_y := _minimap.position.y - 12.0
+	if talking:
+		floor_y = minf(floor_y, _talk.top_y() - 12.0)
+	if _paper.mini_showing() and not _paper.hold:
+		floor_y = minf(floor_y, _paper.mini_top() - 14.0)
+	_toasts.max_bottom = floor_y - _toasts.position.y
+	_toasts.hold = _modal in ["help", "paper", "final", "menu"]
 	_mentor.position = Vector2(16, _last_size.y - 16 - 200 - _controls.strip_height() - 8)
 	if _paused and _modal not in ["menu", "help"]:
 		_set_paused(false)

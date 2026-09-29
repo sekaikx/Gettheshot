@@ -86,6 +86,11 @@ func mini_showing() -> bool:
 	return not full and _mini_t < MINI_LIFE
 
 
+## The top of the folded copy on screen (the toasts stop above it).
+func mini_top() -> float:
+	return _mini.position.y if _mini.size.y > 0.0 else mini_bottom - 190.0
+
+
 func _has_point(p: Vector2) -> bool:
 	if full:
 		return true

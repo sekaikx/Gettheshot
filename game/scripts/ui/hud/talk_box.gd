@@ -276,6 +276,13 @@ func _layout() -> void:
 	_pview.size = _portrait_rect().size
 
 
+## The top of the talk box on screen (its portrait sticks out above it), or the screen bottom.
+func top_y() -> float:
+	if not visible or _box.size.y <= 0.0:
+		return size.y
+	return _portrait_rect().position.y - _lift
+
+
 func _portrait_rect() -> Rect2:
 	return Rect2(Vector2(_box.position.x + 26.0, _box.position.y - 38.0), Vector2(PORTRAIT, PORTRAIT))
 

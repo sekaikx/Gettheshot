@@ -11,6 +11,8 @@ const MAX := 5
 const LINE := 21.0
 
 var _items: Array = []      # {text, kind, age, lines, y, n}
+var max_bottom := 100000.0  # the lowest a toast may reach (the talk box, the paper, the minimap are under it)
+var hold := false           # a full-screen panel is open: hide, and keep them for later
 
 
 func _ready() -> void:
@@ -43,9 +45,16 @@ func _h(it: Dictionary) -> float:
 func _process(delta: float) -> void:
 	if _items.is_empty():
 		return
+	visible = not hold
+	if hold:
+		return
 	var y := 0.0
 	for it in _items:
-		it["age"] = float(it["age"]) + delta
+		# one that doesn't fit yet waits (unseen, not ageing) until the ones above it are gone
+		var fits := y + _h(it) <= max_bottom
+		it["hidden"] = not fits
+		if fits or float(it["age"]) >= LIFE:
+			it["age"] = float(it["age"]) + delta
 		it["y"] = lerpf(float(it["y"]), y, clampf(delta * 12.0, 0.0, 1.0))
 		# a fading toast keeps its place until it's gone, then the rest slide up
 		y += _h(it) + 8.0
@@ -57,6 +66,8 @@ func _draw() -> void:
 	var sans := UI.font("sans")
 	var cond := UI.font("cond")
 	for it in _items:
+		if bool(it.get("hidden", false)):
+			continue
 		var age := float(it["age"])
 		var a := clampf(age / 0.2, 0.0, 1.0) * clampf(1.0 - (age - LIFE) / FADE, 0.0, 1.0)
 		if a <= 0.0:
