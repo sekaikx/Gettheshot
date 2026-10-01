@@ -26,6 +26,7 @@ var _dyn := {}
 var _flash: Array = []
 var _t := 0.0
 var _active := true
+var disabled := false     # the 3D view does the night light: this one stays off
 
 
 func setup(w: Node2D) -> void:
@@ -115,14 +116,26 @@ func remove_dynamic(id: String) -> void:
 
 ## A brief flash (a gunshot): lights up even in daylight shade, fades in `t` seconds.
 func flash(pos: Vector2, r: float, color: Color, t: float = 0.12) -> void:
+	if disabled:
+		return
 	var s := _sprite({"pos": pos, "r": r, "color": color, "e": 1.5})
 	_root.add_child(s)
 	_flash.append([s, t, t])
 
 
+## The 3D view lights the street itself: switch the 2D lightmap off for good.
+func disable() -> void:
+	disabled = true
+	_active = false
+	layer.visible = false
+	svp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
 ## night 0..1, dusk 0..1 (the orange hour either side of night).
 func set_level(n: float, dusk: float) -> void:
 	night = n
+	if disabled:
+		return
 	var amb := Color.WHITE.lerp(Color(1.0, 0.8, 0.64), dusk * (1.0 - n)).lerp(Pal.NIGHT_AMBIENT, n)
 	ambient.color = amb
 	_root.modulate = Color(1, 1, 1, clampf(n * 1.2, 0.0, 1.0))
@@ -134,6 +147,8 @@ func set_level(n: float, dusk: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if disabled:
+		return
 	_t += delta
 	var cam := world.get_viewport().get_camera_2d()
 	if cam:

@@ -13,6 +13,7 @@ var _drops: Array = []
 var _splashes: Node2D
 var _t := 0.0
 var _flash_t := 0.0
+var skip_draw := false   # the 3D view draws rain and fog; only the lightning flash stays
 
 
 func setup(w: Node2D) -> void:
@@ -51,6 +52,14 @@ func setup(w: Node2D) -> void:
 		_drops.append([r.randf(), r.randf(), r.randf_range(0.7, 1.3)])
 
 
+## The 3D view draws the rain, fog and splashes: hide the 2D ones (the lightning flash stays).
+func use_3d() -> void:
+	skip_draw = true
+	_fog.visible = false
+	_rain.visible = false
+	_splashes.visible = false
+
+
 func set_kind(k: String) -> void:
 	kind = k
 
@@ -65,6 +74,9 @@ func lightning() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if skip_draw:
+		_flash_process(delta)
+		return
 	var fog_a := 0.0
 	if kind == "fog":
 		fog_a = 0.2
@@ -90,6 +102,15 @@ func _process(delta: float) -> void:
 		_rain.queue_redraw()
 		_splashes.queue_redraw()
 	_rain.visible = kind == "rain"
+
+
+func _flash_process(delta: float) -> void:
+	if _flash_t > 0.0:
+		_flash_t -= delta
+		var k := _flash_t / 0.35
+		_flash.color.a = 0.55 * k * (1.0 if fmod(_flash_t, 0.12) > 0.05 else 0.4)
+	else:
+		_flash.color.a = 0.0
 
 
 func _draw_rain() -> void:

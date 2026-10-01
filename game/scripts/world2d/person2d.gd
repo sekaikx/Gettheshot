@@ -54,6 +54,7 @@ var carrying := false
 var weapon := ""           # "", "pistol", "tommy", "bat"
 var ring_color := Color(0, 0, 0, 0)   # optional ring on the ground (your men, the player)
 var frozen := false        # stop animating (tests, posed figures)
+var mirror: Object = null  # the 3D body (Puppet3D) that copies every call below; null in the 2D view
 var _t := 0.0
 var _action := ""
 var _action_t := 0.0
@@ -139,6 +140,8 @@ func setup(k: String, lk: int, fam_color: Color = Color(0, 0, 0, 0), ex: Diction
 ## Called every frame by the Actor: the looping state and how fast it's moving.
 ## While down or dead, only play() (or set_motion with DOWN/DEAD) changes the state.
 func set_motion(st: int, spd: float) -> void:
+	if mirror:
+		mirror.set_motion(st, spd)
 	speed = spd
 	if st == state:
 		return
@@ -155,6 +158,8 @@ func set_motion(st: int, spd: float) -> void:
 ## "interact" (reach forward), "pickup", "down" (knocked down), "die", "smash" (swing at an object),
 ## "threaten" (point / grab), "talk" (gesture).
 func action(what: String) -> void:
+	if mirror:
+		mirror.action(what)
 	if what == "down":
 		if state != Anim.DOWN and state != Anim.DEAD:
 			_enter_down(Anim.DOWN)
@@ -172,6 +177,8 @@ func action(what: String) -> void:
 
 ## Return to a looping state after being down.
 func play(st: int) -> void:
+	if mirror:
+		mirror.play(st)
 	if st == Anim.DOWN or st == Anim.DEAD:
 		_enter_down(st)
 		return
@@ -182,17 +189,23 @@ func play(st: int) -> void:
 
 
 func carry(on: bool) -> void:
+	if mirror:
+		mirror.carry(on)
 	carrying = on
 	_refresh(false)
 
 
 func set_weapon(w: String) -> void:
+	if mirror:
+		mirror.set_weapon(w)
 	weapon = w
 	_refresh(false)
 
 
 ## A soft ring on the ground under the person (the World can mark your men, or the player).
 func set_ring(c: Color) -> void:
+	if mirror:
+		mirror.set_ring(c)
 	ring_color = c
 	queue_redraw()
 
