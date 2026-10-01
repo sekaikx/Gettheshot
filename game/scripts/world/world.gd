@@ -26,6 +26,7 @@ var roofs_layer: CanvasLayer
 var lighting: Lighting
 var weather_fx: Weather
 var cam: CameraRig
+var view3d: View3D       # the 3D picture of the street (null in the classic 2D view: --view2d)
 var hud: Node
 var controller: PlayerController
 var audio: Node
@@ -55,6 +56,8 @@ var _spotted := {}
 var _stacks := {}
 var _shake_t := 0.0
 var _night := -1.0
+var _wet_3d := -1.0
+var _weather_3d := ""
 var _decor := {}
 var _banner_lot := -2
 var _ring_t := 3.0
@@ -123,6 +126,8 @@ func _ready() -> void:
 	weather_fx = Weather.new()
 	add_child(weather_fx)
 	weather_fx.setup(self)
+	if not "--view2d" in OS.get_cmdline_user_args():
+		_enter_3d()
 	audio = preload("res://scripts/world/ambience.gd").new()
 	add_child(audio)
 	hud = preload("res://scripts/ui/hud.gd").new()
@@ -175,6 +180,42 @@ func _ready() -> void:
 		t.world = self
 		t.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(t)
+
+
+## Switch the picture to 3D: the 2D world keeps simulating (positions, AI, physics, nets) but is no
+## longer drawn; View3D mirrors it. See docs/REBUILD_3D.md.
+func _enter_3d() -> void:
+	view3d = View3D.new()
+	add_child(view3d)
+	view3d.setup(self)
+	ground.visible = false
+	interiors.visible = false
+	fronts.visible = false
+	roofs_layer.visible = false
+	lighting.disable()
+	weather_fx.use_3d()
+	boat.visible = false
+
+
+## Where a 2D world point (pixels) shows on screen, whichever view is on. `height` metres up (3D only).
+func to_screen(p: Vector2, height: float = 0.0) -> Vector2:
+	if view3d:
+		return view3d.to_screen(p, height)
+	return get_viewport().get_canvas_transform() * p
+
+
+## The 2D world point (pixels) under the mouse.
+func mouse_world() -> Vector2:
+	if view3d:
+		return view3d.to_world(get_viewport().get_mouse_position())
+	return get_global_mouse_position()
+
+
+## Screen pixels one metre covers at a 2D world point (for sizing marks over the street).
+func metre_px(p: Vector2) -> float:
+	if view3d:
+		return view3d.metre_px(p)
+	return W.M * get_viewport().get_canvas_transform().get_scale().x
 
 
 func _loading_card() -> CanvasLayer:
@@ -610,6 +651,10 @@ func _day_light() -> void:
 	var wet := 1.0 if weather == "rain" else 0.0
 	lighting.set_level(night, dusk)
 	weather_fx.set_night(night)
+	if view3d and (absf(night - _night) > 0.004 or _wet_3d != wet or _weather_3d != weather):
+		_wet_3d = wet
+		_weather_3d = weather
+		view3d.set_light(night, dusk, wet, weather)
 	if absf(night - _night) > 0.01:
 		_night = night
 		ground.set_night(night, wet)
@@ -1110,6 +1155,8 @@ func _track_inside() -> void:
 	if lot != inside_lot:
 		inside_lot = lot
 		roofs.set_inside(lot)
+		if view3d:
+			view3d.set_inside(lot)
 		cam.inside = lot >= 0
 		if lot >= 0:
 			var b := biz_at_lot(lot)
@@ -2786,6 +2833,8 @@ func _on_state_changed() -> void:
 	fronts.update_owners()
 	roofs.update_owners()
 	interiors.update_from_game()
+	if view3d:
+		view3d.state_changed()
 	# a shop padlocked, reopened or turned into a speakeasy: its windows light differently
 	var sig := ""
 	for b in Game.biz:

@@ -217,7 +217,7 @@ func _smash_more() -> void:
 ## Still won't pay after his things are broken: rough him up, like a player would.
 func _rough_up() -> void:
 	var b := Game.biz_by_id(_shop_id)
-	var owner := world.actor("s%d" % _shop_id)
+	var owner: Actor = world.actor("s%d" % _shop_id)
 	for i in 4:
 		if owner == null or int(b["protector"]) == 0 or int(b.get("shake", -1)) != 0 or owner.is_down():
 			return

@@ -59,7 +59,7 @@ func _physics_process(delta: float) -> void:
 	a.velocity = inp * spd
 	# aim at the mouse while standing still
 	if inp == Vector2.ZERO and _mouse_t > 0.0:
-		var m := world.get_global_mouse_position()
+		var m := world.mouse_world()
 		a.yaw = lerp_angle(a.yaw, (m - a.position).angle(), clampf(delta * 14.0, 0.0, 1.0))
 	_find_focus(a)
 
@@ -127,7 +127,7 @@ func _unhandled_input(e: InputEvent) -> void:
 func _face_mouse() -> void:
 	var a := world.local_actor
 	if a:
-		a.yaw = (world.get_global_mouse_position() - a.position).angle()
+		a.yaw = (world.mouse_world() - a.position).angle()
 		a.person.rotation = a.yaw
 
 

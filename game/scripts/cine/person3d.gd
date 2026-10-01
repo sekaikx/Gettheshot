@@ -676,7 +676,7 @@ func carry(on: bool) -> void:
 		var bm := BoxMesh.new()
 		bm.size = Vector3(0.5, 0.36, 0.4)
 		(_carry as MeshInstance3D).mesh = bm
-		(_carry as MeshInstance3D).material_override = Crate.material()
+		(_carry as MeshInstance3D).material_override = _mat(Color("8a6a44"), 0.9)
 		_carry.position = Vector3(0, 1.2, 0.42) if not _legacy else Vector3(0, 1.08, 0.36)
 		add_child(_carry)
 	elif not on and _carry:
