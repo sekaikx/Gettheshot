@@ -31,7 +31,6 @@ render_mode cull_back;
 uniform float night = 0.0;
 uniform float wet = 0.0;
 uniform float lit_ratio = 0.0;
-uniform int dbg = 0;
 varying vec4 vc;
 varying vec2 vuv;
 varying vec2 vuv2;
@@ -86,6 +85,7 @@ void fragment() {
 	// grime and weather
 	float grime = vn(vec2(u * 0.55, y * 0.22) + seed * 40.0);
 	col *= 0.86 + 0.22 * grime;
+	col *= mix(0.72, 1.0, smoothstep(0.0, 1.6, y));
 	col *= 1.0 - 0.16 * smoothstep(0.55, 1.0, vn(vec2(u * 2.6, y * 0.12 + seed * 9.0)));
 	// stone water table
 	float wt = 0.62;
@@ -209,13 +209,6 @@ void fragment() {
 	ROUGHNESS = mix(0.93, 0.5, wet) * (1.0 - 0.8 * shine) + 0.12 * shine;
 	SPECULAR = 0.2 + 0.5 * shine;
 	EMISSION = lin(ecol) * emis * night * 1.35 + (alb(col) * vec3(0.16, 0.2, 0.34) * 2.6 + vec3(0.022, 0.03, 0.06)) * night;
-	if (dbg == 1) { ALBEDO = lin(bcol); EMISSION = vec3(0.0); }
-	if (dbg == 2) { ALBEDO = vec3(m); EMISSION = vec3(0.0); }
-	if (dbg == 3) { ALBEDO = vec3(fract(bp.y), fract(bp.x), 0.0); EMISSION = vec3(0.0); }
-	if (dbg == 4) { ALBEDO = vec3(bh); EMISSION = vec3(0.0); }
-	if (dbg == 5) { ALBEDO = base; EMISSION = vec3(0.0); }
-	if (dbg == 6) { ALBEDO = vec3(h21(bc)); EMISSION = vec3(0.0); }
-	if (dbg == 7) { ALBEDO = vec3(seed, tint, 0.0); EMISSION = vec3(0.0); }
 }
 """
 

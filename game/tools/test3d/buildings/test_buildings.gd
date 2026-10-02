@@ -24,6 +24,13 @@ var shots := [
 	["night", Vector2(72.0, 88.5), 22.0, 1.0, 0.0, -1, 58.0],
 	["night_rain", Vector2(118.0, 88.5), 22.0, 1.0, 1.0, -1, 58.0],
 	["rain_day", Vector2(72.0, 88.5), 22.0, 0.0, 1.0, -1, 58.0],
+	["corner1", Vector2(91.0, 91.0), 22.0, 0.0, 0.0, -1, 58.0],
+	["corner2", Vector2(143.0, 139.0), 22.0, 0.0, 0.0, -1, 58.0],
+	["ns2", Vector2(144.0, 120.0), 22.0, 0.0, 0.0, -1, 58.0],
+	["shops3", Vector2(190.0, 136.5), 22.0, 0.0, 0.0, -1, 58.0],
+	["block_a", Vector2(72.0, 72.0), 46.0, 0.0, 0.0, -1, 58.0],
+	["block_b", Vector2(216.0, 120.0), 46.0, 0.0, 0.0, -1, 58.0],
+	["waterfront", Vector2(300.0, 100.0), 50.0, 0.0, 0.0, -1, 58.0],
 	["club", "club:0", 12.0, 0.0, 0.0, -1, 58.0],
 	["precinct", "precinct:0", 12.0, 0.0, 0.0, -1, 58.0],
 	["warehouse", "warehouse:0", 14.0, 0.0, 0.0, -1, 58.0],
@@ -33,6 +40,8 @@ var shots := [
 	["club_night", "club:0", 12.0, 1.0, 0.0, -1, 58.0],
 	["shops_night", "bakery:0", 12.0, 1.0, 1.0, -1, 58.0],
 	["neon", "neon", 12.0, 1.0, 0.0, -1, 58.0],
+	["speak", "speak", 12.0, 1.0, 0.0, -1, 58.0],
+	["pool", "poolhall:1", 12.0, 1.0, 0.0, -1, 58.0],
 	["padlock", Vector2(0, 0), 10.0, 0.0, 0.0, -1, 58.0],
 	["broken", Vector2(0, 0), 10.0, 0.0, 0.0, -1, 58.0],
 	["inside", Vector2(0, 0), 16.0, 0.0, 0.0, -3, 58.0],
@@ -115,9 +124,6 @@ func _light(night: float, wet: float) -> void:
 	env.fog_light_color = sky
 	env.fog_density = 0.012 if wet > 0.5 else 0.002
 	buildings.set_night(night, wet)
-	if OS.get_environment("DBG") != "":
-		var wm: ShaderMaterial = preload("res://scripts/world3d/buildings/bld_mats.gd").get_mats()["wall"]
-		wm.set_shader_parameter("dbg", int(OS.get_environment("DBG")))
 
 
 func _place(focus: Vector2, dist: float, pitch_deg: float) -> void:
@@ -162,7 +168,12 @@ func _run() -> void:
 		if not want.is_empty() and not want.has(name):
 			continue
 		var focus: Vector2 = Vector2.ZERO
-		if s[1] is String and s[1] == "neon":
+		if s[1] is String and s[1] == "speak":
+			var sb := _biz_south(["cafe", "restaurant", "cigar", "candy", "bakery", "grocer"])
+			sb["speak"] = true
+			buildings.update_owners()
+			focus = _lot_focus(int(sb["lot"]))
+		elif s[1] is String and s[1] == "neon":
 			var nb := _biz_south(["restaurant", "cigar", "candy", "drugstore"])
 			focus = _lot_focus(int(nb["lot"]))
 		elif s[1] is String:

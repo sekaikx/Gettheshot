@@ -186,7 +186,13 @@ func sphere(key: String, c: Vector3, r: float, col: Color, segs := 8, rings := 5
 			var q := [Vector3(sin(p0) * cos(a0), cos(p0), sin(p0) * sin(a0)), Vector3(sin(p0) * cos(a1), cos(p0), sin(p0) * sin(a1)),
 				Vector3(sin(p1) * cos(a1), cos(p1), sin(p1) * sin(a1)), Vector3(sin(p1) * cos(a0), cos(p1), sin(p1) * sin(a0))]
 			var n: Vector3 = (q[0] + q[1] + q[2] + q[3]).normalized()
-			quad(key, c + q[0] * r, c + q[1] * r, c + q[2] * r, c + q[3] * r, n, col.lightened(0.18 * maxf(n.y, 0.0)).darkened(0.18 * maxf(-n.y, 0.0)))
+			var cc := col.lightened(0.18 * maxf(n.y, 0.0)).darkened(0.18 * maxf(-n.y, 0.0))
+			if j == 0:
+				tri(key, c + q[0] * r, c + q[2] * r, c + q[3] * r, n, cc)
+			elif j == rings - 1:
+				tri(key, c + q[0] * r, c + q[1] * r, c + q[2] * r, n, cc)
+			else:
+				quad(key, c + q[0] * r, c + q[1] * r, c + q[2] * r, c + q[3] * r, n, cc)
 
 
 ## Commit to a mesh: mats maps key -> Material. Unknown keys fall back to mats["trim"].

@@ -223,6 +223,25 @@ static func _bracket(B, S, side: float, board: Color, text: Color) -> void:
 			f.cyl("trim", Vector3(x, 2.66, 0.75), 0.12, 0.2, 8, Color("e8e4d4"), 0.26, false)
 			f.box("trim", Vector3(x, 2.95, 0.75), Vector3(0.05, 0.26, 0.05), Color("e8e4d4"), 8)
 			return
+	var marq := String(S["marquee"])
+	if marq != "":
+		# the pool hall's marquee: a big board ringed with bulbs
+		f.box("trim", Vector3(x, 3.02, 0.9), Vector3(0.14, 0.7, 1.3), IRON, 8)
+		f.box("trim", Vector3(x, 3.02, 0.9), Vector3(0.16, 0.56, 1.14), Color("1c1916"), 8)
+		for k in 14:
+			var t := float(k) / 14.0
+			var pz := 0.28 + 1.24 * t
+			f.sphere("lamp", Vector3(x, 3.4, pz), 0.045, Color(1.0, 0.9, 0.6, 1.0), 5, 3)
+			f.sphere("lamp", Vector3(x, 2.66, pz), 0.045, Color(1.0, 0.9, 0.6, 1.0), 5, 3)
+		for k in 4:
+			var py := 2.66 + 0.74 * (k + 0.5) / 4.0
+			f.sphere("lamp", Vector3(x, py, 0.28), 0.045, Color(1.0, 0.9, 0.6, 1.0), 5, 3)
+			f.sphere("lamp", Vector3(x, py, 1.52), 0.045, Color(1.0, 0.9, 0.6, 1.0), 5, 3)
+		for sgn in [-1.0, 1.0]:
+			B.labels.append({"text": marq, "pos": Vector3(x + sgn * 0.09, 3.02, 0.9), "w": 1.05, "h": 0.3,
+				"col": Color("f0d890"), "font": "cond", "kind": "neon", "ang": sgn * PI * 0.5})
+		B.lights.append(Vector3(x, 3.0, 1.2))
+		return
 	var tint_col := Color("7a2a24") if neon != "" else board.darkened(0.1)
 	f.box("trim", Vector3(x, 2.96, 0.8), Vector3(0.1, 0.5, 1.0), tint_col, 8)
 	f.box("trim", Vector3(x, 2.96, 0.8), Vector3(0.13, 0.56, 1.06), IRON, 8)

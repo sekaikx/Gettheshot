@@ -188,6 +188,7 @@ func build() -> void:
 	_shop_level()
 	if kind != "warehouse":
 		_pilasters()
+		_pipes_and_belts()
 	Props.build(self)
 
 
@@ -300,7 +301,6 @@ func _cornice() -> void:
 			# coping on the parapet and its inside face
 			var tc := Transform3D(Basis(r, Vector3.UP, n), o + r * mid + Vector3.UP * (h + 0.045) - n * 0.14)
 			upper.box_t("trim", tc, Vector3(ln * 0.5, 0.045, 0.19), cornice_col.lightened(0.04), 8)
-			var inner := Color(wall_col, 1.0)
 			upper.face("wall", o - n * 0.3, r, -n, u0, u1, deck_y, h, Color(0.0, tint, float(style) / 16.0, seed), Vector2(0.0, 1.0))
 			if fi == 0 and fancy and ln > 3.0:
 				var k := int(ln / 0.95)
@@ -308,6 +308,30 @@ func _cornice() -> void:
 					var uu := u0 + (i + 0.5) * ln / k
 					var tb := Transform3D(Basis(r, Vector3.UP, n), o + r * uu + Vector3.UP * (h - 0.32) + n * 0.17)
 					upper.box_t("trim", tb, Vector3(0.1, 0.13, 0.12), cornice_col.darkened(0.12), 8)
+
+
+## A downspout up one side of the front, and a stone belt course half way up the tall buildings.
+func _pipes_and_belts() -> void:
+	var s := 1.0 if fr(seed * 31.0) > 0.5 else -1.0
+	if party[1] and s > 0.0 or party[3] and s < 0.0:
+		s = -s
+	var x := s * (w * 0.5 - 0.16)
+	var y0 := 3.5 if (is_shop or kind in ["club", "precinct"]) else 0.35
+	if h - 0.7 > y0 + 1.0 and kind != "precinct":
+		upper.cyl("trim", Vector3(x, y0, 0.14), 0.04, h - 0.6 - y0, 6, Color("3a3e3c"), -1.0, false)
+		var yy := y0 + 0.5
+		while yy < h - 0.8:
+			upper.box("trim", Vector3(x, yy, 0.1), Vector3(0.11, 0.05, 0.1), Color("2a2c2a"), 8)
+			yy += 2.2
+	if floors >= 4:
+		var k := int((floors - 1) / 2)
+		var yb := GROUND_H + k * FLOOR - 0.1
+		var bc := cornice_col.darkened(0.06)
+		for pc in covers[0]:
+			if float(pc[2]) > yb:
+				continue
+			var ln := float(pc[1]) - float(pc[0])
+			upper.box("trim", Vector3(-w * 0.5 + (float(pc[0]) + float(pc[1])) * 0.5, yb, 0.05), Vector3(ln, 0.13, 0.1), bc, 8)
 
 
 ## Pilasters at the corners of the stone and cream buildings; quoins on brick ones.

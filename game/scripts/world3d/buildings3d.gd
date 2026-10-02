@@ -345,7 +345,8 @@ static func _seg_box(a: Vector3, b: Vector3, lo: Vector3, hi: Vector3) -> bool:
 
 
 func _key(b: Dictionary) -> String:
-	return "%s/%d" % [FrontArt.state_key(b), (b.get("broken", []) as Array).size()]
+	return "%d/%d/%d/%d/%d" % [int(b["owned_by"]), int(b["protector"]), int(int(b["closed_until"]) >= Game.month),
+		int(bool(b.get("speak", false))), (b.get("broken", []) as Array).size()]
 
 
 func update_owners() -> void:
