@@ -38,6 +38,8 @@ func _block(b: Dictionary) -> void:
 	for f in b["flats"]:
 		_flat(cell, f)
 	_litter(b, cell)
+	if b["phantom"]:
+		_outskirts(b, cell)
 
 
 func _prop(b: Dictionary, p: Dictionary) -> void:
@@ -255,3 +257,51 @@ func _litter(b: Dictionary, cell: G3Bundle.Cell) -> void:
 			else:
 				# a leaf or scrap of straw, a bottle cap
 				cell.paint.disc(Vector3(pm.x, Y + 0.005, pm.y), 0.045, 6, Color(0.5, 0.4, 0.22, 0.9))
+
+
+# ------------------------------------------------------------------ the city beyond the map edge
+
+const BRICKS := [Color("7a4a3a"), Color("6e4636"), Color("8a5a46"), Color("5f3b30"), Color("85705a"), Color("8a6a48"), Color("6a5a52")]
+
+
+## Plain tenement rows along the far side of the edge streets, so the map does not end in a void.
+func _outskirts(b: Dictionary, cell: G3Bundle.Cell) -> void:
+	var sd: int = b["seed"]
+	var bounds := lay.plan.bounds
+	for s: String in ["N", "S", "W", "E"]:
+		var side: Dictionary = b["sides"][s]
+		var mid := (float(side["a0"]) + float(side["a1"])) * 0.5
+		var cp := GroundLayout.side_point(side, mid, 0.0)
+		if not bounds.grow(2.0).has_point(cp):
+			continue
+		var a := float(side["a0"]) + G3Streets.SW
+		var a1 := float(side["a1"]) - G3Streets.SW
+		var k := 0
+		while a < a1 - 6.0:
+			k += 1
+			var w := minf(GroundUtil.rr(sd, 3000 + k + s.length() * 7 + int(s.unicode_at(0)), 8.0, 12.0), a1 - a)
+			var floors := GroundUtil.ri(sd, 3100 + k + int(s.unicode_at(0)), 3, 6)
+			var h := 3.4 + float(floors - 1) * 3.0
+			var col: Color = BRICKS[GroundUtil.ri(sd, 3200 + k + int(s.unicode_at(0)), 0, BRICKS.size() - 1)]
+			var depth := 10.0
+			var c2 := GroundLayout.side_point(side, a + w * 0.5, -depth * 0.5)
+			var out := side["out"] as Vector2
+			var yaw := atan2(out.x, out.y)
+			var cc := B.at(c2)
+			cc.push_at(Vector3(c2.x, 0.0, c2.y), yaw)
+			cc.stone.box(Vector3(0, h * 0.5, 0), Vector3(w - 0.12, h, depth), col, Color("2e2b29"))
+			cc.stone.box(Vector3(0, h + 0.2, depth * 0.5 - 0.1), Vector3(w - 0.12, 0.4, 0.25), col.lightened(0.18))
+			# window rows on the street face (local +z): dark panes, a few lit at night
+			var cols := maxi(2, int((w - 1.2) / 2.1))
+			for fl in floors:
+				var y := 1.0 + float(fl) * 3.0 + (0.4 if fl == 0 else 0.0)
+				for ic in cols:
+					var x := (float(ic) + 0.5 - float(cols) * 0.5) * ((w - 1.0) / float(cols))
+					var lit := GroundUtil.r01(sd, 3300 + k * 31 + fl * 7 + ic) < 0.3
+					if lit:
+						cc.glow.box(Vector3(x, y + 0.7, depth * 0.5 + 0.02), Vector3(0.95, 1.4, 0.04), Color(1.0, 0.78, 0.46))
+					else:
+						cc.stone.box(Vector3(x, y + 0.7, depth * 0.5 + 0.02), Vector3(0.95, 1.4, 0.04), Color("2a3038"))
+					cc.stone.box(Vector3(x, y - 0.05, depth * 0.5 + 0.05), Vector3(1.15, 0.1, 0.1), col.lightened(0.25))
+			cc.pop()
+			a += w

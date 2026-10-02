@@ -194,7 +194,7 @@ void fragment() {
 		ring = w * (1.0 - t) * wet;
 		pert += normalize(f + 0.001) * ring * 0.8;
 	}
-	vec3 nw = normalize(vec3(pert.x * 0.6, 1.0, pert.y * 0.6));
+	vec3 nw = normalize(vec3(pert.x * 0.5, 1.0, pert.y * 0.5));
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	float d = clamp((wp.x - edge_x) / 26.0, 0.0, 1.0);
 	vec3 col = mix(shallow, deep, d);
@@ -220,8 +220,8 @@ void fragment() {
 		em += vec3(1.0, 0.72, 0.4) * s * brk * 0.9 / len * 3.0;
 	}
 	ALBEDO = col;
-	ROUGHNESS = mix(0.14, 0.07, night);
-	SPECULAR = 0.7;
+	ROUGHNESS = mix(0.32, 0.12, night);
+	SPECULAR = 0.3;
 	METALLIC = 0.0;
 	EMISSION = em * night + sky * vec3(0.05, 0.07, 0.12) * fres * night * (0.5 + 0.5 * a.x);
 }
@@ -250,7 +250,7 @@ func apply(n: float, w: float) -> void:
 	pud.albedo_color = Color(1, 1, 1, clampf(wet * 1.6, 0.0, 1.0))
 	var g: ShaderMaterial = mats["glow"]
 	g.set_shader_parameter("glow", night * 2.6)
-	(mats["pools"] as ShaderMaterial).set_shader_parameter("strength", night * 0.62)
+	(mats["pools"] as ShaderMaterial).set_shader_parameter("strength", night * 0.95)
 	steam.set_shader_parameter("vis", 0.22 + 0.78 * maxf(night, wet))
 	steam.set_shader_parameter("night", night)
 	water.set_shader_parameter("night", night)

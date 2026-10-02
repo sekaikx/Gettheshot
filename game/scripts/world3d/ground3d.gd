@@ -15,6 +15,7 @@ var lamp_points: Array = []
 
 var mats: G3Mats
 var layout: GroundLayout
+var _sign_root: Node3D
 var _night := 0.0
 var _wet := 0.0
 
@@ -83,7 +84,7 @@ func _far_ground() -> void:
 func _river(lamps: Array) -> void:
 	var a := layout.area
 	var m := G3Mesh.new()
-	m.flat(plan.water_x - 0.05, a.position.y - 160.0, a.end.x + 220.0, a.end.y + 160.0, G3Quay.WATER_Y, Color.WHITE)
+	m.flat(plan.water_x - 0.05, a.position.y - 600.0, a.end.x + 600.0, a.end.y + 600.0, G3Quay.WATER_Y, Color.WHITE)
 	var mi := m.instance("River", mats.water, false)
 	add_child(mi)
 	mats.water.set_shader_parameter("edge_x", plan.water_x)
@@ -128,6 +129,7 @@ func _labels(list: Array) -> void:
 	var root := Node3D.new()
 	root.name = "StreetSigns"
 	add_child(root)
+	_sign_root = root
 	for l in list:
 		var lb := Label3D.new()
 		lb.text = String(l[0])
@@ -148,3 +150,7 @@ func set_night(night: float, wet: float) -> void:
 	_wet = wet
 	if mats:
 		mats.apply(night, wet)
+	if _sign_root:
+		var k := lerpf(1.0, 0.28, clampf(night, 0.0, 1.0))
+		for l in _sign_root.get_children():
+			(l as Label3D).modulate = Color(0.94 * k, 0.92 * k, 0.85 * k)

@@ -460,4 +460,5 @@ func _block_ground(b: Dictionary) -> void:
 		cell.paint.strip(p0 - inward * 0.22, p1 - inward * 0.22, 0.44, 0.0082, Color(0.02, 0.02, 0.03, 0.3))
 	# the lot interiors: rough ground under the buildings and the yards
 	var inner := r.grow(-SW)
-	cell.dirt.flat(inner.position.x, inner.position.y, inner.end.x, inner.end.y, 0.012, Color(0.85, 0.85, 0.85))
+	var fill := Color(0.85, 0.85, 0.85) if not b["phantom"] else Color(0.3, 0.29, 0.28)
+	cell.dirt.flat(inner.position.x, inner.position.y, inner.end.x, inner.end.y, 0.012, fill)

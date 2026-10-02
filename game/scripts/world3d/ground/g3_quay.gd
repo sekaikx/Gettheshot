@@ -31,6 +31,7 @@ func build() -> void:
 		_pier(pr)
 	for p in q.props:
 		_prop(p)
+	_river_life()
 
 
 func _near_pier(z: float, margin: float) -> bool:
@@ -332,3 +333,81 @@ func _crane(cell: G3Bundle.Cell, p: Dictionary) -> void:
 	cell.metal.rod(tip, tip + Vector3(0, -5.2, 0), 0.015, Color("1c1c1e"))
 	cell.metal.box(tip + Vector3(0, -5.35, 0), Vector3(0.2, 0.3, 0.2), IRON)
 	cell.metal.box(Vector3(-1.4, 0.9, 0.0), Vector3(0.7, 0.8, 1.2), Color("6a6a6e"))
+
+
+# ------------------------------------------------------------------ boats and flotsam on the river
+
+## Row boats tied up along the piers, a floating crate and driftwood (the 2D art's spots), and a coal
+## barge at anchor out in the stream.
+func _river_life() -> void:
+	var xw := plan.water_x
+	var k := 0
+	for pr in plan.piers:
+		k += 1
+		var z0 := float(pr["z0"])
+		var z1 := float(pr["z1"])
+		var sd := int(z0 * 5.0)
+		# a skiff on the south side of each pier, a second one on the north side of the middle pier
+		var bx := xw + GroundUtil.rr(sd, 1, 6.0, 14.0)
+		_boat(Vector2(bx, z1 + 1.3), PI * 0.5 + GroundUtil.rr(sd, 2, -0.05, 0.05), 3.6, 1.35, sd, true)
+		if k == 2:
+			_boat(Vector2(xw + 18.0, z0 - 1.3), PI * 0.5 + 0.04, 3.2, 1.25, sd + 9, true)
+	var wsd := GroundUtil.hseed(plan.seed_value, 3, 9)
+	var water := q.water
+	for i in 5:
+		var c := Vector2(GroundUtil.rr(wsd, i, water.position.x + 4.0, water.end.x - 4.0), GroundUtil.rr(wsd, 10 + i, plan.bounds.position.y, plan.bounds.end.y))
+		var rot := GroundUtil.r01(wsd, 20 + i) * PI
+		var cell := B.at(c)
+		cell.push_at(Vector3(c.x, WATER_Y, c.y), rot)
+		if i == 0:
+			cell.wood.box(Vector3(0, 0.1, 0), Vector3(0.7, 0.4, 0.7), Color("6e5638"), Color("7e6444"))
+		else:
+			cell.wood.box(Vector3(0, 0.03, 0), Vector3(GroundUtil.rr(wsd, 30 + i, 1.0, 2.2), 0.1, 0.16), Color("4a3a2a"))
+		cell.pop()
+	_barge(Vector2(xw + 52.0, 112.0), 0.07)
+
+
+func _boat(p: Vector2, yaw: float, length: float, beam: float, sd: int, oars: bool) -> void:
+	var c := B.at(p)
+	var hull := Color("4a5a60") if GroundUtil.r01(sd, 5) < 0.5 else Color("6a4a30")
+	var inner := Color("a08a62")
+	c.push_at(Vector3(p.x, WATER_Y, p.y), yaw)
+	var hl := length * 0.5
+	var hb := beam * 0.5
+	var pts := PackedVector2Array([Vector2(-hl, 0), Vector2(-hl * 0.55, -hb), Vector2(hl * 0.45, -hb), Vector2(hl, 0), Vector2(hl * 0.45, hb), Vector2(-hl * 0.55, hb)])
+	var n := pts.size()
+	for i in n:
+		var a := pts[i]
+		var b := pts[(i + 1) % n]
+		c.wood.wall(a, b, -0.12, 0.42, hull)
+		c.wood.strip(a * 0.97, b * 0.97, 0.07, 0.43, hull.lightened(0.25))
+	var ipts := PackedVector2Array()
+	for q in pts:
+		ipts.append(q * 0.92)
+	c.wood.poly_flat(ipts, 0.12, inner.darkened(0.2))
+	for sx in [-0.6, 0.5]:
+		c.wood.box(Vector3(sx, 0.3, 0), Vector3(0.28, 0.04, beam * 0.8), inner)
+	if oars:
+		for sz in [-1.0, 1.0]:
+			c.wood.rod(Vector3(0.0, 0.5, sz * hb * 0.6), Vector3(0.1, 0.35, sz * (hb + 1.1)), 0.02, Color("8a6a44"))
+	c.paint.ring_flat(Vector3(0, 0.02, 0), hb * 0.9, hb * 1.2, 12, Color(0.9, 0.95, 1.0, 0.1))
+	c.pop()
+
+
+func _barge(p: Vector2, yaw: float) -> void:
+	var c := B.at(p)
+	c.push_at(Vector3(p.x, WATER_Y, p.y), yaw)
+	var hl := 8.0
+	var hb := 2.2
+	c.wood.box(Vector3(0, 0.4, 0), Vector3(hb * 2.0, 1.4, hl * 2.0), Color("2a2a2c"), Color("3a3836"))
+	c.wood.box(Vector3(0, 0.45, hl + 0.1), Vector3(hb * 2.0 - 0.8, 1.2, 0.5), Color("2a2a2c"))
+	c.wood.box(Vector3(0, 1.12, 0), Vector3(hb * 2.0 - 0.3, 0.12, hl * 2.0 - 0.3), Color("55402c"))
+	for sx in [-hb + 0.1, hb - 0.1]:
+		c.wood.box(Vector3(sx, 1.35, 0), Vector3(0.12, 0.35, hl * 2.0), Color("6a2a22"))
+	c.wood.box(Vector3(0, 1.38, -hl + 2.2), Vector3(2.9, 2.2, 3.0), Color("c9c0aa"), Color("8a2e26"))
+	c.glow.box(Vector3(0, 2.1, -hl + 0.65), Vector3(1.6, 0.5, 0.02), Color(1.0, 0.78, 0.45))
+	c.metal.cyl(Vector3(0.9, 2.4, -hl + 2.8), 0.3, 0.26, 1.8, 8, Color("1c1c1e"))
+	c.metal.cyl(Vector3(0.9, 3.5, -hl + 2.8), 0.32, 0.32, 0.25, 8, Color("a02a22"), false)
+	for k in 2:
+		c.props.blob(Vector3(0, 1.1, 1.5 + float(k) * 4.2), Vector3(1.7, 0.9, 2.0), Color("1a1a1c"), 3, 9, 0.15, k + 3)
+	c.pop()
