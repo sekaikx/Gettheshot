@@ -233,7 +233,7 @@ func _make_puppet(a) -> Puppet3D:
 	pp.setup(per.kind, per.look, per.family_color, per.extra)
 	add_child(pp)
 	per.mirror = pp
-	a.visible = false         # the 2D body keeps simulating, just isn't drawn
+	a.modulate.a = 0.0        # the 2D body keeps simulating (and stays `visible` for the game rules), just isn't drawn
 	pp.carry(a.carrying)
 	pp.set_motion(a.state, a.speed / W.M)
 	return pp
@@ -255,7 +255,7 @@ func _sync_cars(delta: float) -> void:
 			c.global_position = V3.pos(v.position)
 			c.set_night(night)
 			cars[key] = c
-			v.visible = false
+			v.modulate.a = 0.0
 			c.set_load(v.load)
 		c.sync_from(v, delta)
 		c.set_load(v.load)
@@ -279,7 +279,7 @@ func _sync_items() -> void:
 			n.setup(it.kind, it.amount, int(id))
 			add_child(n)
 			items[id] = n
-			it.visible = false
+			it.modulate.a = 0.0
 		n.global_position = V3.pos(it.position)
 	if items.size() > live.size():
 		for id in items.keys():
