@@ -153,9 +153,9 @@ func _meter(c: Vector2, v: float, mark: float, label: String, col: Color) -> voi
 	UI.grad_rrect(self, r, 6.0, Color("241912", 0.94), Color("120c09", 0.94))
 	UI.rrect_line(self, r, 6.0, UI.GREEN.darkened(0.2) if over else UI.BRASS_DK, 1.5)
 	var cond := UI.font("cond")
-	UI.text(self, r.position + Vector2(9, 15), label, cond, 13, UI.INK)
+	UI.text(self, r.position + Vector2(9, 15), label, cond, 15, UI.INK)
 	var vt := "HE'LL PAY" if over else "%d%%" % int(roundf(clampf(v, 0.0, 1.0) * 100.0))
-	UI.text_r(self, r.end.x - 9, r.position.y + 15, vt, cond, 13, UI.GREEN if over else col.lightened(0.3))
+	UI.text_r(self, r.end.x - 9, r.position.y + 15, vt, cond, 15, UI.GREEN if over else col.lightened(0.3))
 	var bar := Rect2(r.position + Vector2(9, 21), Vector2(w - 18, 9))
 	Draw.rrect(self, bar.grow(1.0), 3.0, Color(0, 0, 0, 0.7))
 	var fw := bar.size.x * clampf(v, 0.0, 1.0)
@@ -263,4 +263,4 @@ func _edge_arrow(p: Vector2, d: Vector2, col: Color, dist: float, is_wp: bool) -
 	else:
 		UI.icon(self, "star", p + Vector2(0, -6), 13.0, col)
 	if dist >= 0.0:
-		UI.text_c(self, p.x, p.y + 13.0, "%d m" % int(roundf(dist)), cond, 13, UI.INK)
+		UI.text_c(self, p.x, p.y + 13.0, "%d m" % int(roundf(dist)), cond, 15, UI.INK)

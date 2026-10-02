@@ -90,4 +90,4 @@ func _draw() -> void:
 			UI.text(self, Vector2(r.position.x + 46, y), lines[k], sans, 17, UI.with_a(UI.INK, a))
 			y += LINE
 		if int(it["n"]) > 1:
-			UI.text_r(self, r.end.x - 10, r.position.y + 18, "×%d" % int(it["n"]), cond, 14, UI.with_a(kc, a))
+			UI.text_r(self, r.end.x - 10, r.position.y + 18, "×%d" % int(it["n"]), cond, 16, UI.with_a(kc, a))

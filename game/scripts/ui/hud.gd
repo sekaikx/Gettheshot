@@ -1,7 +1,7 @@
 extends CanvasLayer
 ## Everything on screen over the street (docs/REBUILD_2D.md, "HUD"). The World creates it
 ## (hud.world = self) and calls the functions below; the pieces live in scripts/ui/hud/:
-##   money_panel   top-left: crest, family, Wallet / Stash / Bank, men, guns, the Heat badge
+##   money_panel   top-left: crest, family, Wallet, Stash, Bank, men, guns, the Heat badge
 ##   objective     under it: the current goal, ticked off when it changes
 ##   clock_panel   top-right: date, sun-and-moon dial, weather, sit-down offers waiting
 ##   toasts        under the date: messages with icons, five at most
@@ -94,6 +94,7 @@ func _ready() -> void:
 	_clock = _add(ClockPanel.new(), _base)
 	_minimap = _add(Minimap.new(), _base)
 	_controls = _add(ControlsStrip.new(), _base)
+	_controls.marks = _marks
 	_mentor = _add(MentorCard.new(), _base)
 	_place = _add(PlaceBanner.new(), _base)
 	_book = preload("res://scripts/ui/family_book.gd").new()
@@ -241,7 +242,7 @@ func _layout() -> void:
 	_obj.position = Vector2(16, 14 + MoneyPanel.H_PANEL + 10)
 	_clock.position = Vector2(area.x - 16 - ClockPanel.W_PANEL, 14)
 	_minimap.position = Vector2(area.x - 16 - Minimap.SIZE, area.y - 16 - _minimap.size.y)
-	_controls.position = Vector2(16, area.y - 16 - 30)
+	_controls.position = Vector2(16, area.y - 16 - ControlsStrip.H)
 	_place.position = Vector2.ZERO
 	_place.size = Vector2(area.x, 130)
 	_place.max_w = clampf(area.x - 2.0 * (MoneyPanel.W_PANEL + 40.0), 360.0, 720.0)
@@ -256,7 +257,7 @@ func _avoid() -> void:
 	if _paper.mini_showing():
 		av.append(Rect2(Vector2(_last_size.x - 400, _paper.mini_bottom - 190), Vector2(400, 210)))
 	if _controls.strip_height() > 4.0:
-		av.append(Rect2(_controls.position, Vector2(_controls.strip_width(), 30)))
+		av.append(Rect2(_controls.position, Vector2(_controls.strip_width(), ControlsStrip.H)))
 	if _mentor.is_showing():
 		av.append(_mentor.card_rect())
 	if _place.is_showing():

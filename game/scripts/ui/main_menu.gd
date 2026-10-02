@@ -37,6 +37,7 @@ var _page := ""
 var _scene: MenuTitleScene
 var _scrim: ColorRect
 var _items: VBoxContainer
+var _hint: Label
 var _home_col: VBoxContainer
 var _frame: PanelContainer
 var _pages := {}
@@ -215,16 +216,26 @@ func _build_home() -> void:
 	col.add_child(_items)
 	_add_item("New game", "", func() -> void:
 		_host_mode = false
-		_show_page("new"))
-	var cont := _add_item("Continue", _save_blurb(), _continue)
+		_show_page("new"), "Play alone against the computer, with a guide.")
+	var cont := _add_item("Continue", _save_blurb(), _continue, "Pick up your saved game.")
 	cont.visible = Game.has_save()
-	_add_item("Play with friends", "", func() -> void: _show_page("friends"))
-	_add_item("How to play", "", func() -> void: _show_page("howto"))
-	_add_item("Settings", "", func() -> void: _show_page("settings"))
-	_add_item("Quit", "", func() -> void: get_tree().quit())
+	_add_item("Play with friends", "", func() -> void: _show_page("friends"), "Host a table or join a friend (up to 8).")
+	_add_item("How to play", "", func() -> void: _show_page("howto"), "Eight short cards on the rules.")
+	_add_item("Settings", "", func() -> void: _show_page("settings"), "Sound, screen size, on-screen hints.")
+	_add_item("Quit", "", func() -> void: get_tree().quit(), "Leave the game.")
 	var gap2 := Control.new()
-	gap2.custom_minimum_size = Vector2(0, 34)
+	gap2.custom_minimum_size = Vector2(0, 8)
 	col.add_child(gap2)
+	_hint = MenuStyle.label("", "semi", 19, Color(MenuStyle.NIGHT_TEXT, 0.92))
+	_hint.custom_minimum_size = Vector2(560, 40)
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var hp := MarginContainer.new()
+	hp.add_theme_constant_override("margin_left", 44)
+	hp.add_child(_hint)
+	col.add_child(hp)
+	var gap3 := Control.new()
+	gap3.custom_minimum_size = Vector2(0, 14)
+	col.add_child(gap3)
 	col.add_child(_key_hints([["Up", ""], ["Down", "Choose"], ["Enter", "Select"], ["Esc", "Back"]], true))
 	# the version, bottom right
 	var ver := MenuStyle.label("v%s" % String(ProjectSettings.get_setting("application/config/version", "0.1")), "cond", 16, Color(MenuStyle.NIGHT_MUTE, 0.7))
@@ -240,9 +251,12 @@ func _build_home() -> void:
 	add_child(ver)
 
 
-func _add_item(text: String, sub: String, cb: Callable) -> Button:
+func _add_item(text: String, sub: String, cb: Callable, hint: String = "") -> Button:
 	var b := MenuWidgets.TitleItem.new(text, sub)
 	b.pressed.connect(cb)
+	b.focus_entered.connect(func() -> void:
+		if _hint:
+			_hint.text = hint)
 	_items.add_child(b)
 	return b
 

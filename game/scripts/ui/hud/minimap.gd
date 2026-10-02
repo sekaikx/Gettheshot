@@ -317,7 +317,7 @@ func _frame(outer: Rect2, mr: Rect2, a: float) -> void:
 	var cond := UI.font("cond")
 	UI.text_c(self, n.x, UI.mid(cond, 14, n.y), "N", cond, 14, UI.with_a(UI.GOLD2, a))
 	if _hover:
-		UI.text_c(self, outer.get_center().x, outer.end.y - 14.0, "CLICK: THE CITY MAP (M)", cond, 12, UI.with_a(UI.INK, 0.9 * a))
+		UI.text_c(self, outer.get_center().x, outer.end.y - 14.0, "CLICK: THE CITY MAP (M)", cond, 14, UI.with_a(UI.INK, 0.9 * a))
 
 
 ## The street (or the shop) you're in, on a plate above the map.

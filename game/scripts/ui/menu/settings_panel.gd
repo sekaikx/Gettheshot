@@ -31,7 +31,7 @@ func _ready() -> void:
 	_section(grid, "Screen")
 	_switch_row(grid, "fullscreen", "Full screen", "")
 	_scale_row(grid)
-	_switch_row(grid, "show_controls", "Show the keys", "A strip of keys, bottom left, in the street.")
+	_switch_row(grid, "show_controls", "Show key hints", "Lists the keys you can use right now, bottom left.")
 
 
 func _section(grid: GridContainer, title: String) -> void:

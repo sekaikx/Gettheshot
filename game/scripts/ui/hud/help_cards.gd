@@ -172,7 +172,7 @@ func _scene(kind: String, r: Rect2, a: float) -> void:
 			UI.grad_rrect(self, Rect2(bar.position, Vector2(bar.size.x * 0.62, bar.size.y)), 3.0, UI.with_a(Pal.UI_RED.lightened(0.2), a), UI.with_a(Pal.UI_RED.darkened(0.3), a))
 			var mx := bar.position.x + bar.size.x * 0.7
 			draw_line(Vector2(mx, bar.position.y - 5), Vector2(mx, bar.end.y + 5), UI.with_a(UI.GOLD2, a), 2.0, true)
-			UI.text_c(self, mx, bar.end.y + 20, "HE PAYS", cond, 12, UI.with_a(UI.GOLD2, a))
+			UI.text_c(self, mx, bar.end.y + 20, "HE PAYS", cond, 14, UI.with_a(UI.GOLD2, a))
 		"money":
 			var xs := [r.position.x + r.size.x * 0.17, c.x, r.end.x - r.size.x * 0.17]
 			var ics := ["wallet", "safe", "bank"]
