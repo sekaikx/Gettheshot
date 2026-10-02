@@ -200,8 +200,8 @@ static func _planks() -> Dictionary:
 					g += cos(TAU * float(k + 1) * float(x) / float(N) + phases[k] + float(y) * 0.35 * float(k % 3 + 1)) / float(k + 2)
 				var edge := minf(float(y - y0), float(y1 - 1 - y))
 				var m := mott.get_pixel(x, y).r - 0.5
-				var v := 0.34 + tone + g * 0.03 + m * 0.07 + (_h(x, y, 75) - 0.5) * 0.03
-				var col := Color(v * 1.06, v * 0.95, v * 0.84, 1.0)
+				var v := 0.29 + tone + g * 0.03 + m * 0.07 + (_h(x, y, 75) - 0.5) * 0.03
+				var col := Color(v * 1.04, v * 0.95, v * 0.86, 1.0)
 				var hgt := 1.0
 				if edge < 1.5:
 					col = col.darkened(0.55 * (1.0 - edge / 1.5))
