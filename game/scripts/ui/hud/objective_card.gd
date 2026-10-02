@@ -6,7 +6,7 @@ extends Control
 signal completed
 
 const UI := preload("res://scripts/ui/hud/hud_ui.gd")
-const W_CARD := 430.0
+const W_CARD := 470.0
 
 var world: Node
 var _cur := {}
@@ -80,6 +80,17 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
+## Where the goal is from you: unit vector on the (north-up) screen, or ZERO.
+func _dir() -> Vector2:
+	var tg: Variant = _cur.get("target", Vector2.INF)
+	if not (tg is Vector2) or (tg as Vector2) == Vector2.INF or world == null:
+		return Vector2.ZERO
+	var la: Variant = world.get("local_actor")
+	if not (la is Node2D) or not is_instance_valid(la):
+		return Vector2.ZERO
+	return ((tg as Vector2) - (la as Node2D).position).normalized()
+
+
 func _dist_m() -> float:
 	var tg: Variant = _cur.get("target", Vector2.INF)
 	if not (tg is Vector2) or (tg as Vector2) == Vector2.INF or world == null:
@@ -116,9 +127,11 @@ func _draw() -> void:
 	var of := int(_cur.get("of", 0))
 	var head := "STEP %d OF %d" % [step, of] if step > 0 and of > 0 else "YOUR GOAL"
 	var x0 := 46.0
-	var tw := W_CARD - x0 - 14.0
+	var dm := _dist_m()
+	var show_dir := dm >= 0.0 and not done
+	var tw := W_CARD - x0 - 14.0 - (64.0 if show_dir else 0.0)
 	var lines := UI.wrap(sans, detail, 16, tw, 2) if detail != "" else PackedStringArray()
-	var h := 62.0 + lines.size() * 20.0
+	var h := 66.0 + lines.size() * 21.0 + (14.0 if show_dir and lines.size() < 2 else 0.0)
 	_h = h
 	var r := Rect2(Vector2(dx, 0), Vector2(W_CARD, h))
 	UI.soft_shadow(self, r, 6.0, a)
@@ -149,20 +162,30 @@ func _draw() -> void:
 			Draw.circle(self, box.get_center(), 14.0 + glow * 10.0, UI.with_a(UI.GREEN, 0.18 * glow * a))
 	# header: step, and how far
 	var hc := UI.GREEN if done else UI.GOLD
-	UI.text(self, r.position + Vector2(x0, 21), "DONE" if done else head, cond, 14, UI.with_a(hc, a))
-	var dm := _dist_m()
-	if dm >= 0.0 and not done:
-		var dtxt := "%d m" % int(roundf(dm)) if dm >= 1.5 else "here"
-		UI.text_r(self, r.end.x - 14, r.position.y + 21, dtxt, cond, 14, UI.with_a(UI.INK, 0.85 * a))
+	UI.text(self, r.position + Vector2(x0, 22), "DONE" if done else head, cond, 16, UI.with_a(hc, a))
+	if show_dir:
+		# a compass disc: the arrow points to the goal, the distance under it
+		var c := Vector2(r.end.x - 38, r.position.y + h * 0.5 - 8)
+		Draw.circle(self, c, 22.0, UI.with_a(Color(0, 0, 0, 0.45), a))
+		var here := dm < 1.5
+		if here:
+			Draw.circle(self, c, 9.0, UI.with_a(UI.GREEN, a))
+		else:
+			var d := _dir()
+			var n := Vector2(-d.y, d.x)
+			var pts := PackedVector2Array([c + d * 16.0, c - d * 9.0 + n * 11.0, c - d * 4.0, c - d * 9.0 - n * 11.0])
+			Draw.poly(self, pts, UI.with_a(UI.GOLD2, a))
+		var dtxt := "here" if here else "%d m" % int(roundf(dm))
+		UI.text_c(self, c.x, c.y + 40.0, dtxt, cond, 16, UI.with_a(UI.INK, a))
 	# the goal
-	var ttxt := UI.fit(semi, title, 19, tw)
+	var ttxt := UI.fit(semi, title, 21, tw)
 	var tcol := UI.MUTE if done else UI.INK
-	UI.text(self, r.position + Vector2(x0, 44), ttxt, semi, 19, UI.with_a(tcol, a))
+	UI.text(self, r.position + Vector2(x0, 47), ttxt, semi, 21, UI.with_a(tcol, a))
 	if done:
 		var k4 := clampf((_t - 0.15) / 0.4, 0.0, 1.0) if _phase == "done" else 1.0
-		var ww := UI.tw(semi, ttxt, 19) * k4
-		draw_line(r.position + Vector2(x0 - 2, 37), r.position + Vector2(x0 + ww + 2, 37), UI.with_a(UI.GREEN, a), 2.0, true)
-	var y := 64.0
+		var ww := UI.tw(semi, ttxt, 21) * k4
+		draw_line(r.position + Vector2(x0 - 2, 40), r.position + Vector2(x0 + ww + 2, 37), UI.with_a(UI.GREEN, a), 2.0, true)
+	var y := 70.0
 	for l in lines:
-		UI.text(self, r.position + Vector2(x0, y), l, sans, 16, UI.with_a(Color("b5a98f"), a))
-		y += 20.0
+		UI.text(self, r.position + Vector2(x0, y), l, sans, 16, UI.with_a(Color("d8cdb0"), a))
+		y += 21.0

@@ -96,7 +96,7 @@ func _draw() -> void:
 	var cond := UI.font("cond")
 	UI.text(self, Vector2(x, r.position.y + 40), who, serif, 21, UI.GOLD2)
 	if String(portrait.get("kind", "")) == "consigliere":
-		UI.text(self, Vector2(x + UI.tw(serif, who, 21) + 12, r.position.y + 39), "YOUR FATHER'S CONSIGLIERE", cond, 13, UI.with_a(UI.MUTE, 0.85))
+		UI.text(self, Vector2(x + UI.tw(serif, who, 21) + 12, r.position.y + 39), "YOUR FATHER'S CONSIGLIERE", cond, 15, UI.with_a(UI.MUTE, 0.85))
 	var left := int(_chars)
 	var y := r.position.y + 66.0
 	for l in _lines:

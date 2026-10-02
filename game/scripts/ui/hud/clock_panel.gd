@@ -190,4 +190,4 @@ func _draw_badge(r: Rect2) -> void:
 	var sans := UI.font("sans")
 	var t1 := "%d sit-down offer%s waiting" % [_deals, "" if _deals == 1 else "s"]
 	UI.text(self, Vector2(r.position.x + 50, r.position.y + 22), t1, semi, 16, UI.INK)
-	UI.text(self, Vector2(r.position.x + 50, r.position.y + 40), UI.fit(sans, "Use your club's phone · or press Tab", 14, r.size.x - 60), sans, 14, Color("e0c8b0"))
+	UI.text(self, Vector2(r.position.x + 50, r.position.y + 40), UI.fit(sans, "Use your club's phone · or press Tab", 15, r.size.x - 60), sans, 15, Color("e0c8b0"))

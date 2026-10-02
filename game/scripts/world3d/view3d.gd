@@ -29,6 +29,10 @@ var wet := 0.0
 var _focus := Vector3.ZERO
 var _dist := 20.0
 var _fog_density := 0.0
+var _pool: Array[OmniLight3D] = []     # real lights that hop to the lamps and shop lights nearest the camera
+var _light_pts: Array = []
+var _pool_t := 0.0
+const POOL_SIZE := 12
 
 
 func setup(w: Node) -> void:
@@ -69,6 +73,19 @@ func setup(w: Node) -> void:
 	rooms.name = "Rooms"
 	add_child(rooms)
 	rooms.build(world.interiors.layouts)
+	weather_fx = Weather3D.new()
+	weather_fx.name = "Weather"
+	add_child(weather_fx)
+	_light_pts = city.light_points()
+	for i in POOL_SIZE:
+		var l := OmniLight3D.new()
+		l.omni_range = 9.0
+		l.omni_attenuation = 1.4
+		l.light_color = Color("ffb868")
+		l.light_energy = 0.0
+		l.visible = false
+		add_child(l)
+		_pool.append(l)
 	snap()
 
 
@@ -97,12 +114,41 @@ func _process(delta: float) -> void:
 		_focus = _target_focus()
 		_dist = lerpf(_dist, _target_dist(), clampf(delta * 8.0, 0.0, 1.0))
 		_place()
+	weather_fx.follow(_focus)
+	_pool_t -= delta
+	if _pool_t <= 0.0:
+		_pool_t = 0.25
+		_refresh_pool()
 
 
 func _place() -> void:
 	var off := Vector3(sin(yaw), 0.0, cos(yaw)) * cos(pitch) * _dist + Vector3(0, sin(pitch) * _dist, 0)
 	cam.global_position = _focus + off
 	cam.look_at(_focus + Vector3(0, 0.6, 0), Vector3.UP)
+
+
+## The real lights go to the lamps and shop lights closest to the focus (night only; by day they are off).
+func _refresh_pool() -> void:
+	var strength := clampf(night * 1.4, 0.0, 1.0)
+	if strength <= 0.01 or _light_pts.is_empty():
+		for l in _pool:
+			l.visible = false
+		return
+	var near: Array = []
+	for pt in _light_pts:
+		var v: Vector3 = pt
+		var d := Vector2(v.x - _focus.x, v.z - _focus.z).length_squared()
+		if d < 900.0:
+			near.append([d, v])
+	near.sort_custom(func(a, b) -> bool: return a[0] < b[0])
+	for i in _pool.size():
+		var l := _pool[i]
+		if i < near.size():
+			l.global_position = near[i][1]
+			l.light_energy = lerpf(0.0, 2.2, strength) * (0.55 if wet > 0.5 else 1.0)
+			l.visible = true
+		else:
+			l.visible = false
 
 
 # ------------------------------------------------------------------ projection
@@ -233,7 +279,7 @@ func _make_puppet(a) -> Puppet3D:
 	pp.setup(per.kind, per.look, per.family_color, per.extra)
 	add_child(pp)
 	per.mirror = pp
-	a.visible = false         # the 2D body keeps simulating, just isn't drawn
+	a.modulate.a = 0.0        # the 2D body keeps simulating (and stays `visible` for the game rules), just isn't drawn
 	pp.carry(a.carrying)
 	pp.set_motion(a.state, a.speed / W.M)
 	return pp
@@ -255,7 +301,7 @@ func _sync_cars(delta: float) -> void:
 			c.global_position = V3.pos(v.position)
 			c.set_night(night)
 			cars[key] = c
-			v.visible = false
+			v.modulate.a = 0.0
 			c.set_load(v.load)
 		c.sync_from(v, delta)
 		c.set_load(v.load)
@@ -279,7 +325,7 @@ func _sync_items() -> void:
 			n.setup(it.kind, it.amount, int(id))
 			add_child(n)
 			items[id] = n
-			it.visible = false
+			it.modulate.a = 0.0
 		n.global_position = V3.pos(it.position)
 	if items.size() > live.size():
 		for id in items.keys():

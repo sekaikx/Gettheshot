@@ -502,7 +502,7 @@ func _meter() -> void:
 	if mark >= 0.0:
 		var mx := bar.position.x + bar.size.x * mark
 		draw_line(Vector2(mx, bar.position.y - 5), Vector2(mx, bar.end.y + 5), UI.GOLD2, 2.0, true)
-		UI.text_c(self, mx, bar.position.y - 8, "HE PAYS", cond, 11, UI.GOLD2)
+		UI.text_c(self, mx, bar.position.y - 8, "HE PAYS", cond, 14, UI.GOLD2)
 	UI.text(self, Vector2(bar.end.x + 12, y + 15), "%d%%" % int(roundf(v * 100.0)), cond, 16, UI.GREEN if over else UI.INK)
 
 

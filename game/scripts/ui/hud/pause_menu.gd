@@ -59,7 +59,7 @@ func _build() -> void:
 		if Store.has_bus("sfx"):
 			_rows.append({"id": "sfx", "text": "Sound effects", "sub": "", "icon": "", "kind": "slider", "key": ""})
 		_rows.append({"id": "fullscreen", "text": "Full screen", "sub": "", "icon": "", "kind": "toggle", "key": ""})
-		_rows.append({"id": "show_controls", "text": "Show the keys at the bottom", "sub": "", "icon": "", "kind": "toggle", "key": ""})
+		_rows.append({"id": "show_controls", "text": "Show key hints", "sub": "", "icon": "", "kind": "toggle", "key": ""})
 		_rows.append({"id": "back", "text": "Back", "sub": "", "icon": "leave", "kind": "button", "key": "Esc"})
 	var h := 140.0 + _rows.size() * ROW + 20.0
 	_card = Rect2((size - Vector2(W_CARD, h)) * 0.5, Vector2(W_CARD, h))
@@ -234,7 +234,7 @@ func _row(i: int, a: float, lift: float) -> void:
 	var ty := UI.mid(semi, 21, cy) if sub == "" else cy + 1.0
 	UI.text(self, Vector2(x, ty), String(row["text"]), semi, 21, UI.with_a(Color("fff4dc") if on else UI.INK, a))
 	if sub != "":
-		UI.text(self, Vector2(x, cy + 19.0), sub, sans, 14, UI.with_a(UI.MUTE, a))
+		UI.text(self, Vector2(x, cy + 19.0), sub, sans, 16, UI.with_a(UI.MUTE, a))
 	var k := String(row["key"])
 	if k != "":
 		var kw := UI.keycap_w(k, 24.0)

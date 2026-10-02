@@ -4,7 +4,7 @@ extends Control
 ## that pulses when it rises. Numbers roll to their new value and a "+$500" floats up when they change.
 
 const UI := preload("res://scripts/ui/hud/hud_ui.gd")
-const W_PANEL := 430.0
+const W_PANEL := 470.0
 const H_PANEL := 164.0
 
 var _fam := {}
@@ -126,37 +126,37 @@ func _draw() -> void:
 	var wtxt := "$" + W.money(int(roundf(_shown.x)))
 	UI.text(self, Vector2(x0 + 33, 76), wtxt, serif, 34, UI.INK)
 	var wx := x0 + 33 + UI.tw(serif, wtxt, 34) + 8
-	UI.text(self, Vector2(wx, 75), "Wallet", sans, 16, UI.MUTE)
+	UI.text(self, Vector2(wx, 75), "Wallet · cash", sans, 16, UI.MUTE)
 	# stash and bank
 	var sx := x0 + 2
 	UI.icon(self, "safe", Vector2(sx + 8, 99), 17.0, UI.BRASS, UI.WOOD_BOT)
 	var stxt := "$" + W.money(int(roundf(_shown.y)))
 	UI.text(self, Vector2(sx + 22, 105), stxt, semi, 18, UI.INK)
 	var sw := UI.tw(semi, stxt, 18)
-	UI.text(self, Vector2(sx + 27 + sw, 105), "Stash", sans, 15, UI.MUTE)
-	var bx := maxf(sx + 150.0, sx + 27 + sw + UI.tw(sans, "Stash", 15) + 22)
+	UI.text(self, Vector2(sx + 27 + sw, 105), "Stash · dirty", sans, 16, UI.MUTE)
+	var bx := maxf(sx + 160.0, sx + 27 + sw + UI.tw(sans, "Stash · dirty", 16) + 22)
 	UI.icon(self, "bank", Vector2(bx + 8, 99), 17.0, UI.BRASS, UI.WOOD_BOT)
 	var btxt := "$" + W.money(int(roundf(_shown.z)))
 	UI.text(self, Vector2(bx + 22, 105), btxt, semi, 18, UI.INK)
-	UI.text(self, Vector2(bx + 27 + UI.tw(semi, btxt, 18), 105), "Bank", sans, 15, UI.MUTE)
+	UI.text(self, Vector2(bx + 27 + UI.tw(semi, btxt, 18), 105), "Bank · clean", sans, 16, UI.MUTE)
 	# the rule
 	UI.rule(self, Vector2(14, 122), Vector2(W_PANEL - 14, 122), UI.with_a(UI.BRASS, 0.45), false)
 	# men, guns, bullets
 	var y := 146.0
 	var gx := 18.0
-	for it in [["crew", str(_men), "men" if _men != 1 else "man"], ["gun", str(_guns), "guns" if _guns != 1 else "gun"], ["ammo", str(_ammo), "ammo"]]:
+	for it in [["crew", str(_men), "men" if _men != 1 else "man"], ["gun", str(_guns), "guns" if _guns != 1 else "gun"], ["ammo", str(_ammo), "bullets"]]:
 		UI.icon(self, String(it[0]), Vector2(gx + 9, y - 6), 19.0, UI.INK, UI.WOOD_BOT)
 		UI.text(self, Vector2(gx + 23, y), String(it[1]), semi, 18, UI.INK)
 		var nw := UI.tw(semi, String(it[1]), 18)
-		UI.text(self, Vector2(gx + 26 + nw, y), String(it[2]), sans, 15, UI.MUTE)
-		gx += 26 + nw + UI.tw(sans, String(it[2]), 15) + 13
-	_draw_heat(Vector2(W_PANEL - 156, y))
+		UI.text(self, Vector2(gx + 26 + nw, y), String(it[2]), sans, 16, UI.MUTE)
+		gx += 26 + nw + UI.tw(sans, String(it[2]), 16) + 14
+	_draw_heat(Vector2(W_PANEL - 160, y))
 	# floaters: "+$500" rising from the number that changed
 	for fl in _floaters:
 		var t := float(fl["t"])
 		var a := clampf(1.0 - (t - 0.9) / 0.9, 0.0, 1.0) * clampf(t * 6.0, 0.0, 1.0)
 		var slot := int(fl["slot"])
-		var at := Vector2(wx + UI.tw(sans, "Wallet", 16) + 10, 72) if slot == 0 else (Vector2(sx + 22, 92) if slot == 1 else Vector2(bx + 22, 92))
+		var at := Vector2(wx + UI.tw(sans, "Wallet · cash", 16) + 10, 72) if slot == 0 else (Vector2(sx + 22, 92) if slot == 1 else Vector2(bx + 22, 92))
 		at.y -= t * 16.0
 		UI.text_sh(self, at, String(fl["text"]), UI.font("cond"), 17 if slot == 0 else 15, UI.with_a(fl["color"], a))
 
@@ -174,8 +174,8 @@ func _draw_heat(at: Vector2) -> void:
 	UI.icon(self, "badge", badge_c, 22.0 + pulse * 3.0, lvl_col if segs > 0 else UI.MUTE, UI.WOOD_BOT)
 	var cond := UI.font("cond")
 	var x := at.x + 26
-	UI.text(self, Vector2(x, at.y - 10), "HEAT", cond, 14, UI.MUTE)
-	UI.text(self, Vector2(x + UI.tw(cond, "HEAT ", 14) + 2, at.y - 10), heat_word(_heat).to_upper(), cond, 14, lvl_col if segs > 0 else UI.INK)
+	UI.text(self, Vector2(x, at.y - 10), "HEAT", cond, 16, UI.MUTE)
+	UI.text(self, Vector2(x + UI.tw(cond, "HEAT ", 16) + 2, at.y - 10), heat_word(_heat).to_upper(), cond, 16, lvl_col if segs > 0 else UI.INK)
 	for k in 5:
 		var r := Rect2(Vector2(x + k * 21.0, at.y - 4), Vector2(18, 8))
 		Draw.rrect(self, r.grow(1.0), 2.5, Color(0, 0, 0, 0.55))
