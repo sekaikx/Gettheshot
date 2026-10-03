@@ -22,6 +22,8 @@ float vn(vec2 p) {
 }
 vec3 lin(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
 vec3 alb(vec3 c) { return lin(c) * 0.74; }
+float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
 """
 
 const WALL := """
@@ -434,20 +436,49 @@ static func get_mats() -> Dictionary:
 	return _mats
 
 
+## Every shader gets `cut` (0..1): a screen-door dissolve for a building that stands between the camera and
+## the player (Buildings3D.update_view). Dithered discard, so it needs no sorting and its shadow goes too.
 static func _shader(code: String) -> ShaderMaterial:
 	var sh := Shader.new()
-	sh.code = code.replace("//COMMON", COMMON)
+	sh.code = code.replace("//COMMON", COMMON).replace("void fragment() {",
+		"uniform float cut = 0.0;\nvoid fragment() {\n\tif (cut > 0.0 && bayer4(FRAGCOORD.xy) < cut) discard;")
 	var m := ShaderMaterial.new()
 	m.shader = sh
 	return m
 
 
+static var _cut := {}          # step -> {material name -> ShaderMaterial with cut = step / CUT_STEPS}
+const CUT_STEPS := 8
+
+
+## The same material as `m` (one of get_mats()), dissolved `step` eighths of the way (0 = m itself).
+static func cut_mat(m: Material, step: int) -> Material:
+	if step <= 0:
+		return m
+	var mats := get_mats()
+	var key := ""
+	for k in mats:
+		if mats[k] == m:
+			key = k
+			break
+	if key == "":
+		return m
+	var set: Dictionary = _cut.get_or_add(step, {})
+	if not set.has(key):
+		var v := (m as ShaderMaterial).duplicate() as ShaderMaterial
+		v.set_shader_parameter("cut", float(step) / CUT_STEPS)
+		set[key] = v
+	return set[key]
+
+
 ## night 0..1, wet 0..1
 static func set_light(night: float, wet: float) -> void:
-	var mats := get_mats()
 	var on := clampf((night - 0.15) / 0.5, 0.0, 1.0)
-	for k in ["wall", "glass", "lamp", "trim", "awn", "roof"]:
-		(mats[k] as ShaderMaterial).set_shader_parameter("night", on)
-	for k in ["wall", "roof", "trim", "glass", "awn"]:
-		(mats[k] as ShaderMaterial).set_shader_parameter("wet", wet)
-	(mats["wall"] as ShaderMaterial).set_shader_parameter("lit_ratio", 0.62 * on)
+	for mats in [get_mats()] + _cut.values():
+		for k in mats:
+			var m := mats[k] as ShaderMaterial
+			m.set_shader_parameter("night", on)
+			if k != "lamp":
+				m.set_shader_parameter("wet", wet)
+		if mats.has("wall"):
+			(mats["wall"] as ShaderMaterial).set_shader_parameter("lit_ratio", 0.62 * on)
