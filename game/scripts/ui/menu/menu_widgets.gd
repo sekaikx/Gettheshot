@@ -52,7 +52,8 @@ class TitleItem extends Button:
 			draw_rect(Rect2(0, 4, 4, h - 8), Color(MenuStyle.GOLD2, ease_k))
 			var dc := Vector2(22 + 4 * ease_k, h * 0.5)
 			var d := 6.0 * ease_k
-			Draw.poly(self, PackedVector2Array([dc + Vector2(0, -d), dc + Vector2(d, 0), dc + Vector2(0, d), dc + Vector2(-d, 0)]), Color(MenuStyle.GOLD2, ease_k))
+			if d >= 1.5:
+				Draw.poly(self, PackedVector2Array([dc + Vector2(0, -d), dc + Vector2(d, 0), dc + Vector2(0, d), dc + Vector2(-d, 0)]), Color(MenuStyle.GOLD2, ease_k))
 		var f := MenuStyle.spaced("cond", 3)
 		var fs := 34
 		var x := 44.0 + 10.0 * ease_k

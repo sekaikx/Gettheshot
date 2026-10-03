@@ -19,7 +19,17 @@ const AA := 1.0
 
 
 static func poly(ci: CanvasItem, pts: PackedVector2Array, color: Color, aa: bool = true) -> void:
-	if pts.size() < 3:
+	if pts.size() < 3 or color.a <= 0.001:
+		return
+	# Degenerate / near-zero polygons fail triangulation and spam ERROR every redraw
+	# (menu hover diamonds, tiny hat accents, etc.) — that alone tanks the editor.
+	var area2 := 0.0
+	var n := pts.size()
+	for i in n:
+		var a := pts[i]
+		var b := pts[(i + 1) % n]
+		area2 += a.x * b.y - b.x * a.y
+	if absf(area2) < 0.5:
 		return
 	ci.draw_colored_polygon(pts, color)
 	if aa and color.a > 0.02:
